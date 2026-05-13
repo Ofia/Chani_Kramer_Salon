@@ -302,3 +302,14 @@ class AiConversation(Base):
     role       = Column(String, nullable=False)  # "user" | "assistant"
     content    = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class EllaFact(Base):
+    __tablename__ = "ella_facts"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    category   = Column(String, nullable=False)  # client_note | business_note | reminder | preference
+    key        = Column(String, nullable=False)   # short searchable label
+    value      = Column(Text, nullable=False)     # the full note
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
