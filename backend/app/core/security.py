@@ -1,12 +1,15 @@
 """
-Auth middleware — validates Supabase JWT tokens.
+Auth middleware — validates Supabase JWT tokens (ES256 via JWKS).
 
 How it works:
-- Supabase issues a JWT when a user logs in on the frontend
-- The frontend sends that token in every request: Authorization: Bearer <token>
-- We decode the token here, extract the user's Supabase UID
-- Then look up the user in our own `users` table to get their role
+- Supabase signs user JWTs with an EC (P-256) key
+- We fetch the public key once from the JWKS endpoint at startup
+- Every request: decode the Bearer token using that public key
+- Extract the Supabase UID (sub), look up the user in our DB
 """
+
+import httpx
+from functools import lru_cache
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -17,16 +20,27 @@ from app.core.config import settings
 from app.database import get_db
 from app.models.models import User
 
-bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer(auto_error=False)
+
+JWKS_URL = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+
+
+@lru_cache(maxsize=1)
+def get_jwks() -> dict:
+    """Fetch and cache the JWKS public key from Supabase (called once)."""
+    response = httpx.get(JWKS_URL, timeout=10)
+    response.raise_for_status()
+    return response.json()
 
 
 def decode_supabase_token(token: str) -> dict:
-    """Decode and verify a Supabase JWT. Returns the payload dict."""
+    """Decode and verify a Supabase JWT using the JWKS public key."""
+    jwks = get_jwks()
     try:
         payload = jwt.decode(
             token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
+            jwks,
+            algorithms=["ES256", "HS256"],  # support both current and legacy keys
             options={"verify_aud": False},
         )
         return payload
@@ -45,8 +59,10 @@ def get_current_user(
     Dependency: extract the current user from the JWT.
     Usage: add `current_user: User = Depends(get_current_user)` to any route.
     """
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     payload = decode_supabase_token(credentials.credentials)
-    supabase_uid = payload.get("sub")  # 'sub' = Supabase user ID
+    supabase_uid = payload.get("sub")
 
     if not supabase_uid:
         raise HTTPException(status_code=401, detail="Token missing subject")

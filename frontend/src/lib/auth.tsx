@@ -11,9 +11,19 @@
  */
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { User as SupabaseUser, Session } from '@supabase/supabase-js'
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { api } from './api'
+
+// When Supabase isn't configured yet (local dev), bypass auth entirely
+const DEV_BYPASS = !import.meta.env.VITE_SUPABASE_URL
+
+const DEV_PROFILE = {
+  id: 'dev-user',
+  name: 'Avi (Dev)',
+  email: 'dev@salon.com',
+  role: 'owner' as const,
+}
 
 interface UserProfile {
   id: string
@@ -34,9 +44,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<SupabaseUser | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profile, setProfile] = useState<UserProfile | null>(DEV_BYPASS ? DEV_PROFILE : null)
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!DEV_BYPASS)
 
   // Fetch our user profile from the backend (has role info)
   async function fetchProfile() {
@@ -49,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    if (DEV_BYPASS) return
+
     // Check if there's already a session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -72,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signOut() {
-    await supabase.auth.signOut()
+    if (!DEV_BYPASS) await supabase.auth.signOut()
     setProfile(null)
   }
 

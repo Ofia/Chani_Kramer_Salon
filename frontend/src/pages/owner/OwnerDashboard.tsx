@@ -10,6 +10,18 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from 'recharts'
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n))
@@ -82,6 +94,58 @@ export default function OwnerDashboard() {
               <MetricCard label="Final Take-Home"     value={fmt(monthly.final_take_home)} accent />
             </div>
           )}
+
+          {/* Charts — always visible when there's monthly data */}
+          <div style={styles.chartsGrid}>
+            {/* Revenue trend — line chart */}
+            <div style={styles.chartCard}>
+              <p style={styles.chartTitle}>Revenue (Last 30 Days)</p>
+              {snapshots.length === 0 ? (
+                <div style={styles.chartEmpty}>No snapshot data yet.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={snapshots} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(14,12,9,0.06)" />
+                    <XAxis dataKey="snapshot_date" tick={{ fontSize: 10, fill: '#6A6560' }} tickFormatter={d => d.slice(5)} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6A6560' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={40} />
+                    <Tooltip
+                      contentStyle={{ border: '1px solid rgba(14,12,9,0.1)', borderRadius: 2, fontSize: 12 }}
+                      formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']}
+                    />
+                    <Line type="monotone" dataKey="total_revenue" stroke="#0E0C09" strokeWidth={1.5} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Revenue by stream — bar chart from monthly summary */}
+            <div style={styles.chartCard}>
+              <p style={styles.chartTitle}>Revenue by Stream — {new Date().toLocaleDateString('en-US', { month: 'long' })}</p>
+              {!monthly || monthly.days_with_data === 0 ? (
+                <div style={styles.chartEmpty}>No data this month.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart
+                    data={[
+                      { name: 'Wash & Set', amount: Number(monthly.total_wash_set ?? 0) },
+                      { name: 'Wig Sales',  amount: Number(monthly.total_wig_sales ?? 0) },
+                      { name: 'Repairs',    amount: Number(monthly.total_repairs ?? 0) },
+                    ]}
+                    margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(14,12,9,0.06)" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6A6560' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6A6560' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={40} />
+                    <Tooltip
+                      contentStyle={{ border: '1px solid rgba(14,12,9,0.1)', borderRadius: 2, fontSize: 12 }}
+                      formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']}
+                    />
+                    <Bar dataKey="amount" fill="#0E0C09" radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
 
           {/* Detailed view */}
           {view === 'detailed' && (
@@ -192,4 +256,9 @@ const styles: Record<string, React.CSSProperties> = {
 
   emptyCard: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: 40, textAlign: 'center' },
   emptyText: { color: '#6A6560', fontSize: 15, margin: 0 },
+
+  chartsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 },
+  chartCard: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: '20px 22px' },
+  chartTitle: { fontSize: 11, color: '#6A6560', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 },
+  chartEmpty: { height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6A6560', fontSize: 13 },
 }

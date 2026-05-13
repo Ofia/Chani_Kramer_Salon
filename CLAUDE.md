@@ -6,6 +6,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 
 
 
+
 ## Project Overview
 A high-end, modern web application for a successful wig salon in Brooklyn, NY.
 Replacing a painful Google Sheets workflow with an intelligent, interactive system.

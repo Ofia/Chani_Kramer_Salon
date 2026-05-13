@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -12,9 +12,9 @@ export default function LoginPage() {
   const { profile } = useAuth()
 
   // If already logged in, redirect
-  if (profile) {
-    navigate(profile.role === 'owner' ? '/owner' : '/bookkeeper')
-  }
+  useEffect(() => {
+    if (profile) navigate(profile.role === 'owner' ? '/owner' : '/bookkeeper')
+  }, [profile, navigate])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()

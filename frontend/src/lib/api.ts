@@ -15,8 +15,11 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 
 export const api = axios.create({ baseURL: BASE_URL })
 
+const DEV_BYPASS = !import.meta.env.VITE_SUPABASE_URL
+
 // Request interceptor — attach the current JWT before every request
 api.interceptors.request.use(async (config) => {
+  if (DEV_BYPASS) return config
   const { data: { session } } = await supabase.auth.getSession()
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`

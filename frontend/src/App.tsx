@@ -20,9 +20,9 @@ const queryClient = new QueryClient({
 
 // Redirects to /login if not authenticated
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
   if (loading) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', fontFamily:'sans-serif' }}>Loading…</div>
-  if (!user)   return <Navigate to="/login" replace />
+  if (!user && !profile) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
