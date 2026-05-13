@@ -1,15 +1,8 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
-  LayoutDashboard,
-  ClipboardList,
-  Users,
-  Receipt,
-  Building2,
-  ChevronRight,
-  LogOut,
-  Search,
-  Zap,
+  LayoutDashboard, ClipboardList, Users, Receipt, Building2,
+  ChevronRight, LogOut, Search,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -27,46 +20,39 @@ export default function BookkeeperLayout() {
   return (
     <div style={s.shell}>
       <aside style={s.sidebar}>
-        {/* ── Top ── */}
         <div style={s.top}>
-          {/* Workspace block */}
+
+          {/* Workspace */}
           <div style={s.workspace}>
             <div style={s.wsIcon}>CK</div>
             <div style={s.wsText}>
               <span style={s.wsName}>Chani Kramer</span>
-              <span style={s.wsSub}>Wigs Salon</span>
+              <span style={s.wsSub}>Wigs Salon · Brooklyn</span>
             </div>
-            <ChevronRight size={14} color="rgba(255,255,255,0.25)" />
+            <ChevronRight size={13} color="rgba(228,228,231,0.3)" />
           </div>
 
-          {/* Quick Actions + Search */}
+          {/* Search */}
           <div style={s.utilRow}>
-            <button style={s.utilBtn}>
-              <Zap size={13} />
-              <span>Quick Actions</span>
-              <span style={s.kbd}>⌘K</span>
-            </button>
-            <button style={s.utilIconBtn} title="Search">
-              <Search size={14} />
+            <button style={s.searchBtn}>
+              <Search size={12} color="#a1a1aa" />
+              <span style={s.searchLabel}>Search…</span>
+              <kbd style={s.kbd}>⌘K</kbd>
             </button>
           </div>
 
           {/* Nav */}
           <nav style={s.nav}>
             {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                style={({ isActive }) => ({
-                  ...s.navLink,
-                  ...(isActive ? s.navLinkActive : {}),
-                })}
-              >
+              <NavLink key={to} to={to} end={end}
+                style={({ isActive }) => ({ ...s.navLink, ...(isActive ? s.navLinkActive : {}) })}>
                 {({ isActive }) => (
                   <>
-                    <Icon size={15} color={isActive ? '#fff' : 'rgba(255,255,255,0.45)'} strokeWidth={1.6} />
-                    <span style={{ color: isActive ? '#fff' : 'rgba(255,255,255,0.55)' }}>{label}</span>
+                    <Icon size={15} strokeWidth={1.8}
+                      color={isActive ? '#ec4899' : 'rgba(228,228,231,0.45)'} />
+                    <span style={{ color: isActive ? '#ec4899' : 'rgba(228,228,231,0.7)', fontWeight: isActive ? 600 : 400 }}>
+                      {label}
+                    </span>
                   </>
                 )}
               </NavLink>
@@ -74,15 +60,14 @@ export default function BookkeeperLayout() {
           </nav>
         </div>
 
-        {/* ── Bottom ── */}
+        {/* Bottom */}
         <div style={s.bottom}>
           {profile?.role === 'owner' && (
             <button onClick={() => navigate('/owner')} style={s.switchBtn}>
               <span>Owner View</span>
-              <ChevronRight size={13} />
+              <ChevronRight size={12} color="rgba(228,228,231,0.5)" />
             </button>
           )}
-
           <div style={s.userRow}>
             <div style={s.avatar}>
               {profile?.name?.charAt(0).toUpperCase() ?? '?'}
@@ -92,7 +77,7 @@ export default function BookkeeperLayout() {
               <span style={s.userRole}>{profile?.role}</span>
             </div>
             <button onClick={signOut} style={s.signOutBtn} title="Sign out">
-              <LogOut size={13} color="rgba(255,255,255,0.3)" />
+              <LogOut size={13} color="rgba(228,228,231,0.4)" />
             </button>
           </div>
         </div>
@@ -109,206 +94,93 @@ const s: Record<string, React.CSSProperties> = {
   shell: {
     display: 'flex',
     minHeight: '100vh',
-    background: '#F5F4F1',
-    fontFamily: "'DM Sans', system-ui, sans-serif",
+    background: '#fafafa',
+    fontFamily: "'Inter', -apple-system, sans-serif",
   },
 
-  /* ── Sidebar ── */
   sidebar: {
     width: 240,
-    background: '#111110',
+    background: '#1a1a1d',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
     flexShrink: 0,
     position: 'fixed',
-    top: 0,
-    left: 0,
+    top: 0, left: 0,
     height: '100vh',
     padding: '12px 0 16px',
-    borderRight: '1px solid rgba(255,255,255,0.04)',
+    borderRight: '1px solid #27272a',
   },
 
   top: { display: 'flex', flexDirection: 'column', gap: 4 },
 
-  /* Workspace */
   workspace: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '8px 14px 8px',
-    margin: '0 8px 4px',
-    borderRadius: 7,
-    cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 9,
+    padding: '7px 12px', margin: '0 6px 4px',
+    borderRadius: 8, cursor: 'pointer',
   },
   wsIcon: {
-    width: 30,
-    height: 30,
-    background: '#2a2927',
-    border: '1px solid rgba(255,255,255,0.1)',
+    width: 30, height: 30,
+    background: '#ec4899',
     borderRadius: 7,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#A0917E',
-    letterSpacing: '0.04em',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '0.04em',
     flexShrink: 0,
   },
-  wsText: { display: 'flex', flexDirection: 'column', flex: 1 },
+  wsText: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 },
   wsName: {
-    fontFamily: "'Cormorant Garamond', Georgia, serif",
-    fontSize: 14,
-    fontWeight: 500,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 1.2,
+    fontSize: 13, fontWeight: 600, color: '#e4e4e7', letterSpacing: '-0.01em',
+    lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   },
-  wsSub: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.3)',
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-  },
+  wsSub: { fontSize: 10, color: 'rgba(228,228,231,0.45)', whiteSpace: 'nowrap' },
 
-  /* Util row */
-  utilRow: {
-    display: 'flex',
-    gap: 4,
-    padding: '0 10px',
-    marginBottom: 6,
+  utilRow: { padding: '0 8px', marginBottom: 6 },
+  searchBtn: {
+    width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+    background: '#27272a', border: '1px solid #27272a',
+    borderRadius: 8, padding: '6px 10px',
+    color: 'rgba(228,228,231,0.5)', fontSize: 12, cursor: 'pointer',
+    fontFamily: 'inherit', textAlign: 'left',
   },
-  utilBtn: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 7,
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: 6,
-    padding: '6px 10px',
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  },
+  searchLabel: { flex: 1 },
   kbd: {
-    marginLeft: 'auto',
-    fontSize: 10,
-    background: 'rgba(255,255,255,0.07)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 4,
-    padding: '1px 5px',
-    color: 'rgba(255,255,255,0.3)',
-    fontFamily: 'monospace',
-  },
-  utilIconBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: 6,
-    width: 32,
-    height: 32,
-    color: 'rgba(255,255,255,0.4)',
-    cursor: 'pointer',
-    flexShrink: 0,
+    fontSize: 10, background: '#18181b',
+    border: '1px solid #3f3f46', borderRadius: 4,
+    padding: '1px 5px', color: 'rgba(228,228,231,0.4)', fontFamily: 'inherit',
   },
 
-  /* Nav */
-  nav: { display: 'flex', flexDirection: 'column', padding: '0 8px' },
+  nav: { display: 'flex', flexDirection: 'column', padding: '0 6px', gap: 1 },
   navLink: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    padding: '7px 10px',
-    borderRadius: 7,
-    textDecoration: 'none',
-    fontSize: 13,
-    fontWeight: 400,
-    transition: 'background 0.1s',
-    marginBottom: 1,
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '7px 10px', borderRadius: 8, textDecoration: 'none',
+    fontSize: 13, transition: 'background 0.12s',
   },
   navLinkActive: {
-    background: 'rgba(255,255,255,0.08)',
+    background: '#27272a',
   },
 
-  /* Bottom */
-  bottom: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    padding: '0 10px',
-  },
+  bottom: { display: 'flex', flexDirection: 'column', gap: 6, padding: '0 8px' },
   switchBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    background: 'rgba(160,145,126,0.1)',
-    border: '1px solid rgba(160,145,126,0.2)',
-    color: '#A0917E',
-    borderRadius: 7,
-    padding: '7px 12px',
-    fontSize: 12,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    width: '100%',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    background: '#27272a', border: '1px solid #3f3f46',
+    color: '#e4e4e7', borderRadius: 8, padding: '7px 10px',
+    fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
   },
   userRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    padding: '6px 6px',
-    borderRadius: 7,
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '7px 8px', borderRadius: 8,
+    background: '#27272a', border: '1px solid #27272a',
   },
   avatar: {
-    width: 28,
-    height: 28,
-    background: '#2a2927',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 6,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 12,
-    fontWeight: 600,
-    color: '#A0917E',
-    flexShrink: 0,
+    width: 26, height: 26,
+    background: '#ec4899',
+    borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
   },
   userText: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 },
-  userName: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  userRole: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.3)',
-    textTransform: 'capitalize',
-    letterSpacing: '0.05em',
-  },
-  signOutBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    padding: 4,
-    borderRadius: 4,
-    flexShrink: 0,
-  },
+  userName: { fontSize: 12, fontWeight: 500, color: '#e4e4e7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' },
+  userRole: { fontSize: 10, color: 'rgba(228,228,231,0.45)', textTransform: 'capitalize' },
+  signOutBtn: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 5, flexShrink: 0 },
 
-  /* Main */
-  main: {
-    marginLeft: 240,
-    flex: 1,
-    padding: '40px 52px',
-    maxWidth: 1140,
-  },
+  main: { marginLeft: 240, flex: 1, padding: '36px 40px', minHeight: '100vh' },
 }

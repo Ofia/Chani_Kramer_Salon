@@ -1,15 +1,9 @@
-/**
- * Payroll Entry — enter weekly pay for each employee.
- * Tzipora selects the week, then enters an amount per employee.
- * Skipping an employee = $0 that week.
- */
-
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 
 function getMonday(d = new Date()) {
-  const day  = d.getDay()
+  const day = d.getDay()
   const diff = d.getDate() - day + (day === 0 ? -6 : 1)
   const monday = new Date(d.setDate(diff))
   return monday.toISOString().split('T')[0]
@@ -26,7 +20,6 @@ export default function PayrollEntryPage() {
   const [amounts, setAmounts]     = useState<Record<string, string>>({})
   const [saved, setSaved]         = useState(false)
   const qc = useQueryClient()
-
   const weekEnd = getSunday(weekStart)
 
   const { data: employees = [] } = useQuery({
@@ -54,10 +47,8 @@ export default function PayrollEntryPage() {
             return api.patch(`/payroll/${existingEntry.id}`, { amount: parseFloat(amounts[emp.id]) })
           } else {
             return api.post('/payroll', {
-              week_start: weekStart,
-              week_end: weekEnd,
-              employee_id: emp.id,
-              amount: parseFloat(amounts[emp.id]),
+              week_start: weekStart, week_end: weekEnd,
+              employee_id: emp.id, amount: parseFloat(amounts[emp.id]),
               pay_type_snapshot: emp.pay_type,
             })
           }
@@ -74,82 +65,88 @@ export default function PayrollEntryPage() {
   const total = Object.values(amounts).reduce((s, v) => s + (parseFloat(v) || 0), 0)
 
   return (
-    <div style={styles.page}>
-      <h1 style={styles.title}>Weekly Payroll</h1>
+    <div style={s.page}>
+      <header style={s.header}>
+        <h1 style={s.title}>Weekly Payroll</h1>
+        <div style={s.weekPicker}>
+          <label style={s.weekLabel}>Week of</label>
+          <input type="date" value={weekStart}
+            onChange={e => { setWeekStart(e.target.value); setAmounts({}) }}
+            style={s.dateInput} />
+          <span style={s.weekArrow}>→ {weekEnd}</span>
+        </div>
+      </header>
 
-      <div style={styles.weekPicker}>
-        <label style={styles.label}>Week of</label>
-        <input
-          type="date"
-          value={weekStart}
-          onChange={e => { setWeekStart(e.target.value); setAmounts({}) }}
-          style={styles.input}
-        />
-        <span style={styles.weekRange}>→ {weekEnd}</span>
-      </div>
-
-      <div style={styles.card}>
-        <div style={styles.tableHeader}>
-          <span style={styles.col1}>Employee</span>
-          <span style={styles.col2}>Role</span>
-          <span style={styles.col3}>Amount</span>
+      {/* Employee list */}
+      <div style={s.card}>
+        {/* Column headers */}
+        <div style={s.tableHeader}>
+          <span style={{ flex: 2 }}>Employee</span>
+          <span style={{ flex: 1 }}>Role</span>
+          <span style={{ flex: 1, textAlign: 'right' }}>Amount</span>
         </div>
 
-        {employees.map((emp: any) => (
-          <div key={emp.id} style={styles.row}>
-            <span style={styles.col1}>{emp.first_name} {emp.last_name}</span>
-            <span style={styles.col2}>{emp.job_title}</span>
-            <div style={styles.col3}>
-              <div style={styles.moneyWrapper}>
-                <span style={styles.moneySym}>$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amounts[emp.id] || ''}
-                  onChange={e => setAmounts(prev => ({ ...prev, [emp.id]: e.target.value }))}
-                  style={styles.moneyInput}
-                  placeholder="0.00"
-                />
-              </div>
+        {employees.map((emp: any, i: number) => (
+          <div key={emp.id} style={{
+            ...s.row,
+            borderBottom: i < employees.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+          }}>
+            <span style={s.empName}>{emp.first_name} {emp.last_name}</span>
+            <span style={s.empRole}>{emp.job_title}</span>
+            <div style={s.moneyCell}>
+              <span style={s.moneySym}>$</span>
+              <input type="number" min="0" step="0.01"
+                value={amounts[emp.id] || ''}
+                onChange={e => setAmounts(prev => ({ ...prev, [emp.id]: e.target.value }))}
+                style={s.moneyInput} placeholder="0.00" />
             </div>
           </div>
         ))}
 
-        <div style={styles.totalRow}>
-          <span style={styles.col1}>Total Payroll</span>
-          <span style={{ ...styles.col3, fontWeight: 600, fontSize: 16 }}>${total.toFixed(2)}</span>
+        {/* Total row */}
+        <div style={s.totalRow}>
+          <span style={{ flex: 2, fontWeight: 600, color: '#18181b' }}>Total Payroll</span>
+          <span style={{ flex: 1 }} />
+          <span style={s.totalValue}>${total.toFixed(2)}</span>
         </div>
       </div>
 
-      <div style={styles.actions}>
-        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} style={styles.saveBtn}>
+      <div style={s.actions}>
+        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} style={s.primaryBtn}>
           {mutation.isPending ? 'Saving…' : 'Save Payroll'}
         </button>
-        {saved && <span style={styles.success}>Saved.</span>}
+        {saved && <span style={s.success}>Saved.</span>}
       </div>
     </div>
   )
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 700 },
-  title: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 32, fontWeight: 500, color: '#0E0C09', margin: '0 0 28px' },
-  weekPicker: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 },
-  label: { fontSize: 11, fontWeight: 600, color: '#6A6560', letterSpacing: '0.08em', textTransform: 'uppercase' },
-  input: { border: '1px solid rgba(14,12,9,0.14)', borderRadius: 2, padding: '7px 10px', fontSize: 14, color: '#0E0C09' },
-  weekRange: { fontSize: 13, color: '#6A6560' },
-  card: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2 },
-  tableHeader: { display: 'flex', padding: '10px 20px', background: '#F3F1ED', borderBottom: '1px solid rgba(14,12,9,0.07)', fontSize: 11, fontWeight: 600, color: '#6A6560', letterSpacing: '0.08em', textTransform: 'uppercase' },
-  row: { display: 'flex', alignItems: 'center', padding: '10px 20px', borderBottom: '1px solid rgba(14,12,9,0.05)', fontSize: 14 },
-  totalRow: { display: 'flex', alignItems: 'center', padding: '14px 20px', background: '#F3F1ED', fontSize: 14, fontWeight: 500 },
-  col1: { flex: 2, color: '#0E0C09' },
-  col2: { flex: 1, color: '#6A6560', fontSize: 12 },
-  col3: { flex: 1 },
-  moneyWrapper: { display: 'flex', alignItems: 'center', border: '1px solid rgba(14,12,9,0.14)', borderRadius: 2, overflow: 'hidden', maxWidth: 120 },
-  moneySym: { padding: '0 8px', color: '#6A6560', fontSize: 13, background: '#F3F1ED', borderRight: '1px solid rgba(14,12,9,0.14)' },
-  moneyInput: { flex: 1, border: 'none', padding: '7px 8px', fontSize: 13, color: '#0E0C09', outline: 'none', width: 80 },
-  actions: { display: 'flex', alignItems: 'center', gap: 16, marginTop: 20 },
-  saveBtn: { background: '#0E0C09', color: '#fff', border: 'none', borderRadius: 2, padding: '11px 28px', fontSize: 14, cursor: 'pointer', fontWeight: 500 },
-  success: { color: '#27ae60', fontSize: 13 },
+const s: Record<string, React.CSSProperties> = {
+  page: { maxWidth: 680 },
+
+  header: { marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.07)' },
+  title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: '0 0 16px', letterSpacing: '-0.03em' },
+  weekPicker: { display: 'flex', alignItems: 'center', gap: 12 },
+  weekLabel: { fontSize: 12, fontWeight: 500, color: '#71717a' },
+  dateInput: { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#18181b', background: '#fff', fontFamily: 'inherit', outline: 'none' },
+  weekArrow: { fontSize: 13, color: '#71717a' },
+
+  card: { background: '#fff', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', marginBottom: 20 },
+
+  tableHeader: { display: 'flex', padding: '10px 20px', background: '#f4f4f5', fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase' },
+
+  row: { display: 'flex', alignItems: 'center', padding: '12px 20px' },
+  empName: { flex: 2, fontSize: 14, fontWeight: 500, color: '#18181b', letterSpacing: '-0.01em' },
+  empRole: { flex: 1, fontSize: 12, color: '#71717a' },
+
+  moneyCell: { flex: 1, display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, overflow: 'hidden', maxWidth: 120, background: '#f9f9f9' },
+  moneySym: { padding: '0 8px', color: '#71717a', fontSize: 13, borderRight: '1px solid rgba(0,0,0,0.07)', paddingTop: 6, paddingBottom: 6 },
+  moneyInput: { flex: 1, border: 'none', padding: '6px 8px', fontSize: 13, color: '#18181b', outline: 'none', background: 'transparent', fontFamily: 'inherit', width: 70 },
+
+  totalRow: { display: 'flex', alignItems: 'center', padding: '14px 20px', background: '#f4f4f5', borderTop: '1px solid rgba(0,0,0,0.07)' },
+  totalValue: { flex: 1, textAlign: 'right', fontWeight: 700, fontSize: 17, color: '#18181b', letterSpacing: '-0.02em' },
+
+  actions: { display: 'flex', alignItems: 'center', gap: 16 },
+  primaryBtn: { background: '#ec4899', color: '#fff', border: 'none', borderRadius: 12, padding: '12px 32px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '-0.01em' },
+  success: { color: '#34c759', fontSize: 13, fontWeight: 500 },
 }

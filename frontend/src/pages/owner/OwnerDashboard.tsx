@@ -1,27 +1,7 @@
-/**
- * Owner Dashboard — analysis + interactive data.
- *
- * Shows:
- *   - Monthly financial summary (current month)
- *   - Revenue vs. expense trend (last 30 days of snapshots)
- *   - Toggle: detailed view vs. summary view
- */
-
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from 'recharts'
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n))
@@ -39,144 +19,130 @@ export default function OwnerDashboard() {
   const { data: snapshots = [] } = useQuery({
     queryKey: ['snapshots-recent'],
     queryFn: () => {
-      const end = now.toISOString().split('T')[0]
+      const end   = now.toISOString().split('T')[0]
       const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       return api.get(`/financials/snapshots?start_date=${start}&end_date=${end}`).then(r => r.data)
     },
   })
 
+  const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
   return (
     <div>
-      {/* Header + toggle */}
-      <header style={styles.header}>
+      <header style={s.header}>
         <div>
-          <h1 style={styles.title}>Overview</h1>
-          <p style={styles.subtitle}>{now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+          <h1 style={s.title}>Overview</h1>
+          <p style={s.subtitle}>{monthLabel}</p>
         </div>
-        <div style={styles.toggle}>
-          <button
-            onClick={() => setView('summary')}
-            style={{ ...styles.toggleBtn, ...(view === 'summary' ? styles.toggleBtnActive : {}) }}
-          >
-            Summary
-          </button>
-          <button
-            onClick={() => setView('detailed')}
-            style={{ ...styles.toggleBtn, ...(view === 'detailed' ? styles.toggleBtnActive : {}) }}
-          >
-            Detailed
-          </button>
+        {/* iOS segmented control */}
+        <div style={s.segmented}>
+          <button onClick={() => setView('summary')}  style={{ ...s.seg, ...(view === 'summary'  ? s.segActive : {}) }}>Summary</button>
+          <button onClick={() => setView('detailed')} style={{ ...s.seg, ...(view === 'detailed' ? s.segActive : {}) }}>Detailed</button>
         </div>
       </header>
 
       {isLoading ? (
-        <p style={{ color: '#6A6560', fontSize: 14 }}>Loading…</p>
+        <p style={s.muted}>Loading…</p>
       ) : !monthly || monthly.days_with_data === 0 ? (
-        <div style={styles.emptyCard}>
-          <p style={styles.emptyText}>No data yet this month.</p>
-        </div>
+        <div style={s.emptyCard}><p style={s.emptyText}>No data yet this month.</p></div>
       ) : (
         <>
-          {/* Key numbers — always visible */}
-          <div style={styles.statsBar}>
-            <BigStat label="Revenue"      value={fmt(monthly.total_revenue)}   />
-            <BigStat label="Expenses"     value={fmt(monthly.total_expenses)}  />
-            <BigStat label="Payroll"      value={fmt(monthly.total_payroll)}   />
-            <BigStat label="Net Profit"   value={fmt(monthly.net_profit)}      highlight />
+          {/* Top KPI strip */}
+          <div style={s.kpiGrid}>
+            <KpiCard label="Revenue"    value={fmt(monthly.total_revenue)} />
+            <KpiCard label="Expenses"   value={fmt(monthly.total_expenses)} />
+            <KpiCard label="Payroll"    value={fmt(monthly.total_payroll)} />
+            <KpiCard label="Net Profit" value={fmt(monthly.net_profit)} dark />
           </div>
 
-          {/* Summary view */}
+          {/* Summary cards */}
           {view === 'summary' && (
-            <div style={styles.summaryGrid}>
+            <div style={s.summaryGrid}>
               <MetricCard label="Bank Portion (40%)"  value={fmt(monthly.bank_portion)} />
               <MetricCard label="Owner Portion (60%)" value={fmt(monthly.owner_portion)} />
               <MetricCard label="Total Tithes"        value={fmt(monthly.total_tithes)} />
-              <MetricCard label="Final Take-Home"     value={fmt(monthly.final_take_home)} accent />
+              <MetricCard label="Final Take-Home"     value={fmt(monthly.final_take_home)} green />
             </div>
           )}
 
-          {/* Charts — always visible when there's monthly data */}
-          <div style={styles.chartsGrid}>
-            {/* Revenue trend — line chart */}
-            <div style={styles.chartCard}>
-              <p style={styles.chartTitle}>Revenue (Last 30 Days)</p>
+          {/* Charts */}
+          <div style={s.chartsGrid}>
+            <div style={s.chartCard}>
+              <p style={s.chartTitle}>Revenue — Last 30 Days</p>
               {snapshots.length === 0 ? (
-                <div style={styles.chartEmpty}>No snapshot data yet.</div>
+                <div style={s.chartEmpty}>No data yet.</div>
               ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={snapshots} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(14,12,9,0.06)" />
-                    <XAxis dataKey="snapshot_date" tick={{ fontSize: 10, fill: '#6A6560' }} tickFormatter={d => d.slice(5)} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6A6560' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={40} />
-                    <Tooltip
-                      contentStyle={{ border: '1px solid rgba(14,12,9,0.1)', borderRadius: 2, fontSize: 12 }}
-                      formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']}
-                    />
-                    <Line type="monotone" dataKey="total_revenue" stroke="#0E0C09" strokeWidth={1.5} dot={false} />
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={snapshots} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
+                    <XAxis dataKey="snapshot_date" tick={{ fontSize: 10, fill: '#a1a1aa' }} tickFormatter={d => d.slice(5)} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
+                    <Tooltip contentStyle={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10, fontSize: 12, fontFamily: 'inherit' }}
+                      formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
+                    <Line type="monotone" dataKey="total_revenue" stroke="#ec4899" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
             </div>
 
-            {/* Revenue by stream — bar chart from monthly summary */}
-            <div style={styles.chartCard}>
-              <p style={styles.chartTitle}>Revenue by Stream — {new Date().toLocaleDateString('en-US', { month: 'long' })}</p>
-              {!monthly || monthly.days_with_data === 0 ? (
-                <div style={styles.chartEmpty}>No data this month.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart
-                    data={[
-                      { name: 'Wash & Set', amount: Number(monthly.total_wash_set ?? 0) },
-                      { name: 'Wig Sales',  amount: Number(monthly.total_wig_sales ?? 0) },
-                      { name: 'Repairs',    amount: Number(monthly.total_repairs ?? 0) },
-                    ]}
-                    margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(14,12,9,0.06)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6A6560' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6A6560' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={40} />
-                    <Tooltip
-                      contentStyle={{ border: '1px solid rgba(14,12,9,0.1)', borderRadius: 2, fontSize: 12 }}
-                      formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']}
-                    />
-                    <Bar dataKey="amount" fill="#0E0C09" radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+            <div style={s.chartCard}>
+              <p style={s.chartTitle}>Revenue by Stream — {now.toLocaleDateString('en-US', { month: 'long' })}</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart
+                  data={[
+                    { name: 'Wash & Set', amount: Number(monthly.total_wash_set ?? 0) },
+                    { name: 'Wig Sales',  amount: Number(monthly.total_wig_sales ?? 0) },
+                    { name: 'Repairs',    amount: Number(monthly.total_repairs ?? 0) },
+                  ]}
+                  margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#a1a1aa' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
+                  <Tooltip contentStyle={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10, fontSize: 12, fontFamily: 'inherit' }}
+                    formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
+                  <Bar dataKey="amount" fill="#ec4899" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Detailed view */}
+          {/* Detailed breakdown */}
           {view === 'detailed' && (
-            <div style={styles.detailSection}>
-              <h2 style={styles.sectionTitle}>Financial Breakdown</h2>
-              <div style={styles.breakdownTable}>
-                <Row label="Total Revenue"    value={fmt(monthly.total_revenue)} />
-                <Row label="Total Expenses"   value={fmt(monthly.total_expenses)} negative />
-                <Row label="Total Payroll"    value={fmt(monthly.total_payroll)} negative />
-                <Row label="Net Profit"       value={fmt(monthly.net_profit)} bold />
-                <Row label="Bank Portion (40%)"  value={fmt(monthly.bank_portion)} />
-                <Row label="Owner Portion (60%)" value={fmt(monthly.owner_portion)} />
-                <Row label="Bank Tithes"      value={fmt(monthly.bank_tithes)} negative />
-                <Row label="Owner Tithes"     value={fmt(monthly.owner_tithes)} negative />
-                <Row label="Final Take-Home"  value={fmt(monthly.final_take_home)} bold accent />
+            <div>
+              <p style={s.sectionLabel}>Financial Breakdown</p>
+              <div style={s.breakdownCard}>
+                <BreakRow label="Total Revenue"       value={fmt(monthly.total_revenue)} />
+                <BreakRow label="Total Expenses"      value={fmt(monthly.total_expenses)} red />
+                <BreakRow label="Total Payroll"       value={fmt(monthly.total_payroll)} red />
+                <BreakRow label="Net Profit"          value={fmt(monthly.net_profit)} bold />
+                <BreakRow label="Bank Portion (40%)"  value={fmt(monthly.bank_portion)} />
+                <BreakRow label="Owner Portion (60%)" value={fmt(monthly.owner_portion)} />
+                <BreakRow label="Bank Tithes"         value={fmt(monthly.bank_tithes)} red />
+                <BreakRow label="Owner Tithes"        value={fmt(monthly.owner_tithes)} red />
+                <BreakRow label="Final Take-Home"     value={fmt(monthly.final_take_home)} bold green last />
               </div>
 
-              <h2 style={{ ...styles.sectionTitle, marginTop: 36 }}>Daily Snapshots ({snapshots.length} days)</h2>
-              {snapshots.length === 0 ? (
-                <p style={{ color: '#6A6560', fontSize: 13 }}>No snapshot data yet.</p>
-              ) : (
-                <div style={styles.snapshotList}>
-                  {snapshots.map((s: any) => (
-                    <div key={s.id} style={styles.snapshotRow}>
-                      <span style={styles.snapshotDate}>{s.snapshot_date}</span>
-                      <span style={styles.snapshotRevenue}>{fmt(s.total_revenue)}</span>
-                      <span style={styles.snapshotProfit}>{fmt(s.net_profit)}</span>
-                      <span style={styles.snapshotTakeHome}>{fmt(s.final_take_home)}</span>
+              {snapshots.length > 0 && (
+                <>
+                  <p style={{ ...s.sectionLabel, marginTop: 28 }}>Daily Snapshots ({snapshots.length} days)</p>
+                  <div style={s.snapshotCard}>
+                    <div style={s.snapshotHeader}>
+                      <span style={{ flex: 2 }}>Date</span>
+                      <span style={{ flex: 1, textAlign: 'right' }}>Revenue</span>
+                      <span style={{ flex: 1, textAlign: 'right' }}>Net Profit</span>
+                      <span style={{ flex: 1, textAlign: 'right' }}>Take-Home</span>
                     </div>
-                  ))}
-                </div>
+                    {snapshots.map((snap: any, i: number) => (
+                      <div key={snap.id} style={{ ...s.snapshotRow, borderBottom: i < snapshots.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
+                        <span style={{ flex: 2, color: '#71717a', fontSize: 13 }}>{snap.snapshot_date}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, color: '#18181b' }}>{fmt(snap.total_revenue)}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 500, color: '#18181b' }}>{fmt(snap.net_profit)}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#10b981' }}>{fmt(snap.final_take_home)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -188,77 +154,69 @@ export default function OwnerDashboard() {
 
 // ── Sub-components ───────────────────────────────────────────
 
-function BigStat({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+function KpiCard({ label, value, dark = false }: { label: string; value: string; dark?: boolean }) {
   return (
-    <div style={{ ...styles.bigStat, ...(highlight ? styles.bigStatHighlight : {}) }}>
-      <p style={{ ...styles.bigStatLabel, ...(highlight ? { color: 'rgba(255,255,255,0.6)' } : {}) }}>{label}</p>
-      <p style={{ ...styles.bigStatValue, ...(highlight ? { color: '#fff' } : {}) }}>{value}</p>
+    <div style={{ ...s.kpiCard, ...(dark ? s.kpiCardDark : {}) }}>
+      <p style={{ ...s.kpiLabel, ...(dark ? { color: 'rgba(255,255,255,0.5)' } : {}) }}>{label}</p>
+      <p style={{ ...s.kpiValue, ...(dark ? { color: '#fff' } : {}) }}>{value}</p>
     </div>
   )
 }
 
-function MetricCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function MetricCard({ label, value, green = false }: { label: string; value: string; green?: boolean }) {
   return (
-    <div style={{ ...styles.metricCard, ...(accent ? styles.metricCardAccent : {}) }}>
-      <p style={styles.metricLabel}>{label}</p>
-      <p style={{ ...styles.metricValue, ...(accent ? { color: '#0E0C09', fontSize: 28 } : {}) }}>{value}</p>
+    <div style={s.metricCard}>
+      <p style={s.metricLabel}>{label}</p>
+      <p style={{ ...s.metricValue, ...(green ? { color: '#10b981' } : {}) }}>{value}</p>
     </div>
   )
 }
 
-function Row({ label, value, negative = false, bold = false, accent = false }: {
-  label: string; value: string; negative?: boolean; bold?: boolean; accent?: boolean
+function BreakRow({ label, value, red = false, green = false, bold = false, last = false }: {
+  label: string; value: string; red?: boolean; green?: boolean; bold?: boolean; last?: boolean
 }) {
   return (
-    <div style={{ ...styles.tableRow, ...(bold ? styles.tableRowBold : {}) }}>
-      <span style={styles.tableLabel}>{label}</span>
-      <span style={{ ...styles.tableValue, ...(negative ? { color: '#c0392b' } : {}), ...(accent ? { color: '#27ae60' } : {}) }}>
-        {negative ? `(${value})` : value}
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 20px', borderBottom: last ? 'none' : '1px solid rgba(0,0,0,0.05)', background: bold ? '#f4f4f5' : 'transparent' }}>
+      <span style={{ fontSize: 14, color: '#71717a', fontWeight: bold ? 600 : 400 }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: bold ? 700 : 500, color: red ? '#ff3b30' : green ? '#10b981' : '#18181b', letterSpacing: '-0.01em' }}>
+        {red ? `(${value})` : value}
       </span>
     </div>
   )
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 36 },
-  title: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 36, fontWeight: 500, color: '#0E0C09', margin: 0 },
-  subtitle: { color: '#6A6560', fontSize: 14, marginTop: 4 },
-  toggle: { display: 'flex', border: '1px solid rgba(14,12,9,0.14)', borderRadius: 2, overflow: 'hidden' },
-  toggleBtn: { padding: '8px 20px', border: 'none', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#6A6560' },
-  toggleBtnActive: { background: '#0E0C09', color: '#fff' },
+const s: Record<string, React.CSSProperties> = {
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(0,0,0,0.07)' },
+  title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: '0 0 4px', letterSpacing: '-0.03em' },
+  subtitle: { color: '#71717a', fontSize: 13, margin: 0 },
+  muted: { color: '#71717a', fontSize: 14 },
 
-  statsBar: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 },
-  bigStat: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: '20px 22px' },
-  bigStatHighlight: { background: '#0E0C09' },
-  bigStatLabel: { fontSize: 11, color: '#6A6560', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' },
-  bigStatValue: { fontSize: 24, fontWeight: 700, color: '#0E0C09', margin: 0 },
+  segmented: { display: 'flex', background: 'rgba(120,120,128,0.12)', borderRadius: 10, padding: 3, gap: 2 },
+  seg: { padding: '6px 20px', border: 'none', background: 'transparent', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#71717a', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
+  segActive: { background: '#fff', color: '#18181b', boxShadow: '0 1px 4px rgba(0,0,0,0.12)' },
 
-  summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 },
-  metricCard: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: '20px 22px' },
-  metricCardAccent: { background: '#F3F1ED', border: '1px solid rgba(14,12,9,0.14)' },
-  metricLabel: { fontSize: 11, color: '#6A6560', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' },
-  metricValue: { fontSize: 20, fontWeight: 600, color: '#0E0C09', margin: 0 },
+  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 },
+  kpiCard: { background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
+  kpiCardDark: { background: '#1c1c1e', boxShadow: '0 2px 12px rgba(0,0,0,0.2)' },
+  kpiLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.04em', textTransform: 'uppercase', margin: '0 0 8px' },
+  kpiValue: { fontSize: 20, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.03em' },
 
-  detailSection: {},
-  sectionTitle: { fontSize: 11, fontWeight: 600, color: '#6A6560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 },
-  breakdownTable: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2 },
-  tableRow: { display: 'flex', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(14,12,9,0.05)', fontSize: 14 },
-  tableRowBold: { background: '#F3F1ED', fontWeight: 600 },
-  tableLabel: { color: '#6A6560' },
-  tableValue: { color: '#0E0C09', fontWeight: 500 },
+  summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 },
+  metricCard: { background: '#fff', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
+  metricLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.04em', textTransform: 'uppercase', margin: '0 0 8px' },
+  metricValue: { fontSize: 18, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.02em' },
 
-  snapshotList: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2 },
-  snapshotRow: { display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr', padding: '10px 20px', borderBottom: '1px solid rgba(14,12,9,0.05)', fontSize: 13 },
-  snapshotDate: { color: '#6A6560' },
-  snapshotRevenue: { color: '#0E0C09' },
-  snapshotProfit: { color: '#0E0C09', fontWeight: 500 },
-  snapshotTakeHome: { color: '#27ae60', fontWeight: 600 },
+  chartsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 28 },
+  chartCard: { background: '#fff', borderRadius: 16, padding: '20px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
+  chartTitle: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 },
+  chartEmpty: { height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a1a1aa', fontSize: 13 },
 
-  emptyCard: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: 40, textAlign: 'center' },
-  emptyText: { color: '#6A6560', fontSize: 15, margin: 0 },
+  sectionLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '0 0 8px' },
+  breakdownCard: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)', marginBottom: 0 },
+  snapshotCard: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
+  snapshotHeader: { display: 'flex', padding: '10px 20px', background: '#f4f4f5', fontSize: 10, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase' },
+  snapshotRow: { display: 'flex', padding: '11px 20px' },
 
-  chartsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 },
-  chartCard: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: '20px 22px' },
-  chartTitle: { fontSize: 11, color: '#6A6560', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 },
-  chartEmpty: { height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6A6560', fontSize: 13 },
+  emptyCard: { background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' },
+  emptyText: { color: '#71717a', fontSize: 15, margin: 0 },
 }

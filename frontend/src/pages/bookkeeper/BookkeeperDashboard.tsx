@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 
-// Format a number as USD currency
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n))
 }
@@ -16,89 +15,175 @@ export default function BookkeeperDashboard() {
     queryFn: () => api.get(`/daily-summary/${today()}`).then(r => r.data).catch(() => null),
   })
 
+  const dateLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
+
   return (
-    <div>
-      <header style={styles.header}>
+    <div style={s.page}>
+      {/* Page header */}
+      <header style={s.header}>
         <div>
-          <h1 style={styles.title}>Today's Summary</h1>
-          <p style={styles.date}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <h1 style={s.title}>Today's Summary</h1>
+          <p style={s.date}>{dateLabel}</p>
         </div>
-        {summary?.is_locked && <span style={styles.locked}>Day Locked</span>}
+        {summary?.is_locked && <span style={s.locked}>Day Locked</span>}
       </header>
 
       {isLoading ? (
-        <p style={styles.empty}>Loading…</p>
+        <p style={s.muted}>Loading…</p>
       ) : !summary ? (
-        <div style={styles.emptyCard}>
-          <p style={styles.emptyText}>No data entered yet today.</p>
-          <p style={styles.emptyHint}>Go to <strong>Daily Entry</strong> to start today's records.</p>
+        <div style={s.emptyCard}>
+          <p style={s.emptyTitle}>No data entered yet today</p>
+          <p style={s.emptyHint}>Go to <strong>Daily Entry</strong> to start today's records.</p>
         </div>
       ) : (
-        <div>
-          {/* Revenue breakdown */}
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Revenue</h2>
-            <div style={styles.grid4}>
-              <StatCard label="Wash & Set"  value={fmt(summary.total_wash_set)} />
-              <StatCard label="Wig Sales"   value={fmt(summary.total_wig_sales)} />
-              <StatCard label="Repairs"     value={fmt(summary.total_repairs)} />
-              <StatCard label="Total"       value={fmt(summary.total_revenue)} highlight />
+        <div style={s.content}>
+          <Section title="Revenue">
+            <div style={s.grid4}>
+              <StatCard label="Wash & Set"    value={fmt(summary.total_wash_set)} />
+              <StatCard label="Wig Sales"     value={fmt(summary.total_wig_sales)} />
+              <StatCard label="Repairs"       value={fmt(summary.total_repairs)} />
+              <StatCard label="Total Revenue" value={fmt(summary.total_revenue)} accent />
             </div>
-          </section>
+          </Section>
 
-          {/* Payment methods */}
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Collected By Method</h2>
-            <div style={styles.grid5}>
-              <StatCard label="Cash"       value={fmt(summary.cash_collected)} />
-              <StatCard label="QuickPay"   value={fmt(summary.quickpay_collected)} />
-              <StatCard label="Credit Card"value={fmt(summary.cc_collected)} />
-              <StatCard label="Check"      value={fmt(summary.check_collected)} />
-              <StatCard label="Zelle"      value={fmt(summary.zelle_collected)} />
+          <Section title="Collected by Method">
+            <div style={s.grid5}>
+              <StatCard label="Cash"        value={fmt(summary.cash_collected)} />
+              <StatCard label="QuickPay"    value={fmt(summary.quickpay_collected)} />
+              <StatCard label="Credit Card" value={fmt(summary.cc_collected)} />
+              <StatCard label="Check"       value={fmt(summary.check_collected)} />
+              <StatCard label="Zelle"       value={fmt(summary.zelle_collected)} />
             </div>
-          </section>
+          </Section>
 
-          {/* Counts */}
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Activity</h2>
-            <div style={styles.grid3}>
-              <StatCard label="New Wigs Sold"   value={summary.new_wigs_sold} />
-              <StatCard label="Paid in Full"    value={summary.wigs_paid_full} />
-              <StatCard label="Chani Cuts"      value={summary.chani_cuts} />
+          <Section title="Activity">
+            <div style={s.grid3}>
+              <StatCard label="New Wigs Sold" value={summary.new_wigs_sold} />
+              <StatCard label="Paid in Full"  value={summary.wigs_paid_full} />
+              <StatCard label="Chani Cuts"    value={summary.chani_cuts} />
             </div>
-          </section>
+          </Section>
         </div>
       )}
     </div>
   )
 }
 
-function StatCard({ label, value, highlight = false }: { label: string; value: string | number; highlight?: boolean }) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ ...styles.card, ...(highlight ? styles.cardHighlight : {}) }}>
-      <p style={styles.cardLabel}>{label}</p>
-      <p style={{ ...styles.cardValue, ...(highlight ? styles.cardValueHighlight : {}) }}>{value}</p>
+    <section style={s.section}>
+      <h2 style={s.sectionTitle}>{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+function StatCard({ label, value, accent = false }: {
+  label: string; value: string | number; accent?: boolean
+}) {
+  return (
+    <div style={{ ...s.card, ...(accent ? s.cardAccent : {}) }}>
+      <p style={{ ...s.cardLabel, ...(accent ? s.cardLabelAccent : {}) }}>{label}</p>
+      <p style={{ ...s.cardValue, ...(accent ? s.cardValueAccent : {}) }}>{value}</p>
     </div>
   )
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40 },
-  title: { fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 32, fontWeight: 500, color: '#0E0C09', margin: 0 },
-  date: { color: '#6A6560', fontSize: 14, marginTop: 4 },
-  locked: { background: '#0E0C09', color: '#fff', padding: '4px 12px', borderRadius: 2, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' },
-  section: { marginBottom: 36 },
-  sectionTitle: { fontSize: 11, fontWeight: 600, color: '#6A6560', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 },
-  grid4: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 },
-  grid5: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 },
-  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
-  card: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: '18px 20px' },
-  cardHighlight: { background: '#0E0C09' },
-  cardLabel: { fontSize: 11, color: '#6A6560', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '0 0 8px' },
-  cardValue: { fontSize: 22, fontWeight: 600, color: '#0E0C09', margin: 0 },
-  cardValueHighlight: { color: '#fff' },
-  emptyCard: { background: '#fff', border: '1px solid rgba(14,12,9,0.07)', borderRadius: 2, padding: '40px', textAlign: 'center' },
-  emptyText: { color: '#0E0C09', fontSize: 16, fontWeight: 500, margin: '0 0 8px' },
-  emptyHint: { color: '#6A6560', fontSize: 14, margin: 0 },
-  empty: { color: '#6A6560', fontSize: 14 },
+const s: Record<string, React.CSSProperties> = {
+  page: {
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+    letterSpacing: '-0.01em',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 36,
+    paddingBottom: 24,
+    borderBottom: '1px solid rgba(0,0,0,0.07)',
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: 600,
+    color: '#18181b',
+    margin: '0 0 4px',
+    letterSpacing: '-0.02em',
+  },
+  date: {
+    fontSize: 13,
+    color: '#71717a',
+    margin: 0,
+    fontWeight: 400,
+  },
+  locked: {
+    background: '#1c1c1e',
+    color: '#fff',
+    padding: '5px 14px',
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+  },
+  muted: { color: '#71717a', fontSize: 14 },
+
+  content: { display: 'flex', flexDirection: 'column' },
+  section: { marginBottom: 28 },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#a1a1aa',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+
+  grid4: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 },
+  grid5: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 },
+  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 },
+
+  /* iOS-style cards */
+  card: {
+    background: '#ffffff',
+    border: '1px solid rgba(0,0,0,0.06)',
+    borderRadius: 16,
+    padding: '18px 20px',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+  },
+  cardAccent: {
+    background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+    border: 'none',
+    boxShadow: '0 4px 20px rgba(236,72,153,0.25)',
+  },
+  cardLabel: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: '#a1a1aa',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    margin: '0 0 8px',
+  },
+  cardLabelAccent: { color: 'rgba(255,255,255,0.35)' },
+  cardValue: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: '#18181b',
+    margin: 0,
+    letterSpacing: '-0.03em',
+    lineHeight: 1,
+  },
+  cardValueAccent: { color: '#ffffff' },
+
+  emptyCard: {
+    background: '#ffffff',
+    border: '1px solid rgba(0,0,0,0.06)',
+    borderRadius: 20,
+    padding: '52px 40px',
+    textAlign: 'center',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+  },
+  emptyTitle: { color: '#18181b', fontSize: 16, fontWeight: 600, margin: '0 0 8px', letterSpacing: '-0.02em' },
+  emptyHint: { color: '#71717a', fontSize: 14, margin: 0 },
 }

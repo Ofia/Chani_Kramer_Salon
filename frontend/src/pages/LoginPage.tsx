@@ -8,7 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
   const { profile } = useAuth()
 
   useEffect(() => {
@@ -28,22 +28,24 @@ export default function LoginPage() {
 
   return (
     <div style={s.page}>
-      {/* Left panel — brand */}
+      {/* Left — brand panel */}
       <div style={s.left}>
-        <div style={s.brandBlock}>
+        <div style={s.leftInner}>
           <div style={s.logoMark}>CK</div>
-          <h1 style={s.salonName}>Chani Kramer</h1>
-          <p style={s.salonSub}>Wigs Salon · Brooklyn</p>
+          <h1 style={s.brandName}>Chani Kramer</h1>
+          <p style={s.brandSub}>Wigs Salon · Brooklyn, NY</p>
+          <p style={s.tagline}>Your salon's numbers,<br />always in order.</p>
         </div>
-        <p style={s.tagline}>Your salon's numbers, always in order.</p>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right — form panel */}
       <div style={s.right}>
         <div style={s.card}>
-          <div style={s.cardHeader}>
-            <h2 style={s.cardTitle}>Sign in</h2>
-            <p style={s.cardSub}>Enter your credentials to continue</p>
+          {/* Header */}
+          <div style={s.cardTop}>
+            <div style={s.cardLogo}>CK</div>
+            <h2 style={s.cardTitle}>Welcome back</h2>
+            <p style={s.cardSub}>Sign in to your account</p>
           </div>
 
           <form onSubmit={handleLogin} style={s.form}>
@@ -72,7 +74,7 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && <p style={s.error}>{error}</p>}
+            {error && <div style={s.errorBox}>{error}</div>}
 
             <button type="submit" disabled={loading} style={s.button}>
               {loading ? 'Signing in…' : 'Sign In'}
@@ -88,138 +90,159 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'flex',
-    fontFamily: "'DM Sans', system-ui, sans-serif",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+    letterSpacing: '-0.01em',
   },
 
-  /* Left brand panel */
+  /* ── Left brand panel ── */
   left: {
-    width: '42%',
-    background: '#111110',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    padding: '60px 56px',
-  },
-  brandBlock: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  logoMark: {
-    width: 44,
-    height: 44,
-    background: '#2a2927',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 10,
+    width: '40%',
+    background: '#1c1c1e',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 15,
+    padding: '60px 48px',
+  },
+  leftInner: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+  },
+  logoMark: {
+    width: 48,
+    height: 48,
+    background: 'linear-gradient(135deg, #3a3a3c 0%, #2c2c2e 100%)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 16,
     fontWeight: 700,
-    color: '#A0917E',
-    letterSpacing: '0.06em',
+    color: 'rgba(255,255,255,0.75)',
+    letterSpacing: '0.04em',
     marginBottom: 8,
   },
-  salonName: {
-    fontFamily: "'Cormorant Garamond', Georgia, serif",
-    fontSize: 32,
-    fontWeight: 500,
-    color: 'rgba(255,255,255,0.92)',
+  brandName: {
+    fontSize: 28,
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.9)',
     margin: 0,
-    letterSpacing: '0.02em',
+    letterSpacing: '-0.02em',
     lineHeight: 1.1,
   },
-  salonSub: {
+  brandSub: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.35)',
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.3)',
     margin: 0,
   },
   tagline: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.2)',
-    margin: 0,
-    letterSpacing: '0.02em',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.18)',
+    margin: '24px 0 0',
+    lineHeight: 1.5,
   },
 
-  /* Right form panel */
+  /* ── Right form panel ── */
   right: {
     flex: 1,
-    background: '#F5F4F1',
+    background: '#fafafa',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '48px 40px',
   },
+
+  /* iOS-style card */
   card: {
-    background: '#fff',
-    borderRadius: 12,
-    padding: '40px 36px',
+    background: '#ffffff',
+    borderRadius: 20,
+    padding: '36px 32px',
     width: '100%',
     maxWidth: 380,
-    boxShadow: '0 1px 4px rgba(14,12,9,0.06), 0 0 0 1px rgba(14,12,9,0.06)',
+    boxShadow: '0 2px 20px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05)',
   },
-  cardHeader: {
+  cardTop: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
     marginBottom: 28,
+    gap: 8,
+  },
+  cardLogo: {
+    width: 44,
+    height: 44,
+    background: '#1c1c1e',
+    borderRadius: 12,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 14,
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: '0.04em',
+    marginBottom: 4,
   },
   cardTitle: {
     fontSize: 20,
     fontWeight: 600,
-    color: '#0E0C09',
-    margin: '0 0 4px',
+    color: '#18181b',
+    letterSpacing: '-0.02em',
+    margin: 0,
   },
   cardSub: {
     fontSize: 13,
-    color: '#6A6560',
+    color: '#71717a',
     margin: 0,
   },
+
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 18,
+    gap: 14,
   },
   field: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 6,
+    gap: 5,
   },
   label: {
     fontSize: 12,
     fontWeight: 500,
-    color: '#6A6560',
-    letterSpacing: '0.04em',
+    color: '#71717a',
+    letterSpacing: '-0.01em',
   },
   input: {
-    padding: '9px 12px',
-    border: '1px solid rgba(14,12,9,0.14)',
-    borderRadius: 7,
-    fontSize: 14,
-    color: '#0E0C09',
-    background: '#fafaf9',
+    padding: '10px 14px',
+    border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: 10,
+    fontSize: 15,
+    color: '#18181b',
+    background: '#f9f9f9',
     outline: 'none',
-    transition: 'border-color 0.15s',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+    letterSpacing: '-0.01em',
   },
-  error: {
-    color: '#c0392b',
+  errorBox: {
+    color: '#ff3b30',
     fontSize: 13,
-    margin: 0,
-    background: 'rgba(192,57,43,0.06)',
-    border: '1px solid rgba(192,57,43,0.15)',
-    borderRadius: 6,
-    padding: '8px 12px',
+    background: 'rgba(255,59,48,0.06)',
+    border: '1px solid rgba(255,59,48,0.15)',
+    borderRadius: 10,
+    padding: '9px 14px',
   },
   button: {
-    background: '#111110',
-    color: '#fff',
+    background: '#1c1c1e',
+    color: '#ffffff',
     border: 'none',
-    borderRadius: 7,
-    padding: '11px 0',
-    fontSize: 14,
-    fontWeight: 500,
+    borderRadius: 12,
+    padding: '13px 0',
+    fontSize: 15,
+    fontWeight: 600,
     cursor: 'pointer',
-    letterSpacing: '0.02em',
-    marginTop: 4,
-    transition: 'background 0.15s',
+    letterSpacing: '-0.01em',
+    marginTop: 6,
+    transition: 'opacity 0.15s',
   },
 }

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap');
-
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -10,13 +8,40 @@ html, body {
   height: 100%;
 }
 
+:root {
+  --background:        #fafafa;
+  --foreground:        #18181b;
+  --card:              #ffffff;
+  --card-foreground:   #18181b;
+  --primary:           #ec4899;
+  --primary-foreground:#ffffff;
+  --secondary:         #f4f4f5;
+  --muted:             #f4f4f5;
+  --muted-foreground:  #71717a;
+  --border:            #e4e4e7;
+  --input:             #e4e4e7;
+  --destructive:       #ef4444;
+  --chart-1:           #ec4899;
+  --chart-2:           #06b6d4;
+  --chart-3:           #8b5cf6;
+  --chart-4:           #10b981;
+  --chart-5:           #f59e0b;
+  --sidebar:           #1a1a1d;
+  --sidebar-foreground:#e4e4e7;
+  --sidebar-primary:   #ec4899;
+  --sidebar-accent:    #27272a;
+  --sidebar-border:    #27272a;
+  --radius:            0.5rem;
+}
+
 body {
-  background: #F3F1ED;
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   font-size: 14px;
-  color: #0E0C09;
+  color: var(--foreground);
+  background: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 #root {
@@ -26,6 +51,7 @@ body {
 input, button, textarea, select {
   font-family: inherit;
   font-size: inherit;
+  letter-spacing: inherit;
 }
 
 button {
