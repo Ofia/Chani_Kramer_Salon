@@ -61,11 +61,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (DEV_BYPASS) return
 
-    // Check if there's already a session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Check if there's already a session on mount — await profile before un-blocking routes
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile()
+      if (session?.user) await fetchProfile()
       setLoading(false)
     })
 
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        fetchProfile()
+        fetchProfile()   // fire-and-forget — RequireOwner waits for profile separately
       } else {
         setProfile(null)
       }

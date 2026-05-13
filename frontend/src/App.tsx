@@ -28,8 +28,9 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 // Owner-only guard
 function RequireOwner({ children }: { children: React.ReactNode }) {
-  const { profile, loading } = useAuth()
-  if (loading) return null
+  const { user, profile, loading } = useAuth()
+  // Still waiting for initial session check OR user is logged in but profile hasn't arrived yet
+  if (loading || (user && !profile)) return null
   if (profile?.role !== 'owner') return <Navigate to="/bookkeeper" replace />
   return <>{children}</>
 }
