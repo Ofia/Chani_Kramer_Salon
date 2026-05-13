@@ -31,19 +31,17 @@ export default function LoginPage() {
       {/* Left — brand panel */}
       <div style={s.left}>
         <div style={s.leftInner}>
-          <div style={s.logoMark}>CK</div>
-          <h1 style={s.brandName}>Chani Kramer</h1>
-          <p style={s.brandSub}>Wigs Salon · Brooklyn, NY</p>
+          <img src="/logo-full.jpeg" alt="Chani Kramer Wigs Salon" style={s.leftLogo} />
           <p style={s.tagline}>Your salon's numbers,<br />always in order.</p>
+          <p style={s.address}>1474 60th St · Brooklyn, NY 11219</p>
         </div>
       </div>
 
       {/* Right — form panel */}
       <div style={s.right}>
         <div style={s.card}>
-          {/* Header */}
           <div style={s.cardTop}>
-            <div style={s.cardLogo}>CK</div>
+            <img src="/logo-full.jpeg" alt="Chani Kramer Wigs Salon" style={s.cardLogo} />
             <h2 style={s.cardTitle}>Welcome back</h2>
             <p style={s.cardSub}>Sign in to your account</p>
           </div>
@@ -90,77 +88,59 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'flex',
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
-    letterSpacing: '-0.01em',
+    fontFamily: "'Inter', -apple-system, sans-serif",
+    background: '#f7f7f5',
   },
 
-  /* ── Left brand panel ── */
   left: {
-    width: '40%',
-    background: '#1c1c1e',
+    width: '42%',
+    background: '#f7f7f5',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '60px 48px',
+    padding: '60px 56px',
+    borderRight: '1px solid rgba(13,13,13,0.09)',
   },
   leftInner: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 16,
+    gap: 20,
   },
-  logoMark: {
-    width: 48,
-    height: 48,
-    background: 'linear-gradient(135deg, #3a3a3c 0%, #2c2c2e 100%)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 12,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 16,
-    fontWeight: 700,
-    color: 'rgba(255,255,255,0.75)',
-    letterSpacing: '0.04em',
-    marginBottom: 8,
-  },
-  brandName: {
-    fontSize: 28,
-    fontWeight: 600,
-    color: 'rgba(255,255,255,0.9)',
-    margin: 0,
-    letterSpacing: '-0.02em',
-    lineHeight: 1.1,
-  },
-  brandSub: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
-    margin: 0,
+  leftLogo: {
+    width: 300,
+    objectFit: 'contain' as const,
+    borderRadius: 10,
   },
   tagline: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.18)',
-    margin: '24px 0 0',
+    fontSize: 18,
+    fontWeight: 500,
+    color: '#0d0d0d',
     lineHeight: 1.5,
+    letterSpacing: '-0.01em',
+  },
+  address: {
+    fontSize: 12,
+    color: 'rgba(13,13,13,0.42)',
+    letterSpacing: '0.02em',
   },
 
-  /* ── Right form panel ── */
   right: {
     flex: 1,
-    background: '#fafafa',
+    background: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '48px 40px',
   },
 
-  /* iOS-style card */
   card: {
     background: '#ffffff',
-    borderRadius: 20,
-    padding: '36px 32px',
+    borderRadius: 14,
     width: '100%',
-    maxWidth: 380,
-    boxShadow: '0 2px 20px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05)',
+    maxWidth: 400,
+    border: '1px solid rgba(13,13,13,0.09)',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)',
+    padding: '36px 32px',
   },
   cardTop: {
     display: 'flex',
@@ -171,30 +151,19 @@ const s: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   cardLogo: {
-    width: 44,
-    height: 44,
-    background: '#1c1c1e',
-    borderRadius: 12,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 14,
-    fontWeight: 700,
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: '0.04em',
+    width: 180,
+    objectFit: 'contain' as const,
     marginBottom: 4,
   },
   cardTitle: {
     fontSize: 20,
-    fontWeight: 600,
-    color: '#18181b',
+    fontWeight: 700,
+    color: '#0d0d0d',
     letterSpacing: '-0.02em',
-    margin: 0,
   },
   cardSub: {
     fontSize: 13,
-    color: '#71717a',
-    margin: 0,
+    color: 'rgba(13,13,13,0.42)',
   },
 
   form: {
@@ -208,41 +177,41 @@ const s: Record<string, React.CSSProperties> = {
     gap: 5,
   },
   label: {
-    fontSize: 12,
-    fontWeight: 500,
-    color: '#71717a',
-    letterSpacing: '-0.01em',
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'rgba(13,13,13,0.42)',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
   },
   input: {
     padding: '10px 14px',
-    border: '1px solid rgba(0,0,0,0.12)',
-    borderRadius: 10,
+    border: '1px solid rgba(13,13,13,0.12)',
+    borderRadius: 8,
     fontSize: 15,
-    color: '#18181b',
-    background: '#f9f9f9',
+    color: '#0d0d0d',
+    background: '#f7f7f5',
     outline: 'none',
-    transition: 'border-color 0.15s, box-shadow 0.15s',
     letterSpacing: '-0.01em',
   },
   errorBox: {
-    color: '#ff3b30',
+    color: '#dc2626',
     fontSize: 13,
-    background: 'rgba(255,59,48,0.06)',
-    border: '1px solid rgba(255,59,48,0.15)',
-    borderRadius: 10,
+    background: 'rgba(220,38,38,0.06)',
+    border: '1px solid rgba(220,38,38,0.15)',
+    borderRadius: 8,
     padding: '9px 14px',
   },
   button: {
-    background: '#1c1c1e',
+    background: '#0d0d0d',
     color: '#ffffff',
     border: 'none',
-    borderRadius: 12,
+    borderRadius: 9,
     padding: '13px 0',
     fontSize: 15,
     fontWeight: 600,
     cursor: 'pointer',
     letterSpacing: '-0.01em',
     marginTop: 6,
-    transition: 'opacity 0.15s',
+    transition: 'opacity 0.12s',
   },
 }

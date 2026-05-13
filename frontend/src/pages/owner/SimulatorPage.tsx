@@ -120,7 +120,7 @@ const s: Record<string, React.CSSProperties> = {
   moneyBox: { display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, overflow: 'hidden', background: '#f9f9f9' },
   sym: { padding: '0 8px', color: '#71717a', fontSize: 13, borderRight: '1px solid rgba(0,0,0,0.08)', paddingTop: 5, paddingBottom: 5 },
   moneyInput: { border: 'none', padding: '5px 8px', fontSize: 13, color: '#18181b', outline: 'none', background: 'transparent', fontFamily: 'inherit', width: 80 },
-  slider: { width: '100%', accentColor: '#ec4899', marginBottom: 4 },
+  slider: { width: '100%', accentColor: '#212121', marginBottom: 4 },
   sliderRange: { display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#a1a1aa' },
 
   resultCard: { background: '#fff', borderRadius: 16, padding: '4px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)' },

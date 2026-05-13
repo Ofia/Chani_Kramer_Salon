@@ -117,7 +117,7 @@ export default function DepositsPage() {
         {/* Payment method breakdown */}
         <div style={s.breakdownCard}>
           <p style={s.breakTitle}>Payment Breakdown</p>
-          <MiniBar label="Cash"        pct={pcts.cash}  amount={cashNum}   color="#ec4899" />
+          <MiniBar label="Cash"        pct={pcts.cash}  amount={cashNum}   color="#212121" />
           <MiniBar label="Checks"      pct={pcts.check} amount={checksNum} color="#8b5cf6" />
           <MiniBar label="Credit Card" pct={pcts.cc}    amount={ccNum}     color="#06b6d4" />
           <MiniBar label="Zelle"       pct={pcts.zelle} amount={zelleNum}  color="#10b981" />
@@ -177,10 +177,10 @@ function TaxLine({ label, value, color, last = false }: { label: string; value: 
 }
 
 const s: Record<string, React.CSSProperties> = {
-  shell: { display: 'flex', gap: 28, alignItems: 'flex-start' },
+  shell: { display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 28, alignItems: 'start' },
 
   /* Form column */
-  formCol: { flex: '0 0 480px', minWidth: 0 },
+  formCol: { minWidth: 0 },
 
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.07)' },
   title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.03em' },
@@ -208,7 +208,7 @@ const s: Record<string, React.CSSProperties> = {
   notesInput: { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '9px 12px', fontSize: 14, color: '#18181b', background: '#fff', outline: 'none', fontFamily: 'inherit' },
 
   actions: { display: 'flex', alignItems: 'center', gap: 16 },
-  primaryBtn: { background: '#ec4899', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '-0.01em' },
+  primaryBtn: { background: '#212121', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '-0.01em' },
   success: { color: '#10b981', fontSize: 13, fontWeight: 500 },
 
   /* Dashboard column */

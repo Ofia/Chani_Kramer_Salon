@@ -5,6 +5,17 @@
 https://github.com/Ofia/Chani_Kramer_Salon.git
 
 
+## Running the App
+
+**Backend** (from `backend/` directory):
+```bash
+uvicorn app.main:app --reload
+```
+
+**Frontend** (from `frontend/` directory):
+```bash
+npm run dev
+```
 
 
 ## Project Overview

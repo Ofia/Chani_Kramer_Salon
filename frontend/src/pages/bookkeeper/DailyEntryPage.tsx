@@ -186,7 +186,7 @@ export default function DailyEntryPage() {
 
             <div style={s.navRow}>
               {step > 0 && <button onClick={() => setStep(p => p - 1)} style={s.navBtn}>← Previous</button>}
-              {step < STEPS.length - 1 && <button onClick={() => setStep(p => p + 1)} style={{ ...s.navBtn, marginLeft: 'auto', color: '#ec4899' }}>Next →</button>}
+              {step < STEPS.length - 1 && <button onClick={() => setStep(p => p + 1)} style={{ ...s.navBtn, marginLeft: 'auto', color: '#212121' }}>Next →</button>}
             </div>
           </>
         )}
@@ -205,7 +205,7 @@ export default function DailyEntryPage() {
         {/* Revenue breakdown bars */}
         <div style={s.breakdownCard}>
           <p style={s.breakTitle}>Revenue by Stream</p>
-          <MiniBar label="Wash & Set" amount={ws}   pct={totalRevenue ? (ws / totalRevenue) * 100 : 0}   color="#ec4899" />
+          <MiniBar label="Wash & Set" amount={ws}   pct={totalRevenue ? (ws / totalRevenue) * 100 : 0}   color="#212121" />
           <MiniBar label="Wig Sales"  amount={wigs}  pct={totalRevenue ? (wigs / totalRevenue) * 100 : 0} color="#06b6d4" />
           <MiniBar label="Repairs"   amount={rep}   pct={totalRevenue ? (rep / totalRevenue) * 100 : 0}  color="#8b5cf6" />
         </div>
@@ -232,7 +232,7 @@ export default function DailyEntryPage() {
 
         {/* Activity counts */}
         <div style={s.countGrid}>
-          <CountCard label="Wigs Sold" value={parseInt(form.new_wigs_sold) || 0} color="#ec4899" />
+          <CountCard label="Wigs Sold" value={parseInt(form.new_wigs_sold) || 0} color="#212121" />
           <CountCard label="Chani Cuts" value={parseInt(form.chani_cuts) || 0} color="#8b5cf6" />
         </div>
 
@@ -354,7 +354,7 @@ const s: Record<string, React.CSSProperties> = {
   subtotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, padding: '12px 14px', background: '#f4f4f5', borderRadius: 10 },
 
   actions: { display: 'flex', gap: 10, marginTop: 22 },
-  primaryBtn: { flex: 1, background: '#ec4899', color: '#fff', border: 'none', borderRadius: 12, padding: '13px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
+  primaryBtn: { flex: 1, background: '#212121', color: '#fff', border: 'none', borderRadius: 12, padding: '13px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
   ghostBtn: { background: 'none', border: '1px solid rgba(0,0,0,0.14)', borderRadius: 12, padding: '13px 20px', fontSize: 14, cursor: 'pointer', color: '#71717a', fontFamily: 'inherit' },
   success: { color: '#10b981', fontSize: 13, marginTop: 10 },
   errorMsg: { color: '#ff3b30', fontSize: 13, marginTop: 10 },

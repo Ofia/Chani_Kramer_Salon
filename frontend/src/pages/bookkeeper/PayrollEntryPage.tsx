@@ -147,6 +147,6 @@ const s: Record<string, React.CSSProperties> = {
   totalValue: { flex: 1, textAlign: 'right', fontWeight: 700, fontSize: 17, color: '#18181b', letterSpacing: '-0.02em' },
 
   actions: { display: 'flex', alignItems: 'center', gap: 16 },
-  primaryBtn: { background: '#ec4899', color: '#fff', border: 'none', borderRadius: 12, padding: '12px 32px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '-0.01em' },
+  primaryBtn: { background: '#212121', color: '#fff', border: 'none', borderRadius: 12, padding: '12px 32px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '-0.01em' },
   success: { color: '#34c759', fontSize: 13, fontWeight: 500 },
 }

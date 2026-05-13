@@ -34,7 +34,6 @@ export default function OwnerDashboard() {
           <h1 style={s.title}>Overview</h1>
           <p style={s.subtitle}>{monthLabel}</p>
         </div>
-        {/* iOS segmented control */}
         <div style={s.segmented}>
           <button onClick={() => setView('summary')}  style={{ ...s.seg, ...(view === 'summary'  ? s.segActive : {}) }}>Summary</button>
           <button onClick={() => setView('detailed')} style={{ ...s.seg, ...(view === 'detailed' ? s.segActive : {}) }}>Detailed</button>
@@ -74,12 +73,12 @@ export default function OwnerDashboard() {
               ) : (
                 <ResponsiveContainer width="100%" height={180}>
                   <LineChart data={snapshots} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
-                    <XAxis dataKey="snapshot_date" tick={{ fontSize: 10, fill: '#a1a1aa' }} tickFormatter={d => d.slice(5)} />
-                    <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
-                    <Tooltip contentStyle={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10, fontSize: 12, fontFamily: 'inherit' }}
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,13,0.06)" />
+                    <XAxis dataKey="snapshot_date" tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={d => d.slice(5)} />
+                    <YAxis tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
+                    <Tooltip contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 10, fontSize: 12, fontFamily: 'Inter' }}
                       formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
-                    <Line type="monotone" dataKey="total_revenue" stroke="#ec4899" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="total_revenue" stroke="#212121" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -96,12 +95,12 @@ export default function OwnerDashboard() {
                   ]}
                   margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#a1a1aa' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#a1a1aa' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
-                  <Tooltip contentStyle={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10, fontSize: 12, fontFamily: 'inherit' }}
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,13,0.06)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} />
+                  <YAxis tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
+                  <Tooltip contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 10, fontSize: 12, fontFamily: 'Inter' }}
                     formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
-                  <Bar dataKey="amount" fill="#ec4899" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="amount" fill="#212121" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -134,11 +133,11 @@ export default function OwnerDashboard() {
                       <span style={{ flex: 1, textAlign: 'right' }}>Take-Home</span>
                     </div>
                     {snapshots.map((snap: any, i: number) => (
-                      <div key={snap.id} style={{ ...s.snapshotRow, borderBottom: i < snapshots.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none' }}>
-                        <span style={{ flex: 2, color: '#71717a', fontSize: 13 }}>{snap.snapshot_date}</span>
-                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, color: '#18181b' }}>{fmt(snap.total_revenue)}</span>
-                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 500, color: '#18181b' }}>{fmt(snap.net_profit)}</span>
-                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#10b981' }}>{fmt(snap.final_take_home)}</span>
+                      <div key={snap.id} style={{ ...s.snapshotRow, borderBottom: i < snapshots.length - 1 ? '1px solid rgba(13,13,13,0.06)' : 'none' }}>
+                        <span style={{ flex: 2, color: 'rgba(13,13,13,0.42)', fontSize: 13, fontFamily: 'Inter' }}>{snap.snapshot_date}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, color: '#0d0d0d' }}>{fmt(snap.total_revenue)}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 500, color: '#0d0d0d' }}>{fmt(snap.net_profit)}</span>
+                        <span style={{ flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#16a34a' }}>{fmt(snap.final_take_home)}</span>
                       </div>
                     ))}
                   </div>
@@ -167,7 +166,7 @@ function MetricCard({ label, value, green = false }: { label: string; value: str
   return (
     <div style={s.metricCard}>
       <p style={s.metricLabel}>{label}</p>
-      <p style={{ ...s.metricValue, ...(green ? { color: '#10b981' } : {}) }}>{value}</p>
+      <p style={{ ...s.metricValue, ...(green ? { color: '#16a34a' } : {}) }}>{value}</p>
     </div>
   )
 }
@@ -176,9 +175,9 @@ function BreakRow({ label, value, red = false, green = false, bold = false, last
   label: string; value: string; red?: boolean; green?: boolean; bold?: boolean; last?: boolean
 }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 20px', borderBottom: last ? 'none' : '1px solid rgba(0,0,0,0.05)', background: bold ? '#f4f4f5' : 'transparent' }}>
-      <span style={{ fontSize: 14, color: '#71717a', fontWeight: bold ? 600 : 400 }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: bold ? 700 : 500, color: red ? '#ff3b30' : green ? '#10b981' : '#18181b', letterSpacing: '-0.01em' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 20px', borderBottom: last ? 'none' : '1px solid rgba(13,13,13,0.06)', background: bold ? '#f7f7f5' : 'transparent' }}>
+      <span style={{ fontSize: 14, color: 'rgba(13,13,13,0.55)', fontWeight: bold ? 600 : 400 }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: bold ? 700 : 500, color: red ? '#dc2626' : green ? '#16a34a' : '#0d0d0d', letterSpacing: '-0.01em' }}>
         {red ? `(${value})` : value}
       </span>
     </div>
@@ -186,37 +185,37 @@ function BreakRow({ label, value, red = false, green = false, bold = false, last
 }
 
 const s: Record<string, React.CSSProperties> = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(0,0,0,0.07)' },
-  title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: '0 0 4px', letterSpacing: '-0.03em' },
-  subtitle: { color: '#71717a', fontSize: 13, margin: 0 },
-  muted: { color: '#71717a', fontSize: 14 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(13,13,13,0.09)' },
+  title: { fontSize: 26, fontWeight: 700, color: '#0d0d0d', margin: '0 0 4px', letterSpacing: '-0.03em' },
+  subtitle: { color: 'rgba(13,13,13,0.42)', fontSize: 13, margin: 0, fontFamily: "'Inter', sans-serif" },
+  muted: { color: 'rgba(13,13,13,0.42)', fontSize: 14 },
 
-  segmented: { display: 'flex', background: 'rgba(120,120,128,0.12)', borderRadius: 10, padding: 3, gap: 2 },
-  seg: { padding: '6px 20px', border: 'none', background: 'transparent', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#71717a', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
-  segActive: { background: '#fff', color: '#18181b', boxShadow: '0 1px 4px rgba(0,0,0,0.12)' },
+  segmented: { display: 'flex', background: 'rgba(13,13,13,0.06)', borderRadius: 10, padding: 3, gap: 2 },
+  seg: { padding: '6px 20px', border: 'none', background: 'transparent', borderRadius: 8, fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.42)', cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.15s' },
+  segActive: { background: '#fff', color: '#0d0d0d', boxShadow: '0 1px 4px rgba(0,0,0,0.10)' },
 
   kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 },
-  kpiCard: { background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
-  kpiCardDark: { background: '#1c1c1e', boxShadow: '0 2px 12px rgba(0,0,0,0.2)' },
-  kpiLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.04em', textTransform: 'uppercase', margin: '0 0 8px' },
-  kpiValue: { fontSize: 20, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.03em' },
+  kpiCard: { background: '#fff', borderRadius: 14, padding: '18px 20px', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
+  kpiCardDark: { background: '#0d0d0d', border: 'none', boxShadow: '0 2px 12px rgba(0,0,0,0.15)' },
+  kpiLabel: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.42)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px', fontFamily: "'Inter', sans-serif" },
+  kpiValue: { fontSize: 20, fontWeight: 700, color: '#0d0d0d', margin: 0, letterSpacing: '-0.03em' },
 
   summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 },
-  metricCard: { background: '#fff', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
-  metricLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.04em', textTransform: 'uppercase', margin: '0 0 8px' },
-  metricValue: { fontSize: 18, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.02em' },
+  metricCard: { background: '#fff', borderRadius: 14, padding: '18px 20px', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
+  metricLabel: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.42)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px', fontFamily: "'Inter', sans-serif" },
+  metricValue: { fontSize: 18, fontWeight: 700, color: '#0d0d0d', margin: 0, letterSpacing: '-0.02em' },
 
   chartsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 28 },
-  chartCard: { background: '#fff', borderRadius: 16, padding: '20px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
-  chartTitle: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14 },
-  chartEmpty: { height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a1a1aa', fontSize: 13 },
+  chartCard: { background: '#fff', borderRadius: 14, padding: '20px 20px', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
+  chartTitle: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.42)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14, fontFamily: "'Inter', sans-serif" },
+  chartEmpty: { height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(13,13,13,0.35)', fontSize: 13 },
 
-  sectionLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '0 0 8px' },
-  breakdownCard: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)', marginBottom: 0 },
-  snapshotCard: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.05)' },
-  snapshotHeader: { display: 'flex', padding: '10px 20px', background: '#f4f4f5', fontSize: 10, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase' },
+  sectionLabel: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.42)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px', fontFamily: "'Inter', sans-serif" },
+  breakdownCard: { background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)', marginBottom: 0 },
+  snapshotCard: { background: '#fff', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
+  snapshotHeader: { display: 'flex', padding: '10px 20px', background: '#f7f7f5', fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.42)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" },
   snapshotRow: { display: 'flex', padding: '11px 20px' },
 
-  emptyCard: { background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' },
-  emptyText: { color: '#71717a', fontSize: 15, margin: 0 },
+  emptyCard: { background: '#fff', borderRadius: 14, padding: 48, textAlign: 'center', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
+  emptyText: { color: 'rgba(13,13,13,0.42)', fontSize: 15, margin: 0 },
 }

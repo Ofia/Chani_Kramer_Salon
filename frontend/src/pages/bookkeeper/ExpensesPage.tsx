@@ -155,7 +155,7 @@ const s: Record<string, React.CSSProperties> = {
   page: { maxWidth: 600 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.07)' },
   title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.03em' },
-  addBtn: { background: '#ec4899', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
+  addBtn: { background: '#212121', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
   cancelBtn: { background: 'rgba(0,0,0,0.06)', color: '#18181b', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' },
 
   formCard: { background: '#fff', borderRadius: 16, padding: '24px', marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)' },
@@ -165,7 +165,7 @@ const s: Record<string, React.CSSProperties> = {
   moneyRow: { display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, overflow: 'hidden', background: '#f9f9f9' },
   moneySym: { padding: '0 10px', color: '#71717a', fontSize: 14, borderRight: '1px solid rgba(0,0,0,0.08)', paddingTop: 9, paddingBottom: 9 },
   moneyInput: { flex: 1, border: 'none', padding: '9px 10px', fontSize: 14, color: '#18181b', outline: 'none', background: 'transparent', fontFamily: 'inherit' },
-  submitBtn: { background: '#ec4899', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start', fontFamily: 'inherit' },
+  submitBtn: { background: '#212121', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start', fontFamily: 'inherit' },
 
   sectionLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 },
   list: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)' },
