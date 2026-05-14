@@ -6,6 +6,10 @@ Think of these as "contracts":
   - Response schema = what the API will return
 
 Pydantic validates and serializes automatically.
+
+NOTE: Response schemas use `float` for numeric fields, not `Decimal`.
+Pydantic v2 serializes Decimal to JSON strings; float serializes as JSON numbers.
+Create/Update schemas keep `Decimal` for precision when writing to the DB.
 """
 
 from datetime import date, datetime
@@ -67,9 +71,9 @@ class EmployeeResponse(BaseModel):
     last_name: str
     job_title: str
     pay_type: PayType
-    weekly_rate: Optional[Decimal]
-    commission_rate: Optional[Decimal]
-    hourly_rate: Optional[Decimal]
+    weekly_rate: Optional[float]
+    commission_rate: Optional[float]
+    hourly_rate: Optional[float]
     is_active: bool
     notes: Optional[str]
     hired_at: Optional[date]
@@ -128,7 +132,7 @@ class PaymentResponse(BaseModel):
     id: UUID
     transaction_id: UUID
     payment_method: PaymentMethod
-    amount: Decimal
+    amount: float
     payment_date: date
     notes: Optional[str]
     created_at: datetime
@@ -180,9 +184,9 @@ class TransactionResponse(BaseModel):
     wig_color: Optional[str]
     wig_size: Optional[str]
     wig_front: Optional[str]
-    total_amount: Decimal
-    amount_paid: Decimal
-    balance_due: Decimal
+    total_amount: float
+    amount_paid: float
+    balance_due: float
     notes: Optional[str]
     source: DataSource
     payments: List[PaymentResponse] = []
@@ -232,20 +236,20 @@ class DailySummaryUpdate(BaseModel):
 class DailySummaryResponse(BaseModel):
     id: UUID
     summary_date: date
-    total_wash_set: Decimal
-    total_wig_sales: Decimal
-    total_repairs: Decimal
-    total_other: Decimal
-    total_revenue: Decimal
-    cash_collected: Decimal
-    quickpay_collected: Decimal
-    cc_collected: Decimal
-    check_collected: Decimal
-    zelle_collected: Decimal
+    total_wash_set: float
+    total_wig_sales: float
+    total_repairs: float
+    total_other: float
+    total_revenue: float
+    cash_collected: float
+    quickpay_collected: float
+    cc_collected: float
+    check_collected: float
+    zelle_collected: float
     new_wigs_sold: int
     wigs_paid_full: int
     chani_cuts: int
-    wig_deposits_total: Decimal
+    wig_deposits_total: float
     is_locked: bool
     notes: Optional[str]
     created_at: datetime
@@ -276,7 +280,7 @@ class ExpenseResponse(BaseModel):
     id: UUID
     expense_date: date
     category: ExpenseCategory
-    amount: Decimal
+    amount: float
     vendor: Optional[str]
     notes: Optional[str]
     created_at: datetime
@@ -306,7 +310,7 @@ class PayrollResponse(BaseModel):
     week_start: date
     week_end: date
     employee_id: UUID
-    amount: Decimal
+    amount: float
     pay_type_snapshot: PayType
     notes: Optional[str]
     created_at: datetime
@@ -337,12 +341,12 @@ class DepositUpdate(BaseModel):
 class DepositResponse(BaseModel):
     id: UUID
     deposit_date: date
-    cash: Decimal
-    checks: Decimal
-    credit_card: Decimal
-    zelle: Decimal
-    sales_tax_cash: Decimal
-    sales_tax_cc_other: Decimal
+    cash: float
+    checks: float
+    credit_card: float
+    zelle: float
+    sales_tax_cash: float
+    sales_tax_cc_other: float
     notes: Optional[str]
     created_at: datetime
 
@@ -355,16 +359,16 @@ class DepositResponse(BaseModel):
 class SnapshotResponse(BaseModel):
     id: UUID
     snapshot_date: date
-    total_revenue: Decimal
-    total_expenses: Decimal
-    total_payroll: Decimal
-    net_profit: Decimal
-    bank_portion: Decimal
-    owner_portion: Decimal
-    bank_tithes: Decimal
-    owner_tithes: Decimal
-    total_tithes: Decimal
-    final_take_home: Decimal
+    total_revenue: float
+    total_expenses: float
+    total_payroll: float
+    net_profit: float
+    bank_portion: float
+    owner_portion: float
+    bank_tithes: float
+    owner_tithes: float
+    total_tithes: float
+    final_take_home: float
     computed_at: datetime
 
     class Config:
@@ -380,16 +384,16 @@ class SimulationInput(BaseModel):
 
 
 class SimulationResponse(BaseModel):
-    total_revenue: Decimal
-    total_expenses: Decimal
-    total_payroll: Decimal
-    net_profit: Decimal
-    bank_portion: Decimal
-    owner_portion: Decimal
-    bank_tithes: Decimal
-    owner_tithes: Decimal
-    total_tithes: Decimal
-    final_take_home: Decimal
+    total_revenue: float
+    total_expenses: float
+    total_payroll: float
+    net_profit: float
+    bank_portion: float
+    owner_portion: float
+    bank_tithes: float
+    owner_tithes: float
+    total_tithes: float
+    final_take_home: float
 
 
 # ── Wig Orders ────────────────────────────────────────────────
@@ -406,7 +410,7 @@ class WigPaymentResponse(BaseModel):
     id: UUID
     wig_order_id: UUID
     payment_date: date
-    amount: Decimal
+    amount: float
     payment_method: PaymentMethod
     payment_type: WigPaymentType
     notes: Optional[str]
@@ -465,11 +469,11 @@ class WigOrderResponse(BaseModel):
     color: Optional[str]
     size: Optional[str]
     front: Optional[str]
-    base_price: Decimal
-    fill_lace_price: Decimal
-    total_price: Decimal
-    amount_paid: Decimal
-    balance_due: Decimal
+    base_price: float
+    fill_lace_price: float
+    total_price: float
+    amount_paid: float
+    balance_due: float
     status: WigStatus
     order_date: date
     pickup_date: Optional[date]

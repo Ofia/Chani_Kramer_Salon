@@ -61,8 +61,8 @@ export default function WigOrdersPage() {
   const completed  = allWigs.filter(w => w.status === 'paid_in_full')
   const wigs = tab === 'in_progress' ? inProgress : completed
 
-  const totalBalance   = inProgress.reduce((s, w) => s + w.balance_due, 0)
-  const totalCompleted = completed.reduce((s, w) => s + w.total_price, 0)
+  const totalBalance   = inProgress.reduce((s, w) => s + Number(w.balance_due), 0)
+  const totalCompleted = completed.reduce((s, w) => s + Number(w.total_price), 0)
 
   return (
     <div>
