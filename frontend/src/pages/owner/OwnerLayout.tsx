@@ -37,7 +37,6 @@ export default function OwnerLayout() {
         <div style={s.topBarLogo}>
           <img src="/logo-mark.jpeg" alt="Chani Kramer Wigs Salon" style={s.topBarLogoImg} />
         </div>
-        <div style={s.topBarDivider} />
         <div style={s.topBarRight} />
       </header>
 
@@ -119,11 +118,10 @@ const s: Record<string, React.CSSProperties> = {
   shell:          { display: 'flex', minHeight: '100vh', background: '#ffffff', fontFamily: "'Inter', -apple-system, sans-serif" },
 
   // Top bar
-  topBar:         { position: 'fixed', top: 0, left: 0, right: 0, height: 44, background: '#fafaf9', borderBottom: BORDER, display: 'flex', alignItems: 'stretch', zIndex: 100 },
-  topBarLogo:     { width: 240, display: 'flex', alignItems: 'center', padding: '0 14px', flexShrink: 0 },
-  topBarLogoImg:  { height: 26, width: 'auto', objectFit: 'contain' as const },
-  topBarDivider:  { width: 1, background: 'rgba(13,13,13,0.08)', flexShrink: 0 },
-  topBarRight:    { flex: 1 },
+  topBar:         { position: 'fixed', top: 0, left: 0, right: 0, height: 44, background: '#ffffff', borderBottom: BORDER, display: 'flex', alignItems: 'stretch', zIndex: 100 },
+  topBarLogo:     { width: 240, flexShrink: 0, background: '#fafaf9', borderRight: BORDER, display: 'flex', alignItems: 'center', padding: '0 14px' },
+  topBarLogoImg:  { width: '100%', height: 'auto', maxHeight: 30, objectFit: 'contain' as const },
+  topBarRight:    { flex: 1, background: '#ffffff' },
 
   // Sidebar
   sidebar:        { width: 240, background: '#fafaf9', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flexShrink: 0, position: 'fixed', top: 44, left: 0, height: 'calc(100vh - 44px)', padding: '10px 0 16px', borderRight: BORDER },
