@@ -968,7 +968,7 @@ function MiniBar({ label, pct, amount, color }: { label: string; pct: number; am
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
         <span style={{ fontSize: 12, color: '#71717a' }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#18181b' }}>${amount.toFixed(2)}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#18181b' }}>${Number(amount).toFixed(2)}</span>
       </div>
       <div style={{ height: 6, background: '#f4f4f5', borderRadius: 99 }}>
         <div style={{ height: 6, width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 99, transition: 'width 0.4s ease' }} />
