@@ -210,7 +210,7 @@ export default function DailyEntryPage() {
   function handleSaveSummary() {
     const totalWigSales = todayWigs
       .filter(w => w.status === 'paid_in_full')
-      .reduce((sum, w) => sum + w.total_price, 0)
+      .reduce((sum, w) => sum + parseFloat(w.total_price as unknown as string), 0)
 
     const totalWashSet = parseFloat((existing?.total_wash_set ?? 0).toString()) || 0
     const totalRepairs = parseFloat((existing?.total_repairs ?? 0).toString()) || 0
@@ -285,8 +285,8 @@ export default function DailyEntryPage() {
   if (isLoading) return <p style={{ color: '#71717a', fontSize: 14 }}>Loading…</p>
 
   const isLocked = existing?.is_locked
-  const totalWigSales = todayWigs.filter(w => w.status === 'paid_in_full').reduce((s, w) => s + w.total_price, 0)
-  const totalRevenue = totalWigSales + (existing?.total_wash_set || 0) + (existing?.total_repairs || 0)
+  const totalWigSales = todayWigs.filter(w => w.status === 'paid_in_full').reduce((s, w) => s + parseFloat(w.total_price as unknown as string), 0)
+  const totalRevenue = totalWigSales + (Number(existing?.total_wash_set) || 0) + (Number(existing?.total_repairs) || 0)
   const totalCollected = ['cash_collected','cc_collected','quickpay_collected','check_collected','zelle_collected']
     .reduce((s, k) => s + (parseFloat(payments[k as keyof typeof payments] as string) || 0), 0)
 
@@ -513,7 +513,7 @@ function ActivityTab({
               <span style={{ color: '#71717a', fontSize: 12 }}>
                 {[w.brand, w.daysmart_serial, w.length, w.color].filter(Boolean).join(' · ')}
               </span>
-              <span style={{ color: '#DF5198', fontWeight: 600 }}>Balance: ${w.balance_due.toFixed(2)}</span>
+              <span style={{ color: '#DF5198', fontWeight: 600 }}>Balance: ${parseFloat(w.balance_due as unknown as string).toFixed(2)}</span>
             </button>
           ))}
         </div>
@@ -523,7 +523,7 @@ function ActivityTab({
           <p style={{ fontWeight: 600, marginBottom: 4 }}>{selectedPickupWig.customer_name}</p>
           <p style={{ fontSize: 12, color: '#71717a', marginBottom: 12 }}>
             {[selectedPickupWig.brand, selectedPickupWig.daysmart_serial, selectedPickupWig.length, selectedPickupWig.color].filter(Boolean).join(' · ')}
-            {' · Balance: $'}{selectedPickupWig.balance_due.toFixed(2)}
+            {' · Balance: $'}{parseFloat(selectedPickupWig.balance_due as unknown as string).toFixed(2)}
           </p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <div style={s.moneyRow}>
@@ -531,7 +531,7 @@ function ActivityTab({
               <input type="number" min="0" step="0.01"
                 value={pickupAmount}
                 onChange={e => setPickupAmount(e.target.value)}
-                placeholder={selectedPickupWig.balance_due.toFixed(2)}
+                placeholder={parseFloat(selectedPickupWig.balance_due as unknown as string).toFixed(2)}
                 style={s.moneyInput}
               />
             </div>
