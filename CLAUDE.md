@@ -5,6 +5,25 @@
 https://github.com/Ofia/Chani_Kramer_Salon.git
 
 
+## Color Palette
+
+### Costal Glam — Charts & Data Visualization
+| Swatch | Hex | Role |
+|--------|-----|------|
+| Pink   | `#DF5198` | Primary (Wash & Set, Cash, Line/Bar charts) |
+| Blue   | `#97BBE9` | Secondary (Wig Sales, Checks) |
+| Sand   | `#E3CD94` | Tertiary (Repairs, Credit Card) |
+| Blush  | `#EDCADB` | Accent (Cash tax line) |
+| Navy   | `#5581B1` | Accent (Chani Cuts, Zelle, CC tax line) |
+
+### Base UI (Sidebar, Text, Buttons)
+- `#212121` — Charcoal: avatars, primary action buttons
+- `rgba(214,210,203,0.5)` — Warm greige: active nav highlight
+- `#fafaf9` — Off-white: sidebar background
+- `#f7f7f5` — Warm white: page/left-panel background
+
+---
+
 ## Running the App
 
 **Backend** (from `backend/` directory):

@@ -117,17 +117,17 @@ export default function DepositsPage() {
         {/* Payment method breakdown */}
         <div style={s.breakdownCard}>
           <p style={s.breakTitle}>Payment Breakdown</p>
-          <MiniBar label="Cash"        pct={pcts.cash}  amount={cashNum}   color="#212121" />
-          <MiniBar label="Checks"      pct={pcts.check} amount={checksNum} color="#8b5cf6" />
-          <MiniBar label="Credit Card" pct={pcts.cc}    amount={ccNum}     color="#06b6d4" />
-          <MiniBar label="Zelle"       pct={pcts.zelle} amount={zelleNum}  color="#10b981" />
+          <MiniBar label="Cash"        pct={pcts.cash}  amount={cashNum}   color="#DF5198" />
+          <MiniBar label="Checks"      pct={pcts.check} amount={checksNum} color="#97BBE9" />
+          <MiniBar label="Credit Card" pct={pcts.cc}    amount={ccNum}     color="#E3CD94" />
+          <MiniBar label="Zelle"       pct={pcts.zelle} amount={zelleNum}  color="#5581B1" />
         </div>
 
         {/* Tax summary */}
         <div style={s.taxSummaryCard}>
           <p style={s.breakTitle}>Tax Summary</p>
-          <TaxLine label="Cash tax (8.875%)"        value={taxCash}  color="#f59e0b" />
-          <TaxLine label="CC/Check/Zelle (4.5%)"    value={taxOther} color="#f59e0b" last />
+          <TaxLine label="Cash tax (8.875%)"        value={taxCash}  color="#EDCADB" />
+          <TaxLine label="CC/Check/Zelle (4.5%)"    value={taxOther} color="#5581B1" last />
         </div>
 
       </div>

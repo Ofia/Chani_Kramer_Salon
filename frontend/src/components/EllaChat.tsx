@@ -66,8 +66,8 @@ export default function EllaChat() {
         title={open ? 'Close Ella' : 'Chat with Ella'}
       >
         {open
-          ? <X size={18} color="#fff" strokeWidth={2.5} />
-          : <MessageCircle size={18} color="#fff" strokeWidth={2} />
+          ? <X size={18} color="#212121" strokeWidth={2.5} />
+          : <MessageCircle size={18} color="#212121" strokeWidth={2} />
         }
       </button>
 
@@ -157,12 +157,12 @@ export default function EllaChat() {
 const s: Record<string, React.CSSProperties> = {
   trigger: {
     position: 'fixed',
-    top: 14,
-    right: 20,
-    width: 38,
-    height: 38,
+    bottom: 24,
+    right: 24,
+    width: 44,
+    height: 44,
     borderRadius: '50%',
-    background: '#212121',
+    background: '#EDCADB',
     border: 'none',
     cursor: 'pointer',
     display: 'flex',

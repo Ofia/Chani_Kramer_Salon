@@ -78,7 +78,7 @@ export default function OwnerDashboard() {
                     <YAxis tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
                     <Tooltip contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 10, fontSize: 12, fontFamily: 'Inter' }}
                       formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
-                    <Line type="monotone" dataKey="total_revenue" stroke="#212121" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="total_revenue" stroke="#DF5198" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -100,7 +100,7 @@ export default function OwnerDashboard() {
                   <YAxis tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={38} />
                   <Tooltip contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 10, fontSize: 12, fontFamily: 'Inter' }}
                     formatter={(v: number) => [`$${Number(v).toLocaleString()}`, 'Revenue']} />
-                  <Bar dataKey="amount" fill="#212121" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="amount" fill="#DF5198" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -205,9 +205,9 @@ export default function DailyEntryPage() {
         {/* Revenue breakdown bars */}
         <div style={s.breakdownCard}>
           <p style={s.breakTitle}>Revenue by Stream</p>
-          <MiniBar label="Wash & Set" amount={ws}   pct={totalRevenue ? (ws / totalRevenue) * 100 : 0}   color="#212121" />
-          <MiniBar label="Wig Sales"  amount={wigs}  pct={totalRevenue ? (wigs / totalRevenue) * 100 : 0} color="#06b6d4" />
-          <MiniBar label="Repairs"   amount={rep}   pct={totalRevenue ? (rep / totalRevenue) * 100 : 0}  color="#8b5cf6" />
+          <MiniBar label="Wash & Set" amount={ws}   pct={totalRevenue ? (ws / totalRevenue) * 100 : 0}   color="#DF5198" />
+          <MiniBar label="Wig Sales"  amount={wigs}  pct={totalRevenue ? (wigs / totalRevenue) * 100 : 0} color="#97BBE9" />
+          <MiniBar label="Repairs"   amount={rep}   pct={totalRevenue ? (rep / totalRevenue) * 100 : 0}  color="#E3CD94" />
         </div>
 
         {/* Payment vs Revenue */}
@@ -232,8 +232,8 @@ export default function DailyEntryPage() {
 
         {/* Activity counts */}
         <div style={s.countGrid}>
-          <CountCard label="Wigs Sold" value={parseInt(form.new_wigs_sold) || 0} color="#212121" />
-          <CountCard label="Chani Cuts" value={parseInt(form.chani_cuts) || 0} color="#8b5cf6" />
+          <CountCard label="Wigs Sold" value={parseInt(form.new_wigs_sold) || 0} color="#DF5198" />
+          <CountCard label="Chani Cuts" value={parseInt(form.chani_cuts) || 0} color="#5581B1" />
         </div>
 
       </div>
