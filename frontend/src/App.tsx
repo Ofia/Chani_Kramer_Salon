@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './lib/auth'
+import { ViewingAsProvider } from './lib/viewingAs'
 
 // Pages
 import LoginPage            from './pages/LoginPage'
@@ -75,9 +76,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <ViewingAsProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ViewingAsProvider>
       </AuthProvider>
     </QueryClientProvider>
   )
