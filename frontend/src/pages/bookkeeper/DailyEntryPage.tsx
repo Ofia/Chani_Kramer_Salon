@@ -902,9 +902,9 @@ function WigCard({ wig }: { wig: WigOrder }) {
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 13 }}>${wig.total_price.toFixed(2)}</p>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 13 }}>${parseFloat(wig.total_price).toFixed(2)}</p>
           <p style={{ margin: '2px 0 0', fontSize: 11, color: isPaid ? '#10b981' : '#DF5198', fontWeight: 600 }}>
-            {isPaid ? 'Paid in Full' : `Balance: $${wig.balance_due.toFixed(2)}`}
+            {isPaid ? 'Paid in Full' : `Balance: $${parseFloat(wig.balance_due).toFixed(2)}`}
           </p>
         </div>
       </div>
