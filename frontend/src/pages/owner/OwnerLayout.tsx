@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
   LayoutDashboard, FlaskConical, ClipboardList, Users, Receipt, Building2,
-  LogOut, Search,
+  LogOut, Search, Sparkles,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 
@@ -19,6 +19,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/bookkeeper',          label: 'Daily Summary', icon: LayoutDashboard, end: true },
       { to: '/bookkeeper/daily',    label: 'Daily Entry',   icon: ClipboardList },
+      { to: '/bookkeeper/wigs',     label: 'Wig Orders',    icon: Sparkles },
       { to: '/bookkeeper/payroll',  label: 'Payroll',       icon: Users },
       { to: '/bookkeeper/expenses', label: 'Expenses',      icon: Receipt },
       { to: '/bookkeeper/deposits', label: 'Deposits',      icon: Building2 },

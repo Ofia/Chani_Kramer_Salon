@@ -214,8 +214,13 @@ function Cell({ children, w, right }: { children: React.ReactNode; w: number; ri
 
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} style={{ ...s.tab, ...(active ? s.tabActive : {}) }}>
+    <button onClick={onClick} style={{ ...s.tab, color: active ? '#18181b' : '#71717a', fontWeight: active ? 600 : 500 }}>
       {children}
+      <span style={{
+        position: 'absolute', bottom: -1, left: 0, right: 0,
+        height: 2, background: active ? '#18181b' : 'transparent',
+        pointerEvents: 'none',
+      }} />
     </button>
   )
 }
@@ -246,14 +251,13 @@ const s: Record<string, React.CSSProperties> = {
   statLabel: { fontSize: 12, color: '#71717a' },
   statValue: { fontSize: 13, fontWeight: 700 },
 
-  tabRow: { display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: 0 },
+  tabRow: { display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid rgba(0,0,0,0.08)' },
   tab: {
-    padding: '8px 18px', border: 'none', background: 'transparent',
+    position: 'relative',
+    padding: '8px 18px 10px', border: 'none', background: 'transparent',
     fontSize: 13, fontWeight: 500, color: '#71717a', cursor: 'pointer',
-    fontFamily: 'inherit', borderBottom: '2px solid transparent', marginBottom: -1,
-    display: 'flex', alignItems: 'center', gap: 6,
+    fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
   },
-  tabActive: { color: '#18181b', borderBottomColor: '#18181b' },
   tabBadge: {
     background: 'rgba(0,0,0,0.07)', color: '#71717a',
     borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 600,
