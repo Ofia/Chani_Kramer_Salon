@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import { useViewingAs, ViewingAs } from '../../lib/viewingAs'
+import { useViewingAs } from '../../lib/viewingAs'
+import type { ViewingAs } from '../../lib/viewingAs'
 import {
   LayoutDashboard, FlaskConical, ClipboardList, Users, Receipt, Building2,
   LogOut, Search, Sparkles,

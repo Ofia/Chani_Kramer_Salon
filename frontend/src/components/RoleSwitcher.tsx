@@ -1,4 +1,5 @@
-import { useViewingAs, ViewingAs } from '../lib/viewingAs'
+import { useViewingAs } from '../lib/viewingAs'
+import type { ViewingAs } from '../lib/viewingAs'
 
 const ROLES: { key: ViewingAs; label: string }[] = [
   { key: 'sales',      label: 'Sales' },
