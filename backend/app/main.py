@@ -8,7 +8,7 @@ All routes are registered here. The app is started with:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import employees, customers, transactions, daily_summary, expenses, payroll, deposits, financials, users, ella
+from app.routes import employees, customers, transactions, daily_summary, expenses, payroll, deposits, financials, users, ella, wig_orders
 
 app = FastAPI(
     title="Chani Kramer Wigs Salon API",
@@ -36,6 +36,7 @@ app.include_router(payroll.router,       prefix="/api/v1")
 app.include_router(deposits.router,      prefix="/api/v1")
 app.include_router(financials.router,    prefix="/api/v1")
 app.include_router(ella.router,          prefix="/api/v1")
+app.include_router(wig_orders.router,    prefix="/api/v1")
 
 
 @app.get("/health")

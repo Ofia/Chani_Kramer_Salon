@@ -16,7 +16,8 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr
 
 from app.models.models import (
-    UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource
+    UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
+    WigStatus, WigPaymentType
 )
 
 
@@ -207,6 +208,7 @@ class DailySummaryCreate(BaseModel):
     new_wigs_sold: int = 0
     wigs_paid_full: int = 0
     chani_cuts: int = 0
+    wig_deposits_total: Decimal = Decimal("0")
     notes: Optional[str] = None
 
 
@@ -223,6 +225,7 @@ class DailySummaryUpdate(BaseModel):
     new_wigs_sold: Optional[int] = None
     wigs_paid_full: Optional[int] = None
     chani_cuts: Optional[int] = None
+    wig_deposits_total: Optional[Decimal] = None
     notes: Optional[str] = None
 
 
@@ -242,6 +245,7 @@ class DailySummaryResponse(BaseModel):
     new_wigs_sold: int
     wigs_paid_full: int
     chani_cuts: int
+    wig_deposits_total: Decimal
     is_locked: bool
     notes: Optional[str]
     created_at: datetime
@@ -386,3 +390,93 @@ class SimulationResponse(BaseModel):
     owner_tithes: Decimal
     total_tithes: Decimal
     final_take_home: Decimal
+
+
+# ── Wig Orders ────────────────────────────────────────────────
+
+class WigPaymentCreate(BaseModel):
+    payment_date: date
+    amount: Decimal
+    payment_method: PaymentMethod
+    payment_type: WigPaymentType = WigPaymentType.deposit
+    notes: Optional[str] = None
+
+
+class WigPaymentResponse(BaseModel):
+    id: UUID
+    wig_order_id: UUID
+    payment_date: date
+    amount: Decimal
+    payment_method: PaymentMethod
+    payment_type: WigPaymentType
+    notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WigOrderCreate(BaseModel):
+    daysmart_serial: Optional[str] = None
+    daysmart_receipt_no: Optional[str] = None
+    customer_name: str
+    customer_phone: Optional[str] = None
+    customer_id: Optional[UUID] = None
+    brand: Optional[str] = None
+    length: Optional[str] = None
+    color: Optional[str] = None
+    size: Optional[str] = None
+    front: Optional[str] = None
+    base_price: Decimal = Decimal("0")
+    fill_lace_price: Decimal = Decimal("0")
+    total_price: Decimal = Decimal("0")
+    order_date: date
+    notes: Optional[str] = None
+    initial_payment: Optional[WigPaymentCreate] = None  # deposit paid at time of sale
+
+
+class WigOrderUpdate(BaseModel):
+    daysmart_serial: Optional[str] = None
+    daysmart_receipt_no: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    brand: Optional[str] = None
+    length: Optional[str] = None
+    color: Optional[str] = None
+    size: Optional[str] = None
+    front: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    fill_lace_price: Optional[Decimal] = None
+    total_price: Optional[Decimal] = None
+    status: Optional[WigStatus] = None
+    pickup_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class WigOrderResponse(BaseModel):
+    id: UUID
+    daysmart_serial: Optional[str]
+    daysmart_receipt_no: Optional[str]
+    customer_name: str
+    customer_phone: Optional[str]
+    customer_id: Optional[UUID]
+    brand: Optional[str]
+    length: Optional[str]
+    color: Optional[str]
+    size: Optional[str]
+    front: Optional[str]
+    base_price: Decimal
+    fill_lace_price: Decimal
+    total_price: Decimal
+    amount_paid: Decimal
+    balance_due: Decimal
+    status: WigStatus
+    order_date: date
+    pickup_date: Optional[date]
+    notes: Optional[str]
+    payments: List[WigPaymentResponse] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

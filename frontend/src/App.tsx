@@ -9,6 +9,7 @@ import DailyEntryPage       from './pages/bookkeeper/DailyEntryPage'
 import PayrollEntryPage     from './pages/bookkeeper/PayrollEntryPage'
 import ExpensesPage         from './pages/bookkeeper/ExpensesPage'
 import DepositsPage         from './pages/bookkeeper/DepositsPage'
+import WigOrdersPage        from './pages/bookkeeper/WigOrdersPage'
 import BookkeeperDashboard  from './pages/bookkeeper/BookkeeperDashboard'
 import OwnerLayout          from './pages/owner/OwnerLayout'
 import OwnerDashboard       from './pages/owner/OwnerDashboard'
@@ -58,6 +59,7 @@ function AppRoutes() {
         <Route path="payroll" element={<PayrollEntryPage />} />
         <Route path="expenses"element={<ExpensesPage />} />
         <Route path="deposits"element={<DepositsPage />} />
+        <Route path="wigs"    element={<WigOrdersPage />} />
       </Route>
 
       {/* Owner routes — owner only */}
