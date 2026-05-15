@@ -16,6 +16,8 @@ router = APIRouter(prefix="/payroll", tags=["payroll"])
 @router.get("/", response_model=List[PayrollResponse])
 def list_payroll(
     week_start: Optional[date] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date:   Optional[date] = Query(None),
     employee_id: Optional[UUID] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -23,6 +25,10 @@ def list_payroll(
     q = db.query(WeeklyPayroll)
     if week_start:
         q = q.filter(WeeklyPayroll.week_start == week_start)
+    if start_date:
+        q = q.filter(WeeklyPayroll.week_start >= start_date)
+    if end_date:
+        q = q.filter(WeeklyPayroll.week_start <= end_date)
     if employee_id:
         q = q.filter(WeeklyPayroll.employee_id == employee_id)
     return q.order_by(WeeklyPayroll.week_start.desc()).all()
