@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts'
 
 // Costal Glam palette — matches DailyEntryPage MiniBar colors
 const STREAM_COLORS = ['#DF5198', '#97BBE9', '#E3CD94']
@@ -12,28 +15,66 @@ function fmt(n: number | string) {
 function today() {
   return new Date().toISOString().split('T')[0]
 }
+function firstOfMonth() {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
+}
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const YEARS  = [2023, 2024, 2025, 2026]
 
 export default function BookkeeperDashboard() {
-  const [view, setView] = useState<'daily' | 'monthly'>('daily')
+  const [view, setView] = useState<'daily' | 'monthly' | 'range'>('daily')
   const now = new Date()
 
+  // Daily
+  const [selectedDate, setSelectedDate] = useState(today())
+
+  // Monthly
+  const [selectedYear,  setSelectedYear]  = useState(now.getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+
+  // Range
+  const [rangeStart, setRangeStart] = useState(firstOfMonth())
+  const [rangeEnd,   setRangeEnd]   = useState(today())
+
+  // ── Queries ──────────────────────────────────────────────────
+
   const { data: summary, isLoading: dailyLoading } = useQuery({
-    queryKey: ['daily-summary', today()],
-    queryFn: () => api.get(`/daily-summary/${today()}`).then(r => r.data).catch(() => null),
+    queryKey: ['daily-summary', selectedDate],
+    queryFn: () => api.get(`/daily-summary/${selectedDate}`).then(r => r.data).catch(() => null),
+    enabled: view === 'daily',
   })
 
   const { data: monthly, isLoading: monthlyLoading } = useQuery({
-    queryKey: ['monthly-summary', now.getFullYear(), now.getMonth() + 1],
+    queryKey: ['monthly-summary', selectedYear, selectedMonth],
     queryFn: () =>
-      api.get(`/financials/monthly-summary?year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
+      api.get(`/financials/monthly-summary?year=${selectedYear}&month=${selectedMonth}`)
         .then(r => r.data).catch(() => null),
     enabled: view === 'monthly',
   })
 
-  const dateLabel = now.toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  const { data: rangeSnaps = [], isLoading: rangeLoading } = useQuery({
+    queryKey: ['snapshots-range', rangeStart, rangeEnd],
+    queryFn: () =>
+      api.get(`/financials/snapshots?start_date=${rangeStart}&end_date=${rangeEnd}`)
+        .then(r => r.data).catch(() => []),
+    enabled: view === 'range' && !!rangeStart && !!rangeEnd,
   })
-  const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  // ── Labels ───────────────────────────────────────────────────
+
+  const dateLabel = (() => {
+    const d = new Date(selectedDate + 'T00:00:00')
+    return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  })()
+  const monthLabel = new Date(selectedYear, selectedMonth - 1, 1)
+    .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const rangeLabel = rangeStart && rangeEnd
+    ? `${new Date(rangeStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — ${new Date(rangeEnd + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : ''
+
+  const subtitle = view === 'daily' ? dateLabel : view === 'monthly' ? monthLabel : rangeLabel
 
   return (
     <div style={s.page}>
@@ -43,18 +84,63 @@ export default function BookkeeperDashboard() {
             <h1 style={s.title}>Dashboard</h1>
             {summary?.is_locked && view === 'daily' && <span style={s.locked}>Locked</span>}
           </div>
-          <p style={s.date}>{view === 'daily' ? dateLabel : monthLabel}</p>
+          <p style={s.date}>{subtitle}</p>
         </div>
         <div style={s.segmented}>
           <button onClick={() => setView('daily')}   style={{ ...s.seg, ...(view === 'daily'   ? s.segActive : {}) }}>Daily</button>
           <button onClick={() => setView('monthly')} style={{ ...s.seg, ...(view === 'monthly' ? s.segActive : {}) }}>Monthly</button>
+          <button onClick={() => setView('range')}   style={{ ...s.seg, ...(view === 'range'   ? s.segActive : {}) }}>Range</button>
         </div>
       </header>
 
-      {view === 'daily'
-        ? <DailyView summary={summary} isLoading={dailyLoading} />
-        : <MonthlyView monthly={monthly} isLoading={monthlyLoading} />
-      }
+      {/* ── Date Controls ── */}
+      {view === 'daily' && (
+        <div style={s.controls}>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            style={s.dateInput}
+          />
+          {selectedDate !== today() && (
+            <button onClick={() => setSelectedDate(today())} style={s.todayBtn}>Today</button>
+          )}
+        </div>
+      )}
+
+      {view === 'monthly' && (
+        <div style={s.controls}>
+          <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} style={s.dateInput}>
+            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
+          <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} style={s.dateInput}>
+            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      )}
+
+      {view === 'range' && (
+        <div style={s.controls}>
+          <input
+            type="date"
+            value={rangeStart}
+            onChange={e => setRangeStart(e.target.value)}
+            style={s.dateInput}
+          />
+          <span style={s.rangeSep}>—</span>
+          <input
+            type="date"
+            value={rangeEnd}
+            onChange={e => setRangeEnd(e.target.value)}
+            style={s.dateInput}
+          />
+        </div>
+      )}
+
+      {/* ── Views ── */}
+      {view === 'daily'   && <DailyView   summary={summary}    isLoading={dailyLoading} />}
+      {view === 'monthly' && <MonthlyView monthly={monthly}    isLoading={monthlyLoading} />}
+      {view === 'range'   && <RangeView   snapshots={rangeSnaps} isLoading={rangeLoading} />}
     </div>
   )
 }
@@ -65,8 +151,8 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
   if (isLoading) return <p style={s.muted}>Loading…</p>
   if (!summary) return (
     <div style={s.emptyCard}>
-      <p style={s.emptyTitle}>No data entered yet today</p>
-      <p style={s.emptyHint}>Go to <strong>Daily Entry</strong> to start today's records.</p>
+      <p style={s.emptyTitle}>No data for this day</p>
+      <p style={s.emptyHint}>Go to <strong>Daily Entry</strong> to add records.</p>
     </div>
   )
 
@@ -89,7 +175,6 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
       {/* ── Revenue + Donut ── */}
       <Label>Revenue</Label>
       <div style={s.revenueCard}>
-        {/* Stat rows */}
         <div style={s.statRows}>
           <StatRow label="Wash & Set"  value={fmt(ws)}   dot="#DF5198" />
           <StatRow label="Wig Sales"   value={fmt(wigs)} dot="#97BBE9" />
@@ -100,8 +185,6 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
             <span style={s.totalValue}>{fmt(total)}</span>
           </div>
         </div>
-
-        {/* Donut chart */}
         <div style={s.chartWrap}>
           {emptyPie ? (
             <div style={s.emptyDonut}>
@@ -111,17 +194,8 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
           ) : (
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%" cy="50%"
-                  innerRadius={44} outerRadius={68}
-                  paddingAngle={2}
-                  dataKey="value"
-                  strokeWidth={0}
-                >
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={STREAM_COLORS[i]} />
-                  ))}
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={44} outerRadius={68} paddingAngle={2} dataKey="value" strokeWidth={0}>
+                  {pieData.map((_, i) => <Cell key={i} fill={STREAM_COLORS[i]} />)}
                 </Pie>
                 <Tooltip
                   contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 8, fontSize: 12, fontFamily: 'Inter' }}
@@ -156,7 +230,6 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
         <div style={s.methodDivider} />
         <ActivityStat label="Chani Cuts"   value={summary.chani_cuts} />
       </div>
-
     </div>
   )
 }
@@ -167,7 +240,7 @@ function MonthlyView({ monthly, isLoading }: { monthly: any; isLoading: boolean 
   if (isLoading) return <p style={s.muted}>Loading…</p>
   if (!monthly || monthly.days_with_data === 0) return (
     <div style={s.emptyCard}>
-      <p style={s.emptyTitle}>No data yet this month</p>
+      <p style={s.emptyTitle}>No data for this month</p>
       <p style={s.emptyHint}>Data will appear as daily entries are added.</p>
     </div>
   )
@@ -187,10 +260,61 @@ function MonthlyView({ monthly, isLoading }: { monthly: any; isLoading: boolean 
         <div style={s.divider} />
         <MonthRow label="Final Take-Home"    value={fmt(monthly.final_take_home)} bold green last />
       </div>
-
       <Label style={{ marginTop: 24 }}>
         {monthly.days_with_data} day{monthly.days_with_data !== 1 ? 's' : ''} with data this month
       </Label>
+    </div>
+  )
+}
+
+// ── Range View ───────────────────────────────────────────────
+
+function RangeView({ snapshots, isLoading }: { snapshots: any[]; isLoading: boolean }) {
+  if (isLoading) return <p style={s.muted}>Loading…</p>
+  if (snapshots.length === 0) return (
+    <div style={s.emptyCard}>
+      <p style={s.emptyTitle}>No data for this range</p>
+      <p style={s.emptyHint}>Try adjusting the date range.</p>
+    </div>
+  )
+
+  const totalRevenue  = snapshots.reduce((acc, s) => acc + Number(s.total_revenue),   0)
+  const totalProfit   = snapshots.reduce((acc, s) => acc + Number(s.net_profit),       0)
+  const totalTakeHome = snapshots.reduce((acc, s) => acc + Number(s.final_take_home),  0)
+
+  return (
+    <div style={s.content}>
+      <Label>{snapshots.length} day{snapshots.length !== 1 ? 's' : ''} with data in range</Label>
+      <div style={s.monthCard}>
+        <MonthRow label="Total Revenue"   value={fmt(totalRevenue)} />
+        <div style={s.divider} />
+        <MonthRow label="Net Profit"      value={fmt(totalProfit)}   bold />
+        <MonthRow label="Final Take-Home" value={fmt(totalTakeHome)} bold green last />
+      </div>
+
+      <Label style={{ marginTop: 24 }}>Daily Revenue</Label>
+      <div style={s.rangeChartCard}>
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={snapshots} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,13,0.06)" />
+            <XAxis
+              dataKey="snapshot_date"
+              tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }}
+              tickFormatter={d => d.slice(5)}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }}
+              tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
+              width={38}
+            />
+            <Tooltip
+              contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 8, fontSize: 12, fontFamily: 'Inter' }}
+              formatter={(v: number) => [fmt(v), 'Revenue']}
+            />
+            <Bar dataKey="total_revenue" fill="#DF5198" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -249,88 +373,97 @@ const s: Record<string, React.CSSProperties> = {
 
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid rgba(13,13,13,0.09)',
+    marginBottom: 16, paddingBottom: 20, borderBottom: '1px solid rgba(13,13,13,0.09)',
   },
   title: { fontSize: 22, fontWeight: 700, color: '#0d0d0d', margin: 0, letterSpacing: '-0.03em' },
-  date: { fontSize: 12, color: 'rgba(13,13,13,0.42)', margin: '3px 0 0', fontWeight: 400 },
+  date:  { fontSize: 12, color: 'rgba(13,13,13,0.42)', margin: '3px 0 0', fontWeight: 400 },
   locked: {
     background: '#212121', color: '#fff', padding: '3px 10px', borderRadius: 20,
     fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
   },
 
   segmented: { display: 'flex', background: 'rgba(13,13,13,0.06)', borderRadius: 9, padding: 3, gap: 2 },
-  seg: { padding: '5px 16px', border: 'none', background: 'transparent', borderRadius: 7, fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.42)', cursor: 'pointer', transition: 'all 0.15s' },
+  seg:       { padding: '5px 16px', border: 'none', background: 'transparent', borderRadius: 7, fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.42)', cursor: 'pointer', transition: 'all 0.15s' },
   segActive: { background: '#fff', color: '#0d0d0d', boxShadow: '0 1px 4px rgba(0,0,0,0.10)' },
 
-  muted: { color: 'rgba(13,13,13,0.42)', fontSize: 14 },
+  // Date controls
+  controls: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    marginBottom: 20,
+  },
+  dateInput: {
+    padding: '5px 10px', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8,
+    fontSize: 13, fontFamily: "'Inter', sans-serif", color: '#0d0d0d', background: '#fff',
+    outline: 'none', cursor: 'pointer',
+  },
+  todayBtn: {
+    padding: '5px 12px', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8,
+    fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.55)', background: '#fff',
+    cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+  },
+  rangeSep: { fontSize: 12, color: 'rgba(13,13,13,0.35)', fontWeight: 500 },
+
+  muted:   { color: 'rgba(13,13,13,0.42)', fontSize: 14 },
   content: { display: 'flex', flexDirection: 'column', gap: 6 },
   sectionLabel: {
     fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.35)',
     letterSpacing: '0.08em', textTransform: 'uppercase', margin: '12px 0 6px',
   },
 
-  // Revenue card — stats + donut side by side
+  // Revenue card
   revenueCard: {
     display: 'grid', gridTemplateColumns: '1fr 180px',
     background: '#fff', border: '1px solid rgba(13,13,13,0.09)',
-    borderRadius: 14, overflow: 'hidden',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  statRows: { padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' },
-  statRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' },
-  statLabel: { fontSize: 13, color: 'rgba(13,13,13,0.6)', fontWeight: 400 },
-  statValue: { fontSize: 13, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em' },
-  divider: { height: 1, background: 'rgba(13,13,13,0.07)', margin: '6px 0' },
+  statRows:   { padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' },
+  statRow:    { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' },
+  statLabel:  { fontSize: 13, color: 'rgba(13,13,13,0.6)', fontWeight: 400 },
+  statValue:  { fontSize: 13, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em' },
+  divider:    { height: 1, background: 'rgba(13,13,13,0.07)', margin: '6px 0' },
   totalLabel: { fontSize: 13, fontWeight: 600, color: '#0d0d0d' },
   totalValue: { fontSize: 18, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.03em' },
 
   chartWrap: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderLeft: '1px solid rgba(13,13,13,0.06)', padding: '16px 8px',
-    background: '#fafaf9',
+    borderLeft: '1px solid rgba(13,13,13,0.06)', padding: '16px 8px', background: '#fafaf9',
   },
-  emptyDonut: { position: 'relative', width: 100, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  emptyDonutRing: {
-    position: 'absolute', inset: 0,
-    borderRadius: '50%', border: '14px solid rgba(13,13,13,0.07)',
-  },
+  emptyDonut:     { position: 'relative', width: 100, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  emptyDonutRing: { position: 'absolute', inset: 0, borderRadius: '50%', border: '14px solid rgba(13,13,13,0.07)' },
   emptyDonutText: { fontSize: 10, color: 'rgba(13,13,13,0.3)', fontWeight: 500 },
 
   // Payment methods
   methodCard: {
     background: '#fff', border: '1px solid rgba(13,13,13,0.09)',
     borderRadius: 14, padding: '14px 22px',
-    display: 'flex', alignItems: 'center', gap: 0,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    display: 'flex', alignItems: 'center', gap: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
   methodDivider: { width: 1, height: 28, background: 'rgba(13,13,13,0.08)', flexShrink: 0, margin: '0 16px' },
-  chip: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1 },
-  chipLabel: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' },
-  chipValue: { fontSize: 14, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.02em' },
+  chip:          { display: 'flex', flexDirection: 'column', gap: 2, flex: 1 },
+  chipLabel:     { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' },
+  chipValue:     { fontSize: 14, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.02em' },
 
   // Activity
   activityCard: {
     background: '#fff', border: '1px solid rgba(13,13,13,0.09)',
     borderRadius: 14, padding: '14px 22px',
-    display: 'flex', alignItems: 'center',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    display: 'flex', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  activityItem: { display: 'flex', alignItems: 'baseline', gap: 6, flex: 1 },
+  activityItem:  { display: 'flex', alignItems: 'baseline', gap: 6, flex: 1 },
   activityCount: { fontSize: 22, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.04em' },
   activityLabel: { fontSize: 12, color: 'rgba(13,13,13,0.45)', fontWeight: 400 },
 
-  // Monthly
+  // Monthly / Range
   monthCard: {
     background: '#fff', border: '1px solid rgba(13,13,13,0.09)',
-    borderRadius: 14, padding: '4px 22px',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    borderRadius: 14, padding: '4px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+  },
+  rangeChartCard: {
+    background: '#fff', border: '1px solid rgba(13,13,13,0.09)',
+    borderRadius: 14, padding: '20px 16px 12px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
 
-  emptyCard: {
-    background: '#ffffff', border: '1px solid rgba(13,13,13,0.09)',
-    borderRadius: 14, padding: '52px 40px', textAlign: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
-  },
+  emptyCard:  { background: '#ffffff', border: '1px solid rgba(13,13,13,0.09)', borderRadius: 14, padding: '52px 40px', textAlign: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
   emptyTitle: { color: '#0d0d0d', fontSize: 15, fontWeight: 600, margin: '0 0 8px', letterSpacing: '-0.02em' },
-  emptyHint: { color: 'rgba(13,13,13,0.42)', fontSize: 13, margin: 0 },
+  emptyHint:  { color: 'rgba(13,13,13,0.42)', fontSize: 13, margin: 0 },
 }

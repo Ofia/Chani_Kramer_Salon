@@ -19,7 +19,7 @@ const BOOKKEEPING_TABS = [
 ]
 
 const OWNER_TABS = [
-  { to: '/owner',          label: 'Dashboard', icon: LayoutDashboard, end: true  },
+  { to: '/owner',          label: 'Main Board', icon: LayoutDashboard, end: true  },
   { to: '/owner/simulate', label: 'Simulator',  icon: FlaskConical,    end: false },
 ]
 
