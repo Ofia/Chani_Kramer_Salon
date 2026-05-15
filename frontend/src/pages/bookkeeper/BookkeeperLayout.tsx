@@ -4,7 +4,7 @@ import { useViewingAs } from '../../lib/viewingAs'
 import type { ViewingAs } from '../../lib/viewingAs'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
-  LogOut, Search, Sparkles,
+  LogOut, Search, Sparkles, BarChart2,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 import RoleSwitcher from '../../components/RoleSwitcher'
@@ -15,7 +15,8 @@ const BOOKKEEPING_TABS = [
   { to: '/bookkeeper/deposits', label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper',          label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/payroll',  label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/expenses', label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/expenses',    label: 'Expenses',    icon: Receipt,      end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/main-board', label: 'Main Board',  icon: BarChart2,    end: false, roles: ['owner'] as ViewingAs[] },
 ]
 
 export default function BookkeeperLayout() {

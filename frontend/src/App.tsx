@@ -60,7 +60,8 @@ function AppRoutes() {
         <Route path="payroll" element={<PayrollEntryPage />} />
         <Route path="expenses"element={<ExpensesPage />} />
         <Route path="deposits"element={<DepositsPage />} />
-        <Route path="wigs"    element={<WigOrdersPage />} />
+        <Route path="wigs"       element={<WigOrdersPage />} />
+        <Route path="main-board" element={<OwnerDashboard />} />
       </Route>
 
       {/* Owner routes — owner only */}
