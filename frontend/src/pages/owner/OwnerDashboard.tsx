@@ -44,6 +44,25 @@ export default function OwnerDashboard() {
 
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
+  // Always show the board — default to zeros when no data exists yet
+  const m = {
+    days_with_data:  monthly?.days_with_data  ?? 0,
+    total_revenue:   monthly?.total_revenue   ?? 0,
+    total_expenses:  monthly?.total_expenses  ?? 0,
+    total_payroll:   monthly?.total_payroll   ?? 0,
+    net_profit:      monthly?.net_profit      ?? 0,
+    bank_portion:    monthly?.bank_portion    ?? 0,
+    owner_portion:   monthly?.owner_portion   ?? 0,
+    total_tithes:    monthly?.total_tithes    ?? 0,
+    final_take_home: monthly?.final_take_home ?? 0,
+    bank_tithes:     monthly?.bank_tithes     ?? 0,
+    owner_tithes:    monthly?.owner_tithes    ?? 0,
+    total_wash_set:  monthly?.total_wash_set  ?? 0,
+    total_wig_sales: monthly?.total_wig_sales ?? 0,
+    total_repairs:   monthly?.total_repairs   ?? 0,
+  }
+  const hasData = m.days_with_data > 0
+
   return (
     <div>
       <header style={s.header}>
@@ -59,24 +78,30 @@ export default function OwnerDashboard() {
 
       {isLoading ? (
         <p style={s.muted}>Loading…</p>
-      ) : !monthly || monthly.days_with_data === 0 ? (
-        <div style={s.emptyCard}><p style={s.emptyText}>No data yet this month.</p></div>
       ) : (
         <>
+          {/* ── No-data notice ── */}
+          {!hasData && (
+            <div style={s.noDataBanner}>
+              <span style={s.noDataDot} />
+              No daily entries yet for {monthLabel}. Data appears here once Tzipora submits daily records.
+            </div>
+          )}
+
           {/* ── KPI strip — always visible ── */}
           <div style={s.kpiGrid}>
-            <KpiCard label="Revenue"    value={fmt(monthly.total_revenue)} />
-            <KpiCard label="Expenses"   value={fmt(monthly.total_expenses)} />
-            <KpiCard label="Payroll"    value={fmt(monthly.total_payroll)} />
-            <KpiCard label="Net Profit" value={fmt(monthly.net_profit)} dark />
+            <KpiCard label="Revenue"    value={fmt(m.total_revenue)} />
+            <KpiCard label="Expenses"   value={fmt(m.total_expenses)} />
+            <KpiCard label="Payroll"    value={fmt(m.total_payroll)} />
+            <KpiCard label="Net Profit" value={fmt(m.net_profit)} dark />
           </div>
 
           {view === 'analysis' && (
-            <AnalysisTab monthly={monthly} snapshots={snapshots} now={now} />
+            <AnalysisTab monthly={m} snapshots={snapshots} now={now} />
           )}
 
           {view === 'glance' && (
-            <GlanceTab monthly={monthly} />
+            <GlanceTab monthly={m} />
           )}
         </>
       )}
@@ -420,6 +445,13 @@ const s: Record<string, React.CSSProperties> = {
   pieLegendLabel: { fontSize: 12, color: 'rgba(13,13,13,0.55)', fontFamily: "'Inter', sans-serif" },
   pieLegendValue: { fontSize: 12, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em', fontFamily: "'Inter', sans-serif" },
 
-  emptyCard: { background: '#fff', borderRadius: 14, padding: 48, textAlign: 'center', border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' },
-  emptyText: { color: 'rgba(13,13,13,0.42)', fontSize: 15, margin: 0 },
+  noDataBanner: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+    padding: '10px 16px', marginBottom: 20,
+    fontSize: 13, color: '#92400e', fontFamily: "'Inter', sans-serif",
+  },
+  noDataDot: {
+    width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', flexShrink: 0,
+  },
 }
