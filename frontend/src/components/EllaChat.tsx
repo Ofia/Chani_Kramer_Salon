@@ -59,17 +59,16 @@ export default function EllaChat() {
 
   return (
     <>
-      {/* Floating circle trigger */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={s.trigger}
-        title={open ? 'Close Ella' : 'Chat with Ella'}
-      >
-        {open
-          ? <X size={18} color="#212121" strokeWidth={2.5} />
-          : <MessageCircle size={18} color="#212121" strokeWidth={2} />
-        }
-      </button>
+      {/* Floating circle trigger — hidden while panel is open */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          style={s.trigger}
+          title="Chat with Ella"
+        >
+          <MessageCircle size={18} color="#212121" strokeWidth={2} />
+        </button>
+      )}
 
       {/* Slide-in panel */}
       <div style={{ ...s.panel, ...(open ? s.panelOpen : {}) }}>
@@ -114,6 +113,14 @@ export default function EllaChat() {
             <Paperclip size={12} color="#212121" />
             <span style={s.fileName}>{attached.name}</span>
             <button onClick={() => setAttached(null)} style={s.fileX}>×</button>
+          </div>
+        )}
+
+        {/* /remember command hint */}
+        {input.trimStart().startsWith('/remember') && (
+          <div style={s.cmdHint}>
+            <span style={s.cmdTag}>/remember</span>
+            <span style={s.cmdDesc}>Ella will save this note to her memory</span>
           </div>
         )}
 
@@ -177,9 +184,9 @@ const s: Record<string, React.CSSProperties> = {
     position: 'fixed',
     top: 0,
     right: 0,
-    width: '33vw',
-    minWidth: 360,
-    maxWidth: 480,
+    width: '40vw',
+    minWidth: 420,
+    maxWidth: 620,
     height: '100vh',
     background: '#fff',
     borderLeft: '1px solid rgba(13,13,13,0.09)',
@@ -292,6 +299,27 @@ const s: Record<string, React.CSSProperties> = {
   },
   fileName: { fontSize: 12, color: '#212121', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   fileX: { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.35)', fontSize: 18, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center' },
+
+  cmdHint: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 16px',
+    background: 'rgba(227,205,148,0.18)',
+    borderTop: '1px solid rgba(227,205,148,0.4)',
+    flexShrink: 0,
+  },
+  cmdTag: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#b38600',
+    letterSpacing: '0.02em',
+    fontFamily: 'monospace',
+  },
+  cmdDesc: {
+    fontSize: 11,
+    color: 'rgba(13,13,13,0.45)',
+  },
 
   inputRow: {
     display: 'flex',
