@@ -4,19 +4,25 @@ import { useViewingAs } from '../../lib/viewingAs'
 import type { ViewingAs } from '../../lib/viewingAs'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
-  LogOut, Search, Sparkles, BarChart2,
+  LogOut, Search, Sparkles, BarChart2, UserCog,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 import RoleSwitcher from '../../components/RoleSwitcher'
 
-const BOOKKEEPING_TABS = [
-  { to: '/bookkeeper/wigs',     label: 'Wig Orders',    icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/daily',    label: 'Daily Entry',   icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/deposits', label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper',          label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/payroll',  label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/expenses',    label: 'Expenses',    icon: Receipt,      end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/main-board', label: 'Main Board',  icon: BarChart2,    end: false, roles: ['owner'] as ViewingAs[] },
+type NavItem =
+  | { to: string; label: string; icon: React.ElementType; end: boolean; roles: ViewingAs[]; divider?: never }
+  | { divider: true; roles: ViewingAs[]; to?: never; label?: never; icon?: never; end?: never }
+
+const BOOKKEEPING_TABS: NavItem[] = [
+  { to: '/bookkeeper/wigs',      label: 'Wig Orders',    icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/daily',     label: 'Daily Entry',   icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/deposits',  label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper',           label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/payroll',   label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/main-board',label: 'Main Board',    icon: BarChart2,       end: false, roles: ['owner'] as ViewingAs[] },
+  { divider: true, roles: ['owner'] as ViewingAs[] },
+  { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
 ]
 
 export default function BookkeeperLayout() {
@@ -49,19 +55,25 @@ export default function BookkeeperLayout() {
           </div>
 
           <nav style={s.nav}>
-            {visibleTabs.map(({ to, label, icon: Icon, end }) => (
-              <NavLink key={to} to={to} end={end}
-                style={({ isActive }) => ({ ...s.navLink, ...(isActive ? s.navLinkActive : {}) })}>
-                {({ isActive }) => (
-                  <>
-                    <Icon size={15} strokeWidth={1.8} color={isActive ? '#212121' : 'rgba(13,13,13,0.35)'} />
-                    <span style={{ color: isActive ? '#212121' : 'rgba(13,13,13,0.55)', fontWeight: isActive ? 600 : 400 }}>
-                      {label}
-                    </span>
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {visibleTabs.map((item, i) => {
+              if ('divider' in item && item.divider) {
+                return <div key={`divider-${i}`} style={s.navDivider} />
+              }
+              const { to, label, icon: Icon, end } = item
+              return (
+                <NavLink key={to} to={to} end={end}
+                  style={({ isActive }) => ({ ...s.navLink, ...(isActive ? s.navLinkActive : {}) })}>
+                  {({ isActive }) => (
+                    <>
+                      <Icon size={15} strokeWidth={1.8} color={isActive ? '#212121' : 'rgba(13,13,13,0.35)'} />
+                      <span style={{ color: isActive ? '#212121' : 'rgba(13,13,13,0.55)', fontWeight: isActive ? 600 : 400 }}>
+                        {label}
+                      </span>
+                    </>
+                  )}
+                </NavLink>
+              )
+            })}
           </nav>
         </div>
 
@@ -112,6 +124,7 @@ const s: Record<string, React.CSSProperties> = {
   searchLabel:    { flex: 1 },
   kbd:            { fontSize: 10, background: '#f0f0ee', border: '1px solid rgba(13,13,13,0.09)', borderRadius: 4, padding: '1px 5px', color: 'rgba(13,13,13,0.35)' },
   nav:            { display: 'flex', flexDirection: 'column', padding: '0 6px', gap: 1 },
+  navDivider:     { height: 1, background: 'rgba(13,13,13,0.08)', margin: '6px 4px' },
   navLink:        { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, textDecoration: 'none', fontSize: 13, transition: 'background 0.12s' },
   navLinkActive:  { background: 'rgba(214,210,203,0.5)' },
   bottom:         { display: 'flex', flexDirection: 'column', gap: 6, padding: '0 8px' },

@@ -1037,7 +1037,7 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
       job_title:       form.job_title,
       pay_type:        form.pay_type,
       weekly_rate:     form.pay_type === 'weekly_flat'    && form.weekly_rate     ? parseFloat(form.weekly_rate)     : null,
-      commission_rate: form.pay_type === 'commission_pct' && form.commission_rate ? parseFloat(form.commission_rate) : null,
+      commission_rate: form.pay_type === 'commission_pct' && form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
       hourly_rate:     form.pay_type === 'hourly'         && form.hourly_rate     ? parseFloat(form.hourly_rate)     : null,
       hired_at:        form.hired_at || null,
       notes:           form.notes    || null,
