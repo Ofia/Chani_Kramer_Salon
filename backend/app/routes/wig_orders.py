@@ -174,6 +174,21 @@ def add_payment(
     return wig
 
 
+# ── Delete ───────────────────────────────────────────────────
+
+@router.delete("/{wig_id}", status_code=204)
+def delete_wig_order(
+    wig_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    wig = db.query(WigOrder).filter(WigOrder.id == wig_id).first()
+    if not wig:
+        raise HTTPException(status_code=404, detail="Wig order not found")
+    db.delete(wig)
+    db.commit()
+
+
 # ── Mark Ready ────────────────────────────────────────────────
 
 @router.post("/{wig_id}/mark-ready", response_model=WigOrderResponse)

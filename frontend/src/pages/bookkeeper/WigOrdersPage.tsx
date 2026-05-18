@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 
 type WigPayment = {
@@ -52,10 +53,22 @@ export default function WigOrdersPage() {
   const [tab, setTab] = useState<'in_progress' | 'completed'>('in_progress')
   const [expanded, setExpanded] = useState<string | null>(null)
 
+  const qc = useQueryClient()
+
   const { data: allWigs = [], isLoading } = useQuery<WigOrder[]>({
     queryKey: ['wig-orders-all'],
     queryFn: () => api.get('/wig-orders/').then(r => r.data),
   })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/wig-orders/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wig-orders-all'] }),
+  })
+
+  function handleDelete(w: WigOrder) {
+    if (!confirm(`Delete wig order for ${w.customer_name}? This cannot be undone.`)) return
+    deleteMutation.mutate(w.id)
+  }
 
   const inProgress = allWigs.filter(w => w.status !== 'paid_in_full')
   const completed  = allWigs.filter(w => w.status === 'paid_in_full')
@@ -110,6 +123,7 @@ export default function WigOrdersPage() {
               {tab === 'in_progress' ? 'Status' : 'Picked Up'}
             </Cell>
             <Cell w={90}>Order Date</Cell>
+            <Cell w={36} />
           </div>
 
           {wigs.map(w => (
@@ -154,6 +168,16 @@ export default function WigOrdersPage() {
                 </Cell>
                 <Cell w={90}>
                   <span style={s.specs}>{fmt(w.order_date)}</span>
+                </Cell>
+                <Cell w={36}>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleDelete(w) }}
+                    disabled={deleteMutation.isPending}
+                    style={s.deleteBtn}
+                    title="Delete wig order"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </Cell>
               </div>
 
@@ -290,6 +314,11 @@ const s: Record<string, React.CSSProperties> = {
   expandedInner: { padding: '14px 16px 14px 28px' },
   expandedTitle: { fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' },
 
+  deleteBtn: {
+    background: 'none', border: 'none', cursor: 'pointer',
+    color: '#a1a1aa', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center',
+    transition: 'color 0.15s',
+  },
   paymentRow: { display: 'flex', gap: 16, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid rgba(0,0,0,0.04)' },
   paymentDate: { fontSize: 12, color: '#18181b', width: 90 },
   paymentType: { fontSize: 11, fontWeight: 600, width: 70 },
