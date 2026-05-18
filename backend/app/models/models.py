@@ -368,6 +368,46 @@ class WigPayment(Base):
     wig_order = relationship("WigOrder", back_populates="payments")
 
 
+class BoardPost(Base):
+    __tablename__ = "board_posts"
+
+    id        = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    content   = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    author = relationship("User", foreign_keys=[author_id])
+
+
+class CompanyNotification(Base):
+    __tablename__ = "company_notifications"
+
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title          = Column(String, nullable=False)
+    body           = Column(Text)
+    scheduled_date = Column(Date)
+    is_pinned      = Column(Boolean, nullable=False, default=False)
+    created_by     = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class StaffCheckin(Base):
+    __tablename__ = "staff_checkins"
+
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id       = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    date          = Column(Date, nullable=False, server_default=func.current_date())
+    checked_in_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "date", name="uq_checkin_user_date"),
+    )
+
+
 class AiConversation(Base):
     __tablename__ = "ai_conversations"
 

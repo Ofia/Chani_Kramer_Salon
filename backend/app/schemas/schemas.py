@@ -484,3 +484,58 @@ class WigOrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ── Hello Board ───────────────────────────────────────────────
+
+class BoardPostCreate(BaseModel):
+    content: str
+
+
+class BoardPostResponse(BaseModel):
+    id: UUID
+    author_id: Optional[UUID]
+    author_name: Optional[str]
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationCreate(BaseModel):
+    title: str
+    body: Optional[str] = None
+    scheduled_date: Optional[date] = None
+    is_pinned: bool = False
+
+
+class NotificationUpdate(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    scheduled_date: Optional[date] = None
+    is_pinned: Optional[bool] = None
+
+
+class NotificationResponse(BaseModel):
+    id: UUID
+    title: str
+    body: Optional[str]
+    scheduled_date: Optional[date]
+    is_pinned: bool
+    created_by: Optional[UUID]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CheckinResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_name: str
+    date: date
+    checked_in_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -4,7 +4,7 @@ import { useViewingAs } from '../../lib/viewingAs'
 import type { ViewingAs } from '../../lib/viewingAs'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
-  LogOut, Search, Sparkles, BarChart2, UserCog,
+  LogOut, Search, Sparkles, BarChart2, UserCog, Home,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 import RoleSwitcher from '../../components/RoleSwitcher'
@@ -14,6 +14,7 @@ type NavItem =
   | { divider: true; roles: ViewingAs[]; to?: never; label?: never; icon?: never; end?: never }
 
 const BOOKKEEPING_TABS: NavItem[] = [
+  { to: '/bookkeeper/hello',     label: 'Hello Board',   icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/wigs',      label: 'Wig Orders',    icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/daily',     label: 'Daily Entry',   icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/deposits',  label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
