@@ -92,6 +92,7 @@ class CustomerCreate(BaseModel):
     cell: Optional[str] = None
     address: Optional[str] = None
     daysmart_client_id: Optional[str] = None
+    access_id: Optional[int] = None
     notes: Optional[str] = None
 
 
@@ -101,6 +102,7 @@ class CustomerUpdate(BaseModel):
     phone: Optional[str] = None
     cell: Optional[str] = None
     address: Optional[str] = None
+    access_id: Optional[int] = None
     notes: Optional[str] = None
 
 
@@ -112,6 +114,7 @@ class CustomerResponse(BaseModel):
     cell: Optional[str]
     address: Optional[str]
     daysmart_client_id: Optional[str]
+    access_id: Optional[int]
     notes: Optional[str]
     created_at: datetime
 

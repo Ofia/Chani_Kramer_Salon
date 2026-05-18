@@ -139,6 +139,7 @@ class Customer(Base):
     cell                = Column(String)
     address             = Column(Text)
     daysmart_client_id  = Column(String, unique=True)
+    access_id           = Column(Integer, unique=True)   # Access/Sheitel.mdb row ID for upsert imports
     notes               = Column(Text)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 

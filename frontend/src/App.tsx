@@ -12,6 +12,7 @@ import ExpensesPage         from './pages/bookkeeper/ExpensesPage'
 import DepositsPage         from './pages/bookkeeper/DepositsPage'
 import WigOrdersPage        from './pages/bookkeeper/WigOrdersPage'
 import EmployeesPage        from './pages/bookkeeper/EmployeesPage'
+import CustomersPage        from './pages/bookkeeper/CustomersPage'
 import HelloBoardPage       from './pages/bookkeeper/HelloBoardPage'
 import BookkeeperDashboard  from './pages/bookkeeper/BookkeeperDashboard'
 import OwnerLayout          from './pages/owner/OwnerLayout'
@@ -64,6 +65,7 @@ function AppRoutes() {
         <Route path="deposits"element={<DepositsPage />} />
         <Route path="wigs"       element={<WigOrdersPage />} />
         <Route path="employees"  element={<EmployeesPage />} />
+        <Route path="customers"  element={<CustomersPage />} />
         <Route path="hello"      element={<HelloBoardPage />} />
         <Route path="main-board" element={<OwnerDashboard />} />
       </Route>

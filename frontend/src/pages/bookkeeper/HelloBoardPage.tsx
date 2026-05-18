@@ -80,6 +80,83 @@ function checkinTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
+// ── Analog Clock ─────────────────────────────────────────────
+
+function AnalogClock({ now, size = 140 }: { now: Date; size?: number }) {
+  const cx = size / 2
+  const cy = size / 2
+  const r  = size / 2 - 6
+
+  const sec  = now.getSeconds()
+  const min  = now.getMinutes()
+  const hr   = now.getHours() % 12
+
+  const secDeg  = (sec / 60) * 360
+  const minDeg  = (min / 60) * 360 + (sec / 60) * 6
+  const hourDeg = (hr  / 12) * 360 + (min / 60) * 30
+
+  function handEnd(deg: number, length: number) {
+    const rad = (deg - 90) * (Math.PI / 180)
+    return { x: cx + length * Math.cos(rad), y: cy + length * Math.sin(rad) }
+  }
+
+  // tail: small opposite stub for balance
+  function handTail(deg: number, tailLen: number) {
+    const rad = (deg + 90) * (Math.PI / 180)
+    return { x: cx + tailLen * Math.cos(rad), y: cy + tailLen * Math.sin(rad) }
+  }
+
+  const ticks = Array.from({ length: 60 }, (_, i) => {
+    const isHour = i % 5 === 0
+    const rad    = (i / 60) * 2 * Math.PI - Math.PI / 2
+    const outer  = r
+    const inner  = isHour ? r - 9 : r - 4
+    return (
+      <line
+        key={i}
+        x1={cx + inner * Math.cos(rad)} y1={cy + inner * Math.sin(rad)}
+        x2={cx + outer * Math.cos(rad)} y2={cy + outer * Math.sin(rad)}
+        stroke={isHour ? 'rgba(13,13,13,0.28)' : 'rgba(13,13,13,0.1)'}
+        strokeWidth={isHour ? 1.8 : 0.8}
+        strokeLinecap="round"
+      />
+    )
+  })
+
+  const hEnd = handEnd(hourDeg, r * 0.48)
+  const mEnd = handEnd(minDeg,  r * 0.68)
+  const sEnd = handEnd(secDeg,  r * 0.74)
+  const sTail = handTail(secDeg, r * 0.18)
+
+  return (
+    <svg width={size} height={size} style={{ display: 'block', margin: '0 auto' }}>
+      {/* Face */}
+      <circle cx={cx} cy={cy} r={r} fill="#ffffff" stroke="rgba(13,13,13,0.09)" strokeWidth={1.5} />
+      {/* Subtle inner ring */}
+      <circle cx={cx} cy={cy} r={r - 2} fill="none" stroke="rgba(151,187,233,0.15)" strokeWidth={1} />
+
+      {/* Tick marks */}
+      {ticks}
+
+      {/* Hour hand — short, thick */}
+      <line x1={cx} y1={cy} x2={hEnd.x} y2={hEnd.y}
+        stroke="#0d0d0d" strokeWidth={3.5} strokeLinecap="round" />
+
+      {/* Minute hand — longer, medium */}
+      <line x1={cx} y1={cy} x2={mEnd.x} y2={mEnd.y}
+        stroke="#0d0d0d" strokeWidth={2.5} strokeLinecap="round" />
+
+      {/* Second hand — thin, blue accent + tail */}
+      <line x1={sTail.x} y1={sTail.y} x2={sEnd.x} y2={sEnd.y}
+        stroke="#97BBE9" strokeWidth={1.2} strokeLinecap="round" />
+
+      {/* Center cap */}
+      <circle cx={cx} cy={cy} r={4}   fill="#0d0d0d" />
+      <circle cx={cx} cy={cy} r={2}   fill="#97BBE9" />
+    </svg>
+  )
+}
+
 // ── Clock / Weather Widget ────────────────────────────────────
 
 function ClockWeatherWidget() {
@@ -98,12 +175,11 @@ function ClockWeatherWidget() {
       .catch(() => {/* weather is optional */})
   }, [])
 
-  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
-    <div style={{ ...w.card, borderTop: `3px solid #97BBE9` }}>
-      <div style={w.clockTime}>{timeStr}</div>
+    <div style={{ ...w.card, borderTop: `3px solid #97BBE9`, alignItems: 'center' }}>
+      <AnalogClock now={now} size={140} />
       <div style={w.clockDate}>{dateStr}</div>
       {weather && (
         <div style={w.weatherRow}>
@@ -506,8 +582,7 @@ const w: Record<string, React.CSSProperties> = {
   widgetSub:    { fontSize: 11, color: 'rgba(13,13,13,0.4)' },
 
   // Clock
-  clockTime:    { fontSize: 38, fontWeight: 700, color: '#5581B1', letterSpacing: '-0.04em', lineHeight: 1 },
-  clockDate:    { fontSize: 13, color: 'rgba(13,13,13,0.5)', marginTop: 4 },
+  clockDate:    { fontSize: 13, color: 'rgba(13,13,13,0.5)', marginTop: 2 },
   weatherRow:   { display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 },
   weatherText:  { fontSize: 11, color: 'rgba(13,13,13,0.45)' },
 
