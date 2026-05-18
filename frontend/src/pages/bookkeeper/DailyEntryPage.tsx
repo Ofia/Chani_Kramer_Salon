@@ -108,9 +108,9 @@ export default function DailyEntryPage() {
     cash_collected: '', quickpay_collected: '', cc_collected: '',
     check_collected: '', zelle_collected: '', wig_deposits_total: '',
   })
-  // Activity counts
+  // Activity — services & products revenue
   const [activity, setActivity] = useState({
-    chani_cuts: '', notes: '',
+    wash_set: '', repairs: '', product_sales: '', notes: '',
   })
 
   const qc = useQueryClient()
@@ -152,7 +152,12 @@ export default function DailyEntryPage() {
         zelle_collected: String(existing.zelle_collected),
         wig_deposits_total: String(existing.wig_deposits_total),
       })
-      setActivity({ chani_cuts: String(existing.chani_cuts), notes: existing.notes || '' })
+      setActivity({
+        wash_set:      existing.total_wash_set  ? String(existing.total_wash_set)  : '',
+        repairs:       existing.total_repairs   ? String(existing.total_repairs)   : '',
+        product_sales: existing.total_other     ? String(existing.total_other)     : '',
+        notes:         existing.notes || '',
+      })
     }
   }, [existing])
 
@@ -212,23 +217,22 @@ export default function DailyEntryPage() {
       .filter(w => w.status === 'paid_in_full')
       .reduce((sum, w) => sum + parseFloat(w.total_price as unknown as string), 0)
 
-    const totalWashSet = parseFloat((existing?.total_wash_set ?? 0).toString()) || 0
-    const totalRepairs = parseFloat((existing?.total_repairs ?? 0).toString()) || 0
+    const wigsPaidFull = todayWigs.filter(w => w.status === 'paid_in_full').length
 
     summaryMutation.mutate({
       summary_date: summaryDate,
-      total_wash_set: totalWashSet,
-      total_wig_sales: totalWigSales,
-      total_repairs: totalRepairs,
-      total_other: 0,
-      cash_collected: parseFloat(payments.cash_collected) || 0,
-      quickpay_collected: parseFloat(payments.quickpay_collected) || 0,
-      cc_collected: parseFloat(payments.cc_collected) || 0,
-      check_collected: parseFloat(payments.check_collected) || 0,
-      zelle_collected: parseFloat(payments.zelle_collected) || 0,
-      new_wigs_sold: todayWigs.length,
-      wigs_paid_full: todayWigs.filter(w => w.status === 'paid_in_full').length,
-      chani_cuts: parseInt(activity.chani_cuts) || 0,
+      total_wash_set:   parseFloat(activity.wash_set)      || 0,
+      total_wig_sales:  totalWigSales,
+      total_repairs:    parseFloat(activity.repairs)       || 0,
+      total_other:      parseFloat(activity.product_sales) || 0,
+      cash_collected:      parseFloat(payments.cash_collected)      || 0,
+      quickpay_collected:  parseFloat(payments.quickpay_collected)  || 0,
+      cc_collected:        parseFloat(payments.cc_collected)        || 0,
+      check_collected:     parseFloat(payments.check_collected)     || 0,
+      zelle_collected:     parseFloat(payments.zelle_collected)     || 0,
+      new_wigs_sold:    todayWigs.length,
+      wigs_paid_full:   wigsPaidFull,
+      chani_cuts:       wigsPaidFull,   // every wig paid in full gets a Chani cut
       wig_deposits_total: parseFloat(payments.wig_deposits_total) || 0,
       notes: activity.notes || null,
     })
@@ -286,7 +290,10 @@ export default function DailyEntryPage() {
 
   const isLocked = existing?.is_locked
   const totalWigSales = todayWigs.filter(w => w.status === 'paid_in_full').reduce((s, w) => s + parseFloat(w.total_price as unknown as string), 0)
-  const totalRevenue = totalWigSales + (Number(existing?.total_wash_set) || 0) + (Number(existing?.total_repairs) || 0)
+  const washSetAmt     = parseFloat(activity.wash_set)      || 0
+  const repairsAmt     = parseFloat(activity.repairs)       || 0
+  const productSalesAmt = parseFloat(activity.product_sales) || 0
+  const totalRevenue   = totalWigSales + washSetAmt + repairsAmt + productSalesAmt
   const totalCollected = ['cash_collected','cc_collected','quickpay_collected','check_collected','zelle_collected']
     .reduce((s, k) => s + (parseFloat(payments[k as keyof typeof payments] as string) || 0), 0)
 
@@ -341,8 +348,12 @@ export default function DailyEntryPage() {
                   setPickupMethod={setPickupMethod}
                   onPickupPayment={handlePickupPayment}
                   paymentMutation={paymentMutation}
-                  chaniCuts={activity.chani_cuts}
-                  setChaniCuts={(v: string) => setActivity(p => ({ ...p, chani_cuts: v }))}
+                  washSet={activity.wash_set}
+                  setWashSet={(v: string) => setActivity(p => ({ ...p, wash_set: v }))}
+                  repairs={activity.repairs}
+                  setRepairs={(v: string) => setActivity(p => ({ ...p, repairs: v }))}
+                  productSales={activity.product_sales}
+                  setProductSales={(v: string) => setActivity(p => ({ ...p, product_sales: v }))}
                   notes={activity.notes}
                   setNotes={(v: string) => setActivity(p => ({ ...p, notes: v }))}
                 />
@@ -373,9 +384,11 @@ export default function DailyEntryPage() {
 
               {step === 3 && (
                 <RevenueTab
-                  existing={existing}
                   todayWigs={todayWigs}
                   totalWigSales={totalWigSales}
+                  washSet={washSetAmt}
+                  repairs={repairsAmt}
+                  productSales={productSalesAmt}
                 />
               )}
 
@@ -384,7 +397,9 @@ export default function DailyEntryPage() {
                   summaryDate={summaryDate}
                   existing={existing}
                   payments={payments}
-                  activity={activity}
+                  washSet={washSetAmt}
+                  repairs={repairsAmt}
+                  productSales={productSalesAmt}
                   todayWigs={todayWigs}
                   totalWigSales={totalWigSales}
                   totalRevenue={totalRevenue}
@@ -425,10 +440,12 @@ export default function DailyEntryPage() {
           <p style={s.breakTitle}>Revenue Breakdown</p>
           <MiniBar label="Wig Sales (full)" amount={totalWigSales}
             pct={totalRevenue ? (totalWigSales / totalRevenue) * 100 : 0} color="#DF5198" />
-          <MiniBar label="Wash & Set" amount={existing?.total_wash_set || 0}
-            pct={totalRevenue ? ((existing?.total_wash_set || 0) / totalRevenue) * 100 : 0} color="#97BBE9" />
-          <MiniBar label="Repairs" amount={existing?.total_repairs || 0}
-            pct={totalRevenue ? ((existing?.total_repairs || 0) / totalRevenue) * 100 : 0} color="#E3CD94" />
+          <MiniBar label="Wash & Set" amount={washSetAmt}
+            pct={totalRevenue ? (washSetAmt / totalRevenue) * 100 : 0} color="#97BBE9" />
+          <MiniBar label="Repairs" amount={repairsAmt}
+            pct={totalRevenue ? (repairsAmt / totalRevenue) * 100 : 0} color="#E3CD94" />
+          <MiniBar label="Product Sales" amount={productSalesAmt}
+            pct={totalRevenue ? (productSalesAmt / totalRevenue) * 100 : 0} color="#EDCADB" />
         </div>
 
         <div style={s.breakdownCard}>
@@ -453,8 +470,7 @@ export default function DailyEntryPage() {
 
         <div style={s.countGrid}>
           <CountCard label="New Wigs" value={todayWigs.length} color="#DF5198" />
-          <CountCard label="Picked Up" value={todayWigs.filter(w => w.status === 'paid_in_full').length} color="#10b981" />
-          <CountCard label="Chani Cuts" value={parseInt(activity.chani_cuts) || 0} color="#5581B1" />
+          <CountCard label="Paid in Full" value={todayWigs.filter(w => w.status === 'paid_in_full').length} color="#10b981" />
         </div>
       </div>
     </div>
@@ -468,14 +484,15 @@ function ActivityTab({
   onAddWig, wigMutation, pickupSearch, setPickupSearch, searchResults,
   selectedPickupWig, setSelectedPickupWig, pickupAmount, setPickupAmount,
   pickupMethod, setPickupMethod, onPickupPayment, paymentMutation,
-  chaniCuts, setChaniCuts, notes, setNotes,
+  washSet, setWashSet, repairs, setRepairs, productSales, setProductSales,
+  notes, setNotes,
 }: any) {
   const pendingWigs = searchResults.filter((w: WigOrder) => w.status !== 'paid_in_full')
 
   return (
     <div>
-      {/* New wigs sold */}
-      <SectionTitle>New Wigs Sold Today</SectionTitle>
+      {/* ── New wigs ordered today ── */}
+      <SectionTitle>New Wig Orders Today</SectionTitle>
       {todayWigs.length > 0 && (
         <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {todayWigs.map((w: WigOrder) => (
@@ -490,13 +507,16 @@ function ActivityTab({
           isSaving={wigMutation.isPending}
         />
       ) : (
-        <button onClick={() => setShowWigForm(true)} style={s.addBtn}>+ Add New Wig</button>
+        <button onClick={() => setShowWigForm(true)} style={s.addBtn}>+ Add New Wig Order</button>
       )}
 
       <div style={s.divider} />
 
-      {/* Wigs picked up / final payment */}
-      <SectionTitle>Wigs Picked Up Today</SectionTitle>
+      {/* ── Wigs paid in full today — revenue recognized here ── */}
+      <SectionTitle>Wigs Paid in Full Today</SectionTitle>
+      <p style={{ fontSize: 12, color: '#71717a', marginBottom: 10 }}>
+        Search by client name to record the final payment. Revenue is recognized on full payment.
+      </p>
       <div style={{ marginBottom: 10 }}>
         <input
           placeholder="Search client name…"
@@ -548,14 +568,17 @@ function ActivityTab({
 
       <div style={s.divider} />
 
-      {/* Other activity */}
-      <SectionTitle>Other Activity</SectionTitle>
-      <div style={s.field}>
-        <label style={s.fieldLabel}>Chani Cuts</label>
-        <input type="number" min="0" step="1" value={chaniCuts}
-          onChange={e => setChaniCuts(e.target.value)} style={s.input} placeholder="0" />
+      {/* ── Services & Products revenue ── */}
+      <SectionTitle>Services &amp; Products Today</SectionTitle>
+      <p style={{ fontSize: 12, color: '#71717a', marginBottom: 14 }}>
+        Enter dollar totals from your DaySmart report. Chani's cuts are counted automatically from wigs paid in full.
+      </p>
+      <div style={s.fields}>
+        <MoneyFieldInline label="Wash & Set" value={washSet} onChange={setWashSet} />
+        <MoneyFieldInline label="Repairs" value={repairs} onChange={setRepairs} />
+        <MoneyFieldInline label="Product Sales (brushes, care items…)" value={productSales} onChange={setProductSales} />
       </div>
-      <div style={{ ...s.field, marginTop: 10 }}>
+      <div style={{ ...s.field, marginTop: 14 }}>
         <label style={s.fieldLabel}>Notes (optional)</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
           style={s.textarea} rows={2} placeholder="Any notes for today…" />
@@ -679,9 +702,9 @@ function PaymentsTab({ payments, setPayments, totalCollected, wigDepositsTotal, 
 
   return (
     <div>
-      <SectionTitle>All Money Received Today</SectionTitle>
+      <SectionTitle>Cash Flow Reconciliation</SectionTitle>
       <p style={{ fontSize: 12, color: '#71717a', marginBottom: 14 }}>
-        Enter totals by payment method — matches your CC batch + Zelle report + cash in drawer.
+        Every dollar that came into the salon today — CC batch, Zelle report, cash drawer. Includes wig deposits.
       </p>
       <div style={s.fields}>
         {PAYMENT_METHODS.map(method => (
@@ -786,23 +809,22 @@ function ExpensesTab({ summaryDate, todayExpenses, showForm, setShowForm, newExp
 
 // ── Revenue Tab ──────────────────────────────────────────────
 
-function RevenueTab({ existing, todayWigs, totalWigSales }: any) {
-  const washSet = parseFloat(existing?.total_wash_set ?? 0) || 0
-  const repairs = parseFloat(existing?.total_repairs ?? 0) || 0
-  const totalRevenue = totalWigSales + washSet + repairs
-  const pickedUpWigs = todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full')
+function RevenueTab({ todayWigs, totalWigSales, washSet, repairs, productSales }: any) {
+  const totalRevenue = totalWigSales + washSet + repairs + productSales
+  const paidFullWigs = todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full')
 
   return (
     <div>
       <SectionTitle>Revenue Today (Calculated)</SectionTitle>
       <p style={{ fontSize: 12, color: '#71717a', marginBottom: 16 }}>
-        Revenue = services + wigs paid in full. Deposits are excluded.
+        Revenue = wigs paid in full + services + product sales. Deposits are not revenue.
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <BreakdownRow label="Wig Full Payments" value={totalWigSales} color="#DF5198" />
         <BreakdownRow label="Wash & Set" value={washSet} color="#97BBE9" />
         <BreakdownRow label="Repairs" value={repairs} color="#E3CD94" />
+        <BreakdownRow label="Product Sales" value={productSales} color="#EDCADB" />
       </div>
 
       <div style={{ ...s.subtotal, marginTop: 12 }}>
@@ -810,39 +832,38 @@ function RevenueTab({ existing, todayWigs, totalWigSales }: any) {
         <span style={{ fontWeight: 700, fontSize: 20 }}>${totalRevenue.toFixed(2)}</span>
       </div>
 
-      {pickedUpWigs.length > 0 && (
+      {paidFullWigs.length > 0 && (
         <>
           <div style={s.divider} />
           <SectionTitle>Wigs Paid in Full Today</SectionTitle>
+          <p style={{ fontSize: 12, color: '#71717a', marginBottom: 10 }}>
+            Chani cut {paidFullWigs.length === 1 ? 'this wig' : `all ${paidFullWigs.length} wigs`} today.
+          </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {pickedUpWigs.map((w: WigOrder) => (
+            {paidFullWigs.map((w: WigOrder) => (
               <WigCard key={w.id} wig={w} />
             ))}
           </div>
         </>
       )}
-
-      <div style={s.divider} />
-      <p style={{ fontSize: 12, color: '#a1a1aa' }}>
-        W&S and Repairs totals come from the previous Revenue entry. Service revenue entry will be added to this tab in a future update.
-      </p>
     </div>
   )
 }
 
 // ── Review Tab ───────────────────────────────────────────────
 
-function ReviewTab({ summaryDate, payments, activity, todayWigs, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
+function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, todayWigs, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
+  const wigsPaidFull = todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full').length
 
   return (
     <div>
       <SectionTitle>Review & Save</SectionTitle>
 
       <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>Activity</p>
-      <ReviewRow label="New Wigs Sold" value={String(todayWigs.length)} />
-      <ReviewRow label="Wigs Paid in Full" value={String(todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full').length)} />
-      <ReviewRow label="Chani Cuts" value={activity.chani_cuts || '0'} />
+      <ReviewRow label="New Wig Orders" value={String(todayWigs.length)} />
+      <ReviewRow label="Wigs Paid in Full" value={String(wigsPaidFull)} />
+      <ReviewRow label="Chani Cuts (= wigs paid in full)" value={String(wigsPaidFull)} />
 
       <div style={{ height: 12 }} />
       <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>Payments Collected</p>
@@ -858,6 +879,9 @@ function ReviewTab({ summaryDate, payments, activity, todayWigs, totalWigSales, 
       <div style={{ height: 12 }} />
       <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>Revenue</p>
       <ReviewRow label="Wig Full Payments" value={`$${totalWigSales.toFixed(2)}`} />
+      {washSet > 0 && <ReviewRow label="Wash & Set" value={`$${washSet.toFixed(2)}`} />}
+      {repairs > 0 && <ReviewRow label="Repairs" value={`$${repairs.toFixed(2)}`} />}
+      {productSales > 0 && <ReviewRow label="Product Sales" value={`$${productSales.toFixed(2)}`} />}
       <ReviewRow label="Total Revenue" value={`$${totalRevenue.toFixed(2)}`} />
 
       {totalExpenses > 0 && (
@@ -917,6 +941,19 @@ function MoneyField({ label, value, onChange }: { label: string; value: string; 
     <div style={s.field}>
       <label style={s.fieldLabel}>{label}</label>
       <div style={s.moneyRow}>
+        <span style={s.moneySym}>$</span>
+        <input type="number" min="0" step="0.01" value={value}
+          onChange={e => onChange(e.target.value)} style={s.moneyInput} placeholder="0.00" />
+      </div>
+    </div>
+  )
+}
+
+function MoneyFieldInline({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <label style={{ fontSize: 13, color: '#18181b', fontWeight: 500, flex: 1 }}>{label}</label>
+      <div style={{ ...s.moneyRow, maxWidth: 160 }}>
         <span style={s.moneySym}>$</span>
         <input type="number" min="0" step="0.01" value={value}
           onChange={e => onChange(e.target.value)} style={s.moneyInput} placeholder="0.00" />

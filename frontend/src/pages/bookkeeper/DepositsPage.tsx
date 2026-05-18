@@ -1,136 +1,403 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { Pencil, Plus, X } from 'lucide-react'
 
-type DepositForm = { cash: string; checks: string; credit_card: string; zelle: string; notes: string }
-const EMPTY: DepositForm = { cash: '', checks: '', credit_card: '', zelle: '', notes: '' }
+// ── Types ─────────────────────────────────────────────────────
+
+type DaySummary = {
+  id: string
+  summary_date: string
+  cash_collected: number
+  quickpay_collected: number
+  cc_collected: number
+  check_collected: number
+  zelle_collected: number
+  wig_deposits_total: number
+  is_locked: boolean
+}
+
+type PaymentsForm = {
+  cash: string
+  quickpay: string
+  cc: string
+  check: string
+  zelle: string
+  wig_deposits: string
+}
+
+const EMPTY_FORM: PaymentsForm = {
+  cash: '', quickpay: '', cc: '', check: '', zelle: '', wig_deposits: '',
+}
+
+// ── Date helpers ─────────────────────────────────────────────
+
+function todayStr() { return new Date().toISOString().split('T')[0] }
+function firstOfMonth(year: number, month: number) {
+  return new Date(year, month - 1, 1).toISOString().split('T')[0]
+}
+function lastOfMonth(year: number, month: number) {
+  return new Date(year, month, 0).toISOString().split('T')[0]
+}
+function fmtDateLong(str: string) {
+  return new Date(str + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  })
+}
+function fmtDateShort(str: string) {
+  return new Date(str + 'T00:00:00').toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  })
+}
+function fmt(n: number | string) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n))
+}
+function summaryToForm(s: DaySummary): PaymentsForm {
+  return {
+    cash:         Number(s.cash_collected)     > 0 ? String(s.cash_collected)     : '',
+    quickpay:     Number(s.quickpay_collected) > 0 ? String(s.quickpay_collected) : '',
+    cc:           Number(s.cc_collected)       > 0 ? String(s.cc_collected)       : '',
+    check:        Number(s.check_collected)    > 0 ? String(s.check_collected)    : '',
+    zelle:        Number(s.zelle_collected)    > 0 ? String(s.zelle_collected)    : '',
+    wig_deposits: Number(s.wig_deposits_total) > 0 ? String(s.wig_deposits_total) : '',
+  }
+}
+function rowTotal(s: DaySummary) {
+  return Number(s.cash_collected) + Number(s.quickpay_collected) +
+    Number(s.cc_collected) + Number(s.check_collected) + Number(s.zelle_collected)
+}
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const YEARS  = [2023, 2024, 2025, 2026]
+
+// ── Component ────────────────────────────────────────────────
 
 export default function DepositsPage() {
-  const [depositDate, setDepositDate] = useState(new Date().toISOString().split('T')[0])
-  const [form, setForm] = useState<DepositForm>(EMPTY)
-  const [saved, setSaved] = useState(false)
+  const now = new Date()
+  const [view, setView] = useState<'daily' | 'monthly' | 'range'>('daily')
+
+  // Daily
+  const [selectedDate, setSelectedDate] = useState(todayStr())
+  const [showForm,      setShowForm]      = useState(false)
+  const [isEditing,     setIsEditing]     = useState(false)  // true = PATCH, false = POST
+  const [form, setForm] = useState<PaymentsForm>(EMPTY_FORM)
+
+  // Monthly
+  const [selYear,  setSelYear]  = useState(now.getFullYear())
+  const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
+
+  // Range
+  const [rangeStart, setRangeStart] = useState(firstOfMonth(now.getFullYear(), now.getMonth() + 1))
+  const [rangeEnd,   setRangeEnd]   = useState(todayStr())
+
   const qc = useQueryClient()
 
-  const { data: existing } = useQuery({
-    queryKey: ['deposit', depositDate],
-    queryFn: () => api.get(`/deposits/${depositDate}`).then(r => r.data).catch(() => null),
+  // ── Queries — all source from daily_summary ──────────────────
+
+  const { data: dayData, isLoading: dailyLoading } = useQuery<DaySummary | null>({
+    queryKey: ['daily-summary', selectedDate],
+    queryFn: () =>
+      api.get(`/daily-summary/${selectedDate}`).then(r => r.data).catch(() => null),
+    enabled: view === 'daily',
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
-  useEffect(() => {
-    if (existing) {
-      setForm({ cash: String(existing.cash), checks: String(existing.checks), credit_card: String(existing.credit_card), zelle: String(existing.zelle), notes: existing.notes || '' })
-    } else {
-      setForm(EMPTY)
-    }
-  }, [existing, depositDate])
-
-  const mutation = useMutation({
-    mutationFn: (data: object) =>
-      existing ? api.patch(`/deposits/${depositDate}`, data) : api.post('/deposits', data),
-    onSuccess: () => { setSaved(true); qc.invalidateQueries({ queryKey: ['deposit'] }); setTimeout(() => setSaved(false), 3000) },
+  const { data: monthlyRows = [], isLoading: monthlyLoading } = useQuery<DaySummary[]>({
+    queryKey: ['daily-summary-range', firstOfMonth(selYear, selMonth), lastOfMonth(selYear, selMonth)],
+    queryFn: () =>
+      api.get(`/daily-summary/?start_date=${firstOfMonth(selYear, selMonth)}&end_date=${lastOfMonth(selYear, selMonth)}`)
+        .then(r => r.data),
+    enabled: view === 'monthly',
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
-  function set(field: keyof DepositForm, value: string) {
-    setForm(prev => ({ ...prev, [field]: value }))
+  const { data: rangeRows = [], isLoading: rangeLoading } = useQuery<DaySummary[]>({
+    queryKey: ['daily-summary-range', rangeStart, rangeEnd],
+    queryFn: () =>
+      api.get(`/daily-summary/?start_date=${rangeStart}&end_date=${rangeEnd}`)
+        .then(r => r.data),
+    enabled: view === 'range' && !!rangeStart && !!rangeEnd,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  })
+
+  // ── Mutations ────────────────────────────────────────────────
+
+  type SaveVars =
+    | { mode: 'patch'; summaryDate: string; fields: object }
+    | { mode: 'post';  summaryDate: string; fields: object }
+
+  const saveMutation = useMutation({
+    mutationFn: (vars: SaveVars) =>
+      vars.mode === 'patch'
+        ? api.patch(`/daily-summary/${vars.summaryDate}`, vars.fields)
+        : api.post('/daily-summary/', vars.fields),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['daily-summary'] })
+      qc.invalidateQueries({ queryKey: ['daily-summary-range'] })
+      closeForm()
+    },
+  })
+
+  // ── Form helpers ─────────────────────────────────────────────
+
+  function openEdit(record: DaySummary) {
+    setIsEditing(true)
+    setForm(summaryToForm(record))
+    setShowForm(true)
   }
 
-  const cashNum   = parseFloat(form.cash)        || 0
-  const checksNum = parseFloat(form.checks)      || 0
-  const ccNum     = parseFloat(form.credit_card) || 0
-  const zelleNum  = parseFloat(form.zelle)       || 0
-  const taxCash   = cashNum * 0.08875
-  const taxOther  = (checksNum + ccNum + zelleNum) * 0.045
-  const total     = cashNum + checksNum + ccNum + zelleNum
+  function openAdd() {
+    setIsEditing(false)
+    setForm(EMPTY_FORM)
+    setShowForm(true)
+  }
 
-  // For dashboard chart — percentages
-  const hasData = total > 0
-  const pcts = {
-    cash:  hasData ? (cashNum   / total) * 100 : 0,
-    check: hasData ? (checksNum / total) * 100 : 0,
-    cc:    hasData ? (ccNum     / total) * 100 : 0,
-    zelle: hasData ? (zelleNum  / total) * 100 : 0,
+  function closeForm() {
+    setShowForm(false)
+    setIsEditing(false)
+    setForm(EMPTY_FORM)
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    mutation.mutate({ deposit_date: depositDate, cash: cashNum, checks: checksNum, credit_card: ccNum, zelle: zelleNum, notes: form.notes || null })
+    const paymentFields = {
+      cash_collected:      parseFloat(form.cash)         || 0,
+      quickpay_collected:  parseFloat(form.quickpay)     || 0,
+      cc_collected:        parseFloat(form.cc)           || 0,
+      check_collected:     parseFloat(form.check)        || 0,
+      zelle_collected:     parseFloat(form.zelle)        || 0,
+      wig_deposits_total:  parseFloat(form.wig_deposits) || 0,
+    }
+
+    if (isEditing) {
+      // Day already exists — PATCH just the payment fields
+      saveMutation.mutate({ mode: 'patch', summaryDate: selectedDate, fields: paymentFields })
+    } else {
+      // No daily summary yet — POST a new one (all non-payment fields default to 0)
+      saveMutation.mutate({
+        mode: 'post',
+        summaryDate: selectedDate,
+        fields: { summary_date: selectedDate, ...paymentFields },
+      })
+    }
   }
 
+  // ── Derived values ───────────────────────────────────────────
+
+  const existingForDate = dayData ?? null
+  const isToday = selectedDate === todayStr()
+
+  const activeRows: DaySummary[] = view === 'daily'
+    ? (existingForDate ? [existingForDate] : [])
+    : view === 'monthly' ? monthlyRows
+    : rangeRows
+
+  const isLoading = view === 'daily' ? dailyLoading
+    : view === 'monthly' ? monthlyLoading
+    : rangeLoading
+
+  const grandTotal = activeRows.reduce((s, r) => s + rowTotal(r), 0)
+
+  const monthLabel = new Date(selYear, selMonth - 1, 1)
+    .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const rangeLabel = rangeStart && rangeEnd
+    ? `${fmtDateShort(rangeStart)} — ${fmtDateShort(rangeEnd)}` : ''
+  const subtitle = view === 'daily' ? fmtDateLong(selectedDate)
+    : view === 'monthly' ? monthLabel : rangeLabel
+
+  // Live total inside form
+  const formTotal = (parseFloat(form.cash) || 0) + (parseFloat(form.quickpay) || 0) +
+    (parseFloat(form.cc) || 0) + (parseFloat(form.check) || 0) + (parseFloat(form.zelle) || 0)
+
   return (
-    <div style={s.shell}>
-      {/* ── Left: form ── */}
-      <div style={s.formCol}>
-        <header style={s.header}>
+    <div style={s.page}>
+
+      {/* ── Header ── */}
+      <header style={s.header}>
+        <div>
           <h1 style={s.title}>Deposits</h1>
-          <div style={s.datePicker}>
-            <label style={s.dateLabel}>Date</label>
-            <input type="date" value={depositDate} onChange={e => setDepositDate(e.target.value)} style={s.dateInput} />
-          </div>
-        </header>
+          <p style={s.subtitle}>{subtitle}</p>
+        </div>
+        <div style={s.headerRight}>
 
-        <form onSubmit={handleSubmit}>
-          <p style={s.sectionLabel}>Deposit Amounts</p>
-          <div style={s.card}>
-            <div style={s.grid}>
-              <MoneyField label="Cash"        value={form.cash}        onChange={v => set('cash', v)} />
-              <MoneyField label="Checks"      value={form.checks}      onChange={v => set('checks', v)} />
-              <MoneyField label="Credit Card" value={form.credit_card} onChange={v => set('credit_card', v)} />
-              <MoneyField label="Zelle"       value={form.zelle}       onChange={v => set('zelle', v)} />
-            </div>
+          <div style={s.segmented}>
+            <button onClick={() => { setView('daily');   closeForm() }} style={{ ...s.seg, ...(view === 'daily'   ? s.segActive : {}) }}>Daily</button>
+            <button onClick={() => { setView('monthly'); closeForm() }} style={{ ...s.seg, ...(view === 'monthly' ? s.segActive : {}) }}>Monthly</button>
+            <button onClick={() => { setView('range');   closeForm() }} style={{ ...s.seg, ...(view === 'range'   ? s.segActive : {}) }}>Range</button>
           </div>
 
-          <p style={s.sectionLabel}>Sales Tax (auto-calculated)</p>
-          <div style={s.taxCard}>
-            <div style={s.taxRow}><span style={s.taxLabel}>Cash × 8.875%</span><span style={s.taxValue}>${taxCash.toFixed(2)}</span></div>
-            <div style={{ ...s.taxRow, borderBottom: 'none' }}><span style={s.taxLabel}>CC / Checks / Zelle × 4.5%</span><span style={s.taxValue}>${taxOther.toFixed(2)}</span></div>
-          </div>
-
-          <div style={s.totalBanner}>
-            <span style={s.totalLabel}>Total Deposit</span>
-            <span style={s.totalValue}>${total.toFixed(2)}</span>
-          </div>
-
-          <div style={s.notesField}>
-            <label style={s.dateLabel}>Notes (optional)</label>
-            <input value={form.notes} onChange={e => set('notes', e.target.value)} style={s.notesInput} placeholder="Optional" />
-          </div>
-
-          <div style={s.actions}>
-            <button type="submit" disabled={mutation.isPending} style={s.primaryBtn}>
-              {mutation.isPending ? 'Saving…' : existing ? 'Update Deposit' : 'Save Deposit'}
+          {view === 'daily' && !showForm && !existingForDate && (
+            <button onClick={openAdd} style={s.addBtn}>
+              <Plus size={13} style={{ marginRight: 4 }} />Add
             </button>
-            {saved && <span style={s.success}>Saved.</span>}
-          </div>
-        </form>
-      </div>
-
-      {/* ── Right: dashboard panel ── */}
-      <div style={s.dashCol}>
-
-        {/* Total card */}
-        <div style={s.bigCard}>
-          <p style={s.bigCardLabel}>Total Today</p>
-          <p style={s.bigCardValue}>${total.toFixed(2)}</p>
-          <p style={s.bigCardSub}>{depositDate}</p>
+          )}
+          {view === 'daily' && !showForm && existingForDate && !existingForDate.is_locked && (
+            <button onClick={() => openEdit(existingForDate)} style={s.editBtn}>
+              <Pencil size={13} style={{ marginRight: 4 }} />Edit
+            </button>
+          )}
+          {view === 'daily' && showForm && (
+            <button onClick={closeForm} style={s.cancelFormBtn}>
+              <X size={13} style={{ marginRight: 4 }} />Cancel
+            </button>
+          )}
         </div>
+      </header>
 
-        {/* Payment method breakdown */}
-        <div style={s.breakdownCard}>
-          <p style={s.breakTitle}>Payment Breakdown</p>
-          <MiniBar label="Cash"        pct={pcts.cash}  amount={cashNum}   color="#DF5198" />
-          <MiniBar label="Checks"      pct={pcts.check} amount={checksNum} color="#97BBE9" />
-          <MiniBar label="Credit Card" pct={pcts.cc}    amount={ccNum}     color="#E3CD94" />
-          <MiniBar label="Zelle"       pct={pcts.zelle} amount={zelleNum}  color="#5581B1" />
+      {/* ── Date controls ── */}
+      {view === 'daily' && (
+        <div style={s.controls}>
+          <input
+            type="date" value={selectedDate}
+            onChange={e => { setSelectedDate(e.target.value); closeForm() }}
+            style={s.dateInput}
+          />
+          {!isToday && (
+            <button onClick={() => { setSelectedDate(todayStr()); closeForm() }} style={s.todayBtn}>
+              Today
+            </button>
+          )}
         </div>
-
-        {/* Tax summary */}
-        <div style={s.taxSummaryCard}>
-          <p style={s.breakTitle}>Tax Summary</p>
-          <TaxLine label="Cash tax (8.875%)"        value={taxCash}  color="#EDCADB" />
-          <TaxLine label="CC/Check/Zelle (4.5%)"    value={taxOther} color="#5581B1" last />
+      )}
+      {view === 'monthly' && (
+        <div style={s.controls}>
+          <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} style={s.dateInput}>
+            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
+          <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} style={s.dateInput}>
+            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
         </div>
+      )}
+      {view === 'range' && (
+        <div style={s.controls}>
+          <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} style={s.dateInput} />
+          <span style={s.rangeSep}>—</span>
+          <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} style={s.dateInput} />
+        </div>
+      )}
 
-      </div>
+      {/* ── Add / Edit form (daily only) ── */}
+      {view === 'daily' && showForm && (
+        <div style={s.formCard}>
+          <p style={s.formTitle}>
+            {isEditing ? `Edit Payments — ${fmtDateLong(selectedDate)}` : `New Entry — ${fmtDateLong(selectedDate)}`}
+          </p>
+          <form onSubmit={handleSubmit}>
+            <div style={s.formGrid}>
+              <MoneyField label="Cash"        value={form.cash}         onChange={v => setForm(p => ({ ...p, cash: v }))} />
+              <MoneyField label="QuickPay"    value={form.quickpay}     onChange={v => setForm(p => ({ ...p, quickpay: v }))} />
+              <MoneyField label="Credit Card" value={form.cc}           onChange={v => setForm(p => ({ ...p, cc: v }))} />
+              <MoneyField label="Check"       value={form.check}        onChange={v => setForm(p => ({ ...p, check: v }))} />
+              <MoneyField label="Zelle"       value={form.zelle}        onChange={v => setForm(p => ({ ...p, zelle: v }))} />
+              <MoneyField label="Wig Deposits (not revenue)" value={form.wig_deposits} onChange={v => setForm(p => ({ ...p, wig_deposits: v }))} />
+            </div>
+
+            {formTotal > 0 && (
+              <div style={s.formTotal}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.5)' }}>Total Collected</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.02em' }}>{fmt(formTotal)}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button type="submit" disabled={saveMutation.isPending} style={s.submitBtn}>
+                {saveMutation.isPending ? 'Saving…' : isEditing ? 'Update' : 'Save Entry'}
+              </button>
+              <button type="button" onClick={closeForm} style={s.cancelFormBtn}>Cancel</button>
+            </div>
+            {saveMutation.isError && (
+              <p style={s.errorMsg}>
+                {(saveMutation.error as any)?.response?.status === 423
+                  ? 'This day is locked and cannot be edited.'
+                  : 'Error saving. Try again.'}
+              </p>
+            )}
+          </form>
+        </div>
+      )}
+
+      {/* ── List ── */}
+      <p style={s.sectionLabel}>
+        {view === 'daily'   && (isToday ? "Today's Payments" : `Payments — ${fmtDateLong(selectedDate)}`)}
+        {view === 'monthly' && `Payments — ${monthLabel}`}
+        {view === 'range'   && `Payments — ${rangeLabel}`}
+      </p>
+
+      {isLoading ? (
+        <p style={s.muted}>Loading…</p>
+      ) : (
+        <div style={s.card}>
+          {activeRows.length === 0 ? (
+            <div style={s.emptyState}>
+              <p style={s.emptyTitle}>No payments recorded</p>
+              <p style={s.emptyHint}>
+                {view === 'daily'
+                  ? 'Enter via Daily Entry → Payments tab, or use + Add above.'
+                  : 'No daily entries found for this period.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Table header */}
+              <div style={s.tableHeader}>
+                {view !== 'daily' && <span style={s.colDate}>Date</span>}
+                <span style={s.colAmt}>Cash</span>
+                <span style={s.colAmt}>QP</span>
+                <span style={s.colAmt}>CC</span>
+                <span style={s.colAmt}>Check</span>
+                <span style={s.colAmt}>Zelle</span>
+                <span style={{ ...s.colAmt, color: '#5581B1' }}>Wig Dep.</span>
+                <span style={s.colTotal}>Total</span>
+                {view === 'daily' && <span style={{ width: 28 }} />}
+              </div>
+
+              {activeRows.map((row, i) => {
+                const total = rowTotal(row)
+                return (
+                  <div
+                    key={row.id}
+                    style={{ ...s.row, borderBottom: i < activeRows.length - 1 ? '1px solid rgba(13,13,13,0.05)' : 'none' }}
+                  >
+                    {view !== 'daily' && (
+                      <span style={{ ...s.colDate, color: 'rgba(13,13,13,0.5)', fontSize: 12, fontWeight: 400 }}>
+                        {fmtDateShort(row.summary_date)}
+                      </span>
+                    )}
+                    <span style={s.cell}>{Number(row.cash_collected)     > 0 ? fmt(row.cash_collected)     : <Dash />}</span>
+                    <span style={s.cell}>{Number(row.quickpay_collected) > 0 ? fmt(row.quickpay_collected) : <Dash />}</span>
+                    <span style={s.cell}>{Number(row.cc_collected)       > 0 ? fmt(row.cc_collected)       : <Dash />}</span>
+                    <span style={s.cell}>{Number(row.check_collected)    > 0 ? fmt(row.check_collected)    : <Dash />}</span>
+                    <span style={s.cell}>{Number(row.zelle_collected)    > 0 ? fmt(row.zelle_collected)    : <Dash />}</span>
+                    <span style={{ ...s.cell, color: '#5581B1' }}>
+                      {Number(row.wig_deposits_total) > 0 ? fmt(row.wig_deposits_total) : <Dash />}
+                    </span>
+                    <span style={s.colTotal}>{fmt(total)}</span>
+                    {view === 'daily' && !row.is_locked && (
+                      <button onClick={() => openEdit(row)} style={s.editRowBtn} title="Edit">
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                    {view === 'daily' && row.is_locked && (
+                      <span style={s.lockedDot} title="Locked" />
+                    )}
+                  </div>
+                )
+              })}
+
+              <div style={s.totalRow}>
+                <span style={s.totalLabel}>
+                  {activeRows.length > 1 ? `Total (${activeRows.length} days)` : 'Total Collected'}
+                </span>
+                <span style={s.totalValue}>{fmt(grandTotal)}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -139,88 +406,88 @@ export default function DepositsPage() {
 
 function MoneyField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <label style={{ fontSize: 12, fontWeight: 500, color: '#71717a' }}>{label}</label>
+    <div style={s.field}>
+      <label style={s.fieldLabel}>{label}</label>
       <div style={s.moneyRow}>
         <span style={s.moneySym}>$</span>
-        <input type="number" min="0" step="0.01" value={value}
-          onChange={e => onChange(e.target.value)} style={s.moneyInput} placeholder="0.00" />
+        <input
+          type="number" min="0" step="0.01" value={value}
+          onChange={e => onChange(e.target.value)}
+          style={s.moneyInput} placeholder="0.00"
+        />
       </div>
     </div>
   )
 }
 
-function MiniBar({ label, pct, amount, color }: { label: string; pct: number; amount: number; color: string }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-        <span style={{ fontSize: 12, color: '#71717a' }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#18181b' }}>${amount.toFixed(2)}</span>
-      </div>
-      <div style={{ height: 6, background: '#f4f4f5', borderRadius: 99 }}>
-        <div style={{ height: 6, width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 99, transition: 'width 0.4s ease' }} />
-      </div>
-    </div>
-  )
+function Dash() {
+  return <span style={{ color: 'rgba(13,13,13,0.2)', fontWeight: 400 }}>—</span>
 }
 
-function TaxLine({ label, value, color, last = false }: { label: string; value: number; color: string; last?: boolean }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: last ? 'none' : '1px solid rgba(0,0,0,0.05)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-        <span style={{ fontSize: 12, color: '#71717a' }}>{label}</span>
-      </div>
-      <span style={{ fontSize: 13, fontWeight: 600, color: '#18181b' }}>${value.toFixed(2)}</span>
-    </div>
-  )
-}
+// ── Styles ───────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  shell: { display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 28, alignItems: 'start' },
+  page: { fontFamily: "'Inter', -apple-system, sans-serif", letterSpacing: '-0.01em' },
 
-  /* Form column */
-  formCol: { minWidth: 0 },
+  header: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: 16, paddingBottom: 20, borderBottom: '1px solid rgba(13,13,13,0.09)',
+  },
+  title:    { fontSize: 22, fontWeight: 700, color: '#0d0d0d', margin: 0, letterSpacing: '-0.03em' },
+  subtitle: { fontSize: 12, color: 'rgba(13,13,13,0.42)', margin: '3px 0 0' },
 
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.07)' },
-  title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: 0, letterSpacing: '-0.03em' },
-  datePicker: { display: 'flex', alignItems: 'center', gap: 10 },
-  dateLabel: { fontSize: 12, fontWeight: 500, color: '#71717a' },
-  dateInput: { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#18181b', background: '#fff', fontFamily: 'inherit', outline: 'none' },
+  headerRight: { display: 'flex', alignItems: 'center', gap: 8 },
 
-  sectionLabel: { fontSize: 11, fontWeight: 600, color: '#a1a1aa', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '0 0 8px' },
-  card: { background: '#fff', borderRadius: 16, padding: '22px', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)', marginBottom: 20 },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
-  moneyRow: { display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, overflow: 'hidden', background: '#f9f9f9' },
-  moneySym: { padding: '10px 10px', color: '#71717a', fontSize: 14, borderRight: '1px solid rgba(0,0,0,0.08)' },
-  moneyInput: { flex: 1, border: 'none', padding: '10px 10px', fontSize: 15, color: '#18181b', outline: 'none', background: 'transparent', fontFamily: 'inherit' },
+  segmented: { display: 'flex', background: 'rgba(13,13,13,0.06)', borderRadius: 9, padding: 3, gap: 2 },
+  seg:       { padding: '5px 14px', border: 'none', background: 'transparent', borderRadius: 7, fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.42)', cursor: 'pointer', transition: 'all 0.15s', fontFamily: "'Inter', sans-serif" },
+  segActive: { background: '#fff', color: '#0d0d0d', boxShadow: '0 1px 4px rgba(0,0,0,0.10)' },
 
-  taxCard: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)', marginBottom: 20 },
-  taxRow: { display: 'flex', justifyContent: 'space-between', padding: '13px 20px', borderBottom: '1px solid rgba(0,0,0,0.05)' },
-  taxLabel: { fontSize: 14, color: '#71717a' },
-  taxValue: { fontSize: 14, fontWeight: 600, color: '#18181b', letterSpacing: '-0.01em' },
+  addBtn:        { display: 'flex', alignItems: 'center', padding: '6px 14px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', background: '#212121', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
+  editBtn:       { display: 'flex', alignItems: 'center', padding: '6px 14px', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#0d0d0d', background: '#fff', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
+  cancelFormBtn: { display: 'flex', alignItems: 'center', padding: '6px 14px', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, fontSize: 13, color: 'rgba(13,13,13,0.55)', background: '#fff', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
 
-  totalBanner: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f4f4f5', border: '1px solid #e4e4e7', borderRadius: 12, padding: '16px 20px', marginBottom: 20 },
-  totalLabel: { fontSize: 13, fontWeight: 500, color: '#71717a' },
-  totalValue: { fontSize: 24, fontWeight: 700, color: '#18181b', letterSpacing: '-0.03em' },
+  controls:  { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 },
+  dateInput: { padding: '5px 10px', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, fontSize: 13, fontFamily: "'Inter', sans-serif", color: '#0d0d0d', background: '#fff', outline: 'none' },
+  todayBtn:  { padding: '5px 12px', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.55)', background: '#fff', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
+  rangeSep:  { fontSize: 12, color: 'rgba(13,13,13,0.35)' },
 
-  notesField: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 },
-  notesInput: { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '9px 12px', fontSize: 14, color: '#18181b', background: '#fff', outline: 'none', fontFamily: 'inherit' },
+  formCard:  { background: '#fff', borderRadius: 14, padding: '20px 22px', marginBottom: 18, border: '1px solid rgba(13,13,13,0.09)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
+  formTitle: { fontSize: 13, fontWeight: 600, color: '#0d0d0d', margin: '0 0 14px', letterSpacing: '-0.01em' },
+  formGrid:  { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 },
+  formTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f7f7f5', borderRadius: 10, padding: '10px 14px', marginBottom: 4 },
 
-  actions: { display: 'flex', alignItems: 'center', gap: 16 },
-  primaryBtn: { background: '#212121', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '-0.01em' },
-  success: { color: '#10b981', fontSize: 13, fontWeight: 500 },
+  field:     { display: 'flex', flexDirection: 'column', gap: 5 },
+  fieldLabel:{ fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', letterSpacing: '0.06em', textTransform: 'uppercase' },
+  moneyRow:  { display: 'flex', alignItems: 'center', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, overflow: 'hidden', background: '#fafaf9' },
+  moneySym:  { padding: '7px 8px', color: 'rgba(13,13,13,0.4)', fontSize: 12, borderRight: '1px solid rgba(13,13,13,0.08)' },
+  moneyInput:{ flex: 1, border: 'none', padding: '7px 8px', fontSize: 13, color: '#0d0d0d', outline: 'none', background: 'transparent', fontFamily: "'Inter', sans-serif" },
+  submitBtn: { padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', background: '#212121', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
+  errorMsg:  { color: '#dc2626', fontSize: 12, margin: '8px 0 0' },
 
-  /* Dashboard column */
-  dashCol: { flex: 1, display: 'flex', flexDirection: 'column', gap: 14, position: 'sticky', top: 36 },
+  muted:        { color: 'rgba(13,13,13,0.42)', fontSize: 14 },
+  sectionLabel: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.35)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' },
 
-  bigCard: { background: '#fff', borderRadius: 12, padding: '20px 22px', border: '1px solid #e4e4e7' },
-  bigCardLabel: { fontSize: 11, fontWeight: 500, color: '#71717a', letterSpacing: '0.04em', textTransform: 'uppercase', margin: '0 0 6px' },
-  bigCardValue: { fontSize: 32, fontWeight: 700, color: '#18181b', letterSpacing: '-0.03em', margin: '0 0 4px' },
-  bigCardSub: { fontSize: 11, color: '#a1a1aa', margin: 0 },
+  card:       { background: '#fff', borderRadius: 14, border: '1px solid rgba(13,13,13,0.09)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
+  emptyState: { padding: '48px 40px', textAlign: 'center' },
+  emptyTitle: { color: '#0d0d0d', fontSize: 14, fontWeight: 600, margin: '0 0 6px', letterSpacing: '-0.02em' },
+  emptyHint:  { color: 'rgba(13,13,13,0.42)', fontSize: 12, margin: 0 },
 
-  breakdownCard: { background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)' },
-  breakTitle: { fontSize: 12, fontWeight: 600, color: '#18181b', margin: '0 0 16px', letterSpacing: '-0.01em' },
+  tableHeader: {
+    display: 'flex', alignItems: 'center', padding: '10px 20px',
+    background: '#f7f7f5', borderBottom: '1px solid rgba(13,13,13,0.07)',
+    fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', letterSpacing: '0.07em', textTransform: 'uppercase',
+  },
 
-  taxSummaryCard: { background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.05)' },
+  row:     { display: 'flex', alignItems: 'center', padding: '12px 20px' },
+  colDate: { flex: '0 0 120px', fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' },
+  colAmt:  { flex: 1, fontSize: 10 },
+  colTotal:{ flex: '0 0 90px', textAlign: 'right' as const, fontSize: 14, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.02em' },
+  cell:    { flex: 1, fontSize: 13, fontWeight: 500, color: '#0d0d0d', letterSpacing: '-0.01em' },
+
+  editRowBtn: { background: 'none', border: 'none', color: 'rgba(13,13,13,0.25)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6, marginLeft: 8, flexShrink: 0 },
+  lockedDot:  { width: 6, height: 6, borderRadius: '50%', background: 'rgba(13,13,13,0.2)', marginLeft: 8, flexShrink: 0 },
+
+  totalRow:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 20px', background: '#f7f7f5', borderTop: '1px solid rgba(13,13,13,0.07)' },
+  totalLabel: { fontSize: 12, fontWeight: 600, color: 'rgba(13,13,13,0.5)', letterSpacing: '0.04em', textTransform: 'uppercase' },
+  totalValue: { fontSize: 17, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.03em' },
 }

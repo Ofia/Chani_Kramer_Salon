@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 
 // Costal Glam palette — matches DailyEntryPage MiniBar colors
-const STREAM_COLORS = ['#DF5198', '#97BBE9', '#E3CD94']
+const STREAM_COLORS = ['#DF5198', '#97BBE9', '#E3CD94', '#EDCADB']
 
 function fmt(n: number | string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n))
@@ -156,15 +156,17 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
     </div>
   )
 
-  const ws   = Number(summary.total_wash_set)  || 0
-  const wigs = Number(summary.total_wig_sales) || 0
-  const rep  = Number(summary.total_repairs)   || 0
-  const total = Number(summary.total_revenue)  || 0
+  const ws      = Number(summary.total_wash_set)  || 0
+  const wigs    = Number(summary.total_wig_sales) || 0
+  const rep     = Number(summary.total_repairs)   || 0
+  const other   = Number(summary.total_other)     || 0
+  const total   = Number(summary.total_revenue)   || 0
 
   const pieData = [
-    { name: 'Wash & Set', value: ws },
-    { name: 'Wig Sales',  value: wigs },
-    { name: 'Repairs',    value: rep },
+    { name: 'Wash & Set',      value: ws },
+    { name: 'Wig Sales',       value: wigs },
+    { name: 'Repairs',         value: rep },
+    { name: 'Product Sales',   value: other },
   ].filter(d => d.value > 0)
 
   const emptyPie = pieData.length === 0
@@ -176,9 +178,10 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
       <Label>Revenue</Label>
       <div style={s.revenueCard}>
         <div style={s.statRows}>
-          <StatRow label="Wash & Set"  value={fmt(ws)}   dot="#DF5198" />
-          <StatRow label="Wig Sales"   value={fmt(wigs)} dot="#97BBE9" />
-          <StatRow label="Repairs"     value={fmt(rep)}  dot="#E3CD94" />
+          <StatRow label="Wash & Set"    value={fmt(ws)}    dot="#DF5198" />
+          <StatRow label="Wig Sales"     value={fmt(wigs)}  dot="#97BBE9" />
+          <StatRow label="Repairs"       value={fmt(rep)}   dot="#E3CD94" />
+          {other > 0 && <StatRow label="Product Sales" value={fmt(other)} dot="#EDCADB" />}
           <div style={s.divider} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={s.totalLabel}>Total Revenue</span>

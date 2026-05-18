@@ -60,6 +60,7 @@ export default function OwnerDashboard() {
     total_wash_set:  monthly?.total_wash_set  ?? 0,
     total_wig_sales: monthly?.total_wig_sales ?? 0,
     total_repairs:   monthly?.total_repairs   ?? 0,
+    total_other:     monthly?.total_other     ?? 0,
   }
   const hasData = m.days_with_data > 0
 
@@ -120,11 +121,14 @@ function AnalysisTab({ monthly, snapshots, now }: { monthly: any; snapshots: any
     ? snapshots.reduce((sum: number, s: any) => sum + Number(s.total_revenue), 0) / snapshots.length
     : 0
   const streams    = [
-    { name: 'Wash & Set', v: Number(monthly.total_wash_set  ?? 0) },
-    { name: 'Wig Sales',  v: Number(monthly.total_wig_sales ?? 0) },
-    { name: 'Repairs',    v: Number(monthly.total_repairs   ?? 0) },
-  ]
-  const dominant = streams.reduce((a, b) => a.v > b.v ? a : b)
+    { name: 'Wash & Set',    v: Number(monthly.total_wash_set  ?? 0) },
+    { name: 'Wig Sales',     v: Number(monthly.total_wig_sales ?? 0) },
+    { name: 'Repairs',       v: Number(monthly.total_repairs   ?? 0) },
+    { name: 'Product Sales', v: Number(monthly.total_other     ?? 0) },
+  ].filter(s => s.v > 0)
+  const dominant = streams.length > 0
+    ? streams.reduce((a, b) => a.v > b.v ? a : b)
+    : { name: '—', v: 0 }
 
   return (
     <div>
@@ -162,10 +166,11 @@ function AnalysisTab({ monthly, snapshots, now }: { monthly: any; snapshots: any
           <ResponsiveContainer width="100%" height={180}>
             <BarChart
               data={[
-                { name: 'Wash & Set', amount: Number(monthly.total_wash_set  ?? 0) },
-                { name: 'Wig Sales',  amount: Number(monthly.total_wig_sales ?? 0) },
-                { name: 'Repairs',    amount: Number(monthly.total_repairs   ?? 0) },
-              ]}
+                { name: 'Wash & Set',    amount: Number(monthly.total_wash_set  ?? 0) },
+                { name: 'Wig Sales',     amount: Number(monthly.total_wig_sales ?? 0) },
+                { name: 'Repairs',       amount: Number(monthly.total_repairs   ?? 0) },
+                { name: 'Product Sales', amount: Number(monthly.total_other     ?? 0) },
+              ].filter(d => d.amount > 0)}
               margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(13,13,13,0.06)" />

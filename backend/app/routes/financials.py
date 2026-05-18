@@ -187,5 +187,6 @@ def get_monthly_summary(
         "total_wash_set":  total_wash_set,
         "total_wig_sales": total_wig_sales,
         "total_repairs":   total_repairs,
+        "total_other":     total_other,
         **result,
     }
