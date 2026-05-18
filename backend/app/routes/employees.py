@@ -40,7 +40,7 @@ def get_employee(
 def create_employee(
     data: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_owner),
+    current_user: User = Depends(get_current_user),
 ):
     emp = Employee(**data.model_dump())
     db.add(emp)

@@ -88,6 +88,28 @@ const EXPENSE_CATEGORIES = [
 const BRANDS = ['RINA', 'RINA ELITE', 'BK', 'ROCHI LIPSKER', 'SARY', 'ZEHAVA', 'ELITE']
 const TABS = ['Activity', 'Payments', 'Expenses', 'Revenue', 'Review']
 
+const PAY_TYPES = [
+  { value: 'weekly_flat',    label: 'Weekly Flat' },
+  { value: 'commission_pct', label: 'Commission %' },
+  { value: 'hourly',         label: 'Hourly' },
+]
+
+function getWeekStart(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  return d.toISOString().split('T')[0]
+}
+function getWeekEnd(mondayStr: string): string {
+  const d = new Date(mondayStr + 'T00:00:00')
+  d.setDate(d.getDate() + 6)
+  return d.toISOString().split('T')[0]
+}
+function fmtDate(str: string) {
+  return new Date(str + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 // ── Main Component ───────────────────────────────────────────
 
 export default function DailyEntryPage() {
@@ -98,6 +120,7 @@ export default function DailyEntryPage() {
   const [newWig, setNewWig] = useState<NewWigForm>(EMPTY_WIG)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [newExpense, setNewExpense] = useState<NewExpenseForm>(EMPTY_EXPENSE)
+  const [expensesSubTab, setExpensesSubTab] = useState<'expenses' | 'payroll'>('expenses')
   const [pickupSearch, setPickupSearch] = useState('')
   const [pickupAmount, setPickupAmount] = useState('')
   const [pickupMethod, setPickupMethod] = useState<PaymentMethod>('cash')
@@ -379,6 +402,8 @@ export default function DailyEntryPage() {
                   setNewExpense={setNewExpense}
                   onAdd={handleAddExpense}
                   expenseMutation={expenseMutation}
+                  subTab={expensesSubTab}
+                  setSubTab={setExpensesSubTab}
                 />
               )}
 
@@ -739,7 +764,7 @@ function PaymentsTab({ payments, setPayments, totalCollected, wigDepositsTotal, 
 
 // ── Expenses Tab ─────────────────────────────────────────────
 
-function ExpensesTab({ summaryDate, todayExpenses, showForm, setShowForm, newExpense, setNewExpense, onAdd, expenseMutation }: any) {
+function ExpensesTab({ summaryDate, todayExpenses, showForm, setShowForm, newExpense, setNewExpense, onAdd, expenseMutation, subTab, setSubTab }: any) {
   function set(field: keyof NewExpenseForm, value: string) {
     setNewExpense((p: NewExpenseForm) => ({ ...p, [field]: value }))
   }
@@ -747,62 +772,339 @@ function ExpensesTab({ summaryDate, todayExpenses, showForm, setShowForm, newExp
 
   return (
     <div>
-      <SectionTitle>Expenses for {summaryDate}</SectionTitle>
+      {/* Inner sub-tab toggle */}
+      <div style={s.innerTabRow}>
+        <button onClick={() => setSubTab('expenses')} style={{ ...s.innerTab, ...(subTab === 'expenses' ? s.innerTabActive : {}) }}>
+          Expenses
+        </button>
+        <button onClick={() => setSubTab('payroll')} style={{ ...s.innerTab, ...(subTab === 'payroll' ? s.innerTabActive : {}) }}>
+          Payroll
+        </button>
+      </div>
 
-      {todayExpenses.length > 0 && (
-        <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {todayExpenses.map((e: any) => (
-            <div key={e.id} style={s.expenseRow}>
-              <div>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#18181b', textTransform: 'capitalize' }}>
-                  {e.category.replace(/_/g, ' ')}
-                </span>
-                {e.vendor && <span style={{ fontSize: 12, color: '#71717a' }}> · {e.vendor}</span>}
+      {subTab === 'expenses' ? (
+        <div>
+          <SectionTitle>Expenses for {summaryDate}</SectionTitle>
+
+          {todayExpenses.length > 0 && (
+            <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {todayExpenses.map((e: any) => (
+                <div key={e.id} style={s.expenseRow}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#18181b', textTransform: 'capitalize' }}>
+                      {e.category.replace(/_/g, ' ')}
+                    </span>
+                    {e.vendor && <span style={{ fontSize: 12, color: '#71717a' }}> · {e.vendor}</span>}
+                  </div>
+                  <span style={{ fontWeight: 700, color: '#18181b' }}>${parseFloat(e.amount).toFixed(2)}</span>
+                </div>
+              ))}
+              <div style={s.subtotal}>
+                <span style={{ color: '#71717a', fontSize: 13 }}>Total Expenses</span>
+                <span style={{ fontWeight: 700, fontSize: 17 }}>${totalExpenses.toFixed(2)}</span>
               </div>
-              <span style={{ fontWeight: 700, color: '#18181b' }}>${parseFloat(e.amount).toFixed(2)}</span>
             </div>
-          ))}
+          )}
+
+          {showForm ? (
+            <div style={s.wigFormPanel}>
+              <p style={s.wigFormTitle}>Add Expense</p>
+              <div style={s.fields}>
+                <div style={s.field}>
+                  <label style={s.fieldLabel}>Category</label>
+                  <select value={newExpense.category} onChange={e => set('category', e.target.value)} style={s.select}>
+                    {EXPENSE_CATEGORIES.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <MoneyField label="Amount" value={newExpense.amount} onChange={v => set('amount', v)} />
+                <div style={s.field}>
+                  <label style={s.fieldLabel}>Vendor (optional)</label>
+                  <input value={newExpense.vendor} onChange={e => set('vendor', e.target.value)}
+                    style={s.input} placeholder="Who was it paid to?" />
+                </div>
+                <div style={s.field}>
+                  <label style={s.fieldLabel}>Notes (optional)</label>
+                  <input value={newExpense.notes} onChange={e => set('notes', e.target.value)}
+                    style={s.input} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                <button onClick={onAdd} disabled={expenseMutation.isPending || !newExpense.amount} style={s.primaryBtn}>
+                  {expenseMutation.isPending ? 'Saving…' : 'Add Expense'}
+                </button>
+                <button onClick={() => setShowForm(false)} style={s.ghostBtn}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowForm(true)} style={s.addBtn}>+ Add Expense</button>
+          )}
+        </div>
+      ) : (
+        <PayrollSubTab summaryDate={summaryDate} />
+      )}
+    </div>
+  )
+}
+
+// ── Payroll Sub-Tab ──────────────────────────────────────────
+
+const EMPTY_PAYROLL = { employee_id: '', amount: '', notes: '' }
+
+function PayrollSubTab({ summaryDate }: { summaryDate: string }) {
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(EMPTY_PAYROLL)
+  const [showNewEmpModal, setShowNewEmpModal] = useState(false)
+  const qc = useQueryClient()
+
+  const weekStart = getWeekStart(summaryDate)
+  const weekEnd   = getWeekEnd(weekStart)
+
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['employees'],
+    queryFn: () => api.get('/employees/?active_only=true').then(r => r.data),
+  })
+
+  const { data: weekPayroll = [] } = useQuery<any[]>({
+    queryKey: ['payroll-weekly', weekStart],
+    queryFn: () => api.get(`/payroll/?week_start=${weekStart}`).then(r => r.data),
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: object) => {
+      try {
+        return await api.post('/payroll/', payload)
+      } catch (err: any) {
+        if (err?.response?.status === 409) {
+          // Already exists — patch instead
+          const existing = (weekPayroll as any[]).find((p: any) => p.employee_id === (payload as any).employee_id)
+          if (existing) return api.patch(`/payroll/${existing.id}`, { amount: (payload as any).amount, notes: (payload as any).notes })
+        }
+        throw err
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] })
+      setForm(EMPTY_PAYROLL)
+      setShowForm(false)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/payroll/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }),
+  })
+
+  function handleSubmit() {
+    if (!form.employee_id || !form.amount) return
+    const emp = (employees as any[]).find((e: any) => e.id === form.employee_id)
+    saveMutation.mutate({
+      employee_id:       form.employee_id,
+      week_start:        weekStart,
+      week_end:          weekEnd,
+      amount:            parseFloat(form.amount),
+      pay_type_snapshot: emp?.pay_type ?? 'weekly_flat',
+      notes:             form.notes || null,
+    })
+  }
+
+  const totalPayroll = (weekPayroll as any[]).reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+  const paidIds = new Set((weekPayroll as any[]).map((p: any) => p.employee_id))
+
+  return (
+    <div>
+      <SectionTitle>
+        Payroll — Week of {fmtDate(weekStart)} – {fmtDate(weekEnd)}
+      </SectionTitle>
+
+      {weekPayroll.length > 0 && (
+        <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {(weekPayroll as any[]).map((p: any) => {
+            const emp = (employees as any[]).find((e: any) => e.id === p.employee_id)
+            return (
+              <div key={p.id} style={s.expenseRow}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#18181b' }}>
+                    {emp ? `${emp.first_name} ${emp.last_name}` : '—'}
+                  </span>
+                  {p.notes && <span style={{ fontSize: 12, color: '#71717a' }}> · {p.notes}</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontWeight: 700, color: '#18181b' }}>${Number(p.amount).toFixed(2)}</span>
+                  <button
+                    onClick={() => { if (confirm(`Remove payroll for ${emp?.first_name}?`)) deleteMutation.mutate(p.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a1a1aa', padding: 2, display: 'flex' }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </div>
+              </div>
+            )
+          })}
           <div style={s.subtotal}>
-            <span style={{ color: '#71717a', fontSize: 13 }}>Total Expenses</span>
-            <span style={{ fontWeight: 700, fontSize: 17 }}>${totalExpenses.toFixed(2)}</span>
+            <span style={{ color: '#71717a', fontSize: 13 }}>Total Payroll This Week</span>
+            <span style={{ fontWeight: 700, fontSize: 17 }}>${totalPayroll.toFixed(2)}</span>
           </div>
         </div>
       )}
 
       {showForm ? (
         <div style={s.wigFormPanel}>
-          <p style={s.wigFormTitle}>Add Expense</p>
+          <p style={s.wigFormTitle}>Add Payroll Payment</p>
           <div style={s.fields}>
             <div style={s.field}>
-              <label style={s.fieldLabel}>Category</label>
-              <select value={newExpense.category} onChange={e => set('category', e.target.value)} style={s.select}>
-                {EXPENSE_CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
+              <label style={s.fieldLabel}>Employee</label>
+              <select
+                value={form.employee_id}
+                onChange={e => {
+                  if (e.target.value === '__new__') { setShowNewEmpModal(true); return }
+                  setForm(p => ({ ...p, employee_id: e.target.value }))
+                }}
+                style={s.select}
+              >
+                <option value="">— select employee —</option>
+                <option value="__new__">+ Add New Employee</option>
+                <optgroup label="─────────────">
+                  {(employees as any[]).map((e: any) => (
+                    <option key={e.id} value={e.id}>
+                      {e.first_name} {e.last_name}{paidIds.has(e.id) ? ' ✓' : ''}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
-            <MoneyField label="Amount" value={newExpense.amount} onChange={v => set('amount', v)} />
-            <div style={s.field}>
-              <label style={s.fieldLabel}>Vendor (optional)</label>
-              <input value={newExpense.vendor} onChange={e => set('vendor', e.target.value)}
-                style={s.input} placeholder="Who was it paid to?" />
-            </div>
+            <MoneyField label="Amount" value={form.amount} onChange={v => setForm(p => ({ ...p, amount: v }))} />
             <div style={s.field}>
               <label style={s.fieldLabel}>Notes (optional)</label>
-              <input value={newExpense.notes} onChange={e => set('notes', e.target.value)}
-                style={s.input} />
+              <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                style={s.input} placeholder="e.g. includes bonus" />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button onClick={onAdd} disabled={expenseMutation.isPending || !newExpense.amount} style={s.primaryBtn}>
-              {expenseMutation.isPending ? 'Saving…' : 'Add Expense'}
+            <button onClick={handleSubmit} disabled={saveMutation.isPending || !form.employee_id || !form.amount} style={s.primaryBtn}>
+              {saveMutation.isPending ? 'Saving…' : 'Save Payment'}
             </button>
             <button onClick={() => setShowForm(false)} style={s.ghostBtn}>Cancel</button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setShowForm(true)} style={s.addBtn}>+ Add Expense</button>
+        <button onClick={() => setShowForm(true)} style={s.addBtn}>+ Add Payroll Payment</button>
       )}
+
+      {showNewEmpModal && (
+        <NewEmployeeModal
+          onClose={() => setShowNewEmpModal(false)}
+          onCreated={(emp: any) => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            setForm(p => ({ ...p, employee_id: emp.id }))
+            setShowNewEmpModal(false)
+            setShowForm(true)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── New Employee Modal ───────────────────────────────────────
+
+const EMPTY_EMP = { first_name: '', last_name: '', job_title: '', pay_type: 'weekly_flat', weekly_rate: '', commission_rate: '', hourly_rate: '', hired_at: '', notes: '' }
+
+function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (emp: any) => void }) {
+  const [form, setForm] = useState(EMPTY_EMP)
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: (data: object) => api.post('/employees/', data).then(r => r.data),
+    onSuccess: (emp) => onCreated(emp),
+    onError: () => setError('Failed to save. Please try again.'),
+  })
+
+  function set(field: string, value: string) {
+    setForm(p => ({ ...p, [field]: value }))
+  }
+
+  function handleSave() {
+    if (!form.first_name || !form.last_name || !form.job_title) {
+      setError('First name, last name, and job title are required.')
+      return
+    }
+    setError('')
+    mutation.mutate({
+      first_name:      form.first_name,
+      last_name:       form.last_name,
+      job_title:       form.job_title,
+      pay_type:        form.pay_type,
+      weekly_rate:     form.pay_type === 'weekly_flat'    && form.weekly_rate     ? parseFloat(form.weekly_rate)     : null,
+      commission_rate: form.pay_type === 'commission_pct' && form.commission_rate ? parseFloat(form.commission_rate) : null,
+      hourly_rate:     form.pay_type === 'hourly'         && form.hourly_rate     ? parseFloat(form.hourly_rate)     : null,
+      hired_at:        form.hired_at || null,
+      notes:           form.notes    || null,
+    })
+  }
+
+  return (
+    <div style={s.modalOverlay} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={s.modalBox}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#18181b' }}>New Employee</p>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', fontSize: 18, lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={s.wigFormGrid}>
+            <div style={s.field}>
+              <label style={s.fieldLabel}>First Name *</label>
+              <input value={form.first_name} onChange={e => set('first_name', e.target.value)} style={s.input} />
+            </div>
+            <div style={s.field}>
+              <label style={s.fieldLabel}>Last Name *</label>
+              <input value={form.last_name} onChange={e => set('last_name', e.target.value)} style={s.input} />
+            </div>
+          </div>
+          <div style={s.field}>
+            <label style={s.fieldLabel}>Job Title *</label>
+            <input value={form.job_title} onChange={e => set('job_title', e.target.value)} style={s.input} placeholder="e.g. Stylist" />
+          </div>
+          <div style={s.field}>
+            <label style={s.fieldLabel}>Pay Type</label>
+            <select value={form.pay_type} onChange={e => set('pay_type', e.target.value)} style={s.select}>
+              {PAY_TYPES.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
+            </select>
+          </div>
+          {form.pay_type === 'weekly_flat' && (
+            <MoneyField label="Weekly Rate" value={form.weekly_rate} onChange={v => set('weekly_rate', v)} />
+          )}
+          {form.pay_type === 'commission_pct' && (
+            <div style={s.field}>
+              <label style={s.fieldLabel}>Commission Rate (%)</label>
+              <input type="number" min="0" max="100" step="0.01" value={form.commission_rate}
+                onChange={e => set('commission_rate', e.target.value)} style={s.input} placeholder="e.g. 30" />
+            </div>
+          )}
+          {form.pay_type === 'hourly' && (
+            <MoneyField label="Hourly Rate" value={form.hourly_rate} onChange={v => set('hourly_rate', v)} />
+          )}
+          <div style={s.field}>
+            <label style={s.fieldLabel}>Hire Date</label>
+            <input type="date" value={form.hired_at} onChange={e => set('hired_at', e.target.value)} style={s.input} />
+          </div>
+          <div style={s.field}>
+            <label style={s.fieldLabel}>Notes</label>
+            <input value={form.notes} onChange={e => set('notes', e.target.value)} style={s.input} placeholder="Optional" />
+          </div>
+        </div>
+
+        {error && <p style={{ color: '#ff3b30', fontSize: 13, marginTop: 10 }}>{error}</p>}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+          <button onClick={handleSave} disabled={mutation.isPending} style={s.primaryBtn}>
+            {mutation.isPending ? 'Saving…' : 'Add Employee'}
+          </button>
+          <button onClick={onClose} style={s.ghostBtn}>Cancel</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1075,6 +1377,13 @@ const s: Record<string, React.CSSProperties> = {
   pickupPanel: { border: '1px solid rgba(0,0,0,0.1)', borderRadius: 14, padding: 16, background: '#fff5f9', marginBottom: 12 },
 
   expenseRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: '#f9f9f9', borderRadius: 10 },
+
+  innerTabRow: { display: 'flex', gap: 4, marginBottom: 16, background: 'rgba(120,120,128,0.1)', borderRadius: 8, padding: 3 },
+  innerTab: { flex: 1, padding: '5px 0', border: 'none', background: 'transparent', borderRadius: 6, fontSize: 12, fontWeight: 500, color: '#71717a', cursor: 'pointer', fontFamily: 'inherit' },
+  innerTabActive: { background: '#fff', color: '#18181b', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' },
+
+  modalOverlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modalBox: { background: '#fff', borderRadius: 18, padding: 24, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' as const, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' },
 
   compareRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(0,0,0,0.05)' },
   compareLabel: { fontSize: 13, color: '#71717a' },
