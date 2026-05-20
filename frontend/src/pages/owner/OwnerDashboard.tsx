@@ -29,7 +29,8 @@ export default function OwnerDashboard() {
     queryKey: ['monthly-summary', now.getFullYear(), now.getMonth() + 1],
     queryFn: () =>
       api.get(`/financials/monthly-summary?year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
-        .then(r => r.data),
+        .then(r => (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) ? r.data : null)
+        .catch(() => null),
   })
 
   const { data: snapshots = [] } = useQuery({

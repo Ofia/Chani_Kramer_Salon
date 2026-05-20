@@ -42,7 +42,9 @@ export default function BookkeeperDashboard() {
 
   const { data: summary, isLoading: dailyLoading } = useQuery({
     queryKey: ['daily-summary', selectedDate],
-    queryFn: () => api.get(`/daily-summary/${selectedDate}`).then(r => r.data).catch(() => null),
+    queryFn: () => api.get(`/daily-summary/${selectedDate}`)
+      .then(r => (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) ? r.data : null)
+      .catch(() => null),
     enabled: view === 'daily',
   })
 
@@ -50,7 +52,8 @@ export default function BookkeeperDashboard() {
     queryKey: ['monthly-summary', selectedYear, selectedMonth],
     queryFn: () =>
       api.get(`/financials/monthly-summary?year=${selectedYear}&month=${selectedMonth}`)
-        .then(r => r.data).catch(() => null),
+        .then(r => (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) ? r.data : null)
+        .catch(() => null),
     enabled: view === 'monthly',
   })
 

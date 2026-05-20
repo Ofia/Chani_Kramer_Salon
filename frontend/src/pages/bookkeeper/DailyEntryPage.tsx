@@ -134,7 +134,9 @@ export default function DailyEntryPage() {
   // Load existing daily summary
   const { data: existing, isLoading } = useQuery({
     queryKey: ['daily-summary', summaryDate],
-    queryFn: () => api.get(`/daily-summary/${summaryDate}`).then(r => r.data).catch(() => null),
+    queryFn: () => api.get(`/daily-summary/${summaryDate}`)
+      .then(r => (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) ? r.data : null)
+      .catch(() => null),
   })
 
   // Load today's wig orders

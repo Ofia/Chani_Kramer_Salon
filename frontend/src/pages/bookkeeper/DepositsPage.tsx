@@ -97,7 +97,9 @@ export default function DepositsPage() {
   const { data: dayData, isLoading: dailyLoading } = useQuery<DaySummary | null>({
     queryKey: ['daily-summary', selectedDate],
     queryFn: () =>
-      api.get(`/daily-summary/${selectedDate}`).then(r => r.data).catch(() => null),
+      api.get(`/daily-summary/${selectedDate}`)
+        .then(r => (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) ? r.data : null)
+        .catch(() => null),
     enabled: view === 'daily',
     staleTime: 0,
     refetchOnMount: 'always',
