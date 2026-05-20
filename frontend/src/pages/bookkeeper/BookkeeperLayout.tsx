@@ -1,13 +1,11 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import { useViewingAs } from '../../lib/viewingAs'
 import type { ViewingAs } from '../../lib/viewingAs'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
   LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
-import RoleSwitcher from '../../components/RoleSwitcher'
 
 type NavItem =
   | { to: string; label: string; icon: React.ElementType; end: boolean; roles: ViewingAs[]; divider?: never }
@@ -21,17 +19,15 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper',           label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/payroll',   label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/main-board',label: 'Main Board',    icon: BarChart2,       end: false, roles: ['owner'] as ViewingAs[] },
-  { divider: true, roles: ['owner'] as ViewingAs[] },
+  { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] as ViewingAs[] },
+  { divider: true, roles: ['bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
   { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
 ]
 
 export default function BookkeeperLayout() {
   const { profile, signOut } = useAuth()
-  const { viewingAs } = useViewingAs()
-
-  const effectiveRole: ViewingAs = profile?.role === 'owner' ? viewingAs : 'bookkeeper'
+  const effectiveRole: ViewingAs = (profile?.role ?? 'bookkeeper') as ViewingAs
   const visibleTabs = BOOKKEEPING_TABS.filter(t => t.roles.includes(effectiveRole))
 
   return (
@@ -80,7 +76,6 @@ export default function BookkeeperLayout() {
         </div>
 
         <div style={s.bottom}>
-          {profile?.role === 'owner' && <RoleSwitcher />}
           <div style={s.userRow}>
             <div style={s.avatar}>
               {profile?.name?.charAt(0).toUpperCase() ?? '?'}
@@ -88,7 +83,7 @@ export default function BookkeeperLayout() {
             <div style={s.userText}>
               <span style={s.userName}>{profile?.name}</span>
               <span style={s.userRole}>
-                {profile?.role === 'owner' ? viewingAs.replace('_', ' ') : profile?.role}
+                {profile?.role}
               </span>
             </div>
             <button onClick={signOut} style={s.signOutBtn} title="Sign out">
