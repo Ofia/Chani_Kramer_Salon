@@ -96,6 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // If user is authenticated but profile failed to load, keep retrying every 3s
+  useEffect(() => {
+    if (DEV_BYPASS || !user || profile) return
+    const id = setInterval(fetchProfile, 3000)
+    return () => clearInterval(id)
+  }, [user, profile])
+
   async function signOut() {
     if (!DEV_BYPASS) await supabase.auth.signOut()
     setProfile(null)
