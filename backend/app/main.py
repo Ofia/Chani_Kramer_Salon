@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import employees, customers, transactions, daily_summary, expenses, payroll, deposits, financials, users, ella, wig_orders, board_posts, notifications, checkins
+from app.core.config import settings
 
 app = FastAPI(
     title="Chani Kramer Wigs Salon API",
@@ -17,9 +18,16 @@ app = FastAPI(
 )
 
 # ── CORS — allow the React frontend to talk to this API ──────
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:3000",
+    settings.FRONTEND_URL,
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

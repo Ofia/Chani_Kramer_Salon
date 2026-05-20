@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str
     ANTHROPIC_API_KEY: str = ""
     ENVIRONMENT: str = "development"
+    FRONTEND_URL: str = "http://localhost:5173"
 
     class Config:
         env_file = ".env"
