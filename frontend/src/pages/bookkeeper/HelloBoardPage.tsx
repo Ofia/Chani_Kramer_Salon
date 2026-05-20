@@ -203,7 +203,7 @@ function ThreadWidget() {
 
   const { data: posts = [] } = useQuery<BoardPost[]>({
     queryKey: ['board-posts'],
-    queryFn: () => api.get('/board-posts/').then(r => r.data),
+    queryFn: () => api.get('/board-posts/').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   const postMutation = useMutation({
@@ -315,7 +315,7 @@ function NotificationsWidget() {
 
   const { data: notifs = [] } = useQuery<Notification[]>({
     queryKey: ['notifications'],
-    queryFn: () => api.get('/notifications/').then(r => r.data),
+    queryFn: () => api.get('/notifications/').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   const createMutation = useMutation({
@@ -442,7 +442,7 @@ function CheckinWidget() {
 
   const { data: checkins = [] } = useQuery<Checkin[]>({
     queryKey: ['checkins-today'],
-    queryFn: () => api.get('/checkins/today').then(r => r.data),
+    queryFn: () => api.get('/checkins/today').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     refetchInterval: 60000,
   })
 
