@@ -26,6 +26,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 // Pages
 import LoginPage            from './pages/LoginPage'
 import BookkeeperLayout     from './pages/bookkeeper/BookkeeperLayout'
+import BookkeeperDashboard  from './pages/bookkeeper/BookkeeperDashboard'
 import DailyEntryPage       from './pages/bookkeeper/DailyEntryPage'
 import PayrollEntryPage     from './pages/bookkeeper/PayrollEntryPage'
 import ExpensesPage         from './pages/bookkeeper/ExpensesPage'
@@ -34,7 +35,6 @@ import WigOrdersPage        from './pages/bookkeeper/WigOrdersPage'
 import EmployeesPage        from './pages/bookkeeper/EmployeesPage'
 import CustomersPage        from './pages/bookkeeper/CustomersPage'
 import HelloBoardPage       from './pages/bookkeeper/HelloBoardPage'
-import BookkeeperDashboard  from './pages/bookkeeper/BookkeeperDashboard'
 import OwnerLayout          from './pages/owner/OwnerLayout'
 import OwnerDashboard       from './pages/owner/OwnerDashboard'
 import SimulatorPage        from './pages/owner/SimulatorPage'
@@ -71,14 +71,14 @@ function AppRoutes() {
         path="/"
         element={
           <RequireAuth>
-            <Navigate to={profile?.role === 'owner' ? '/owner' : '/bookkeeper'} replace />
+            <Navigate to={profile?.role === 'owner' ? '/owner' : '/bookkeeper/hello'} replace />
           </RequireAuth>
         }
       />
 
       {/* Bookkeeper routes — both roles can access */}
       <Route path="/bookkeeper" element={<RequireAuth><BookkeeperLayout /></RequireAuth>}>
-        <Route index          element={<Navigate to="/bookkeeper/hello" replace />} />
+        <Route index          element={<BookkeeperDashboard />} />
         <Route path="daily"   element={<DailyEntryPage />} />
         <Route path="payroll" element={<PayrollEntryPage />} />
         <Route path="expenses"element={<ExpensesPage />} />
