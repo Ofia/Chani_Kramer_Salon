@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(data)
       } else if (attempt < 3) {
         setTimeout(() => fetchProfile(attempt + 1), 1500)
+      } else {
+        setProfile(null) // gave up — always resolve so callers don't hang
       }
     } catch {
       if (attempt < 3) {

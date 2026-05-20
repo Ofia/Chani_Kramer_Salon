@@ -9,11 +9,18 @@ export default function LoginPage() {
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
   const navigate  = useNavigate()
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
 
+  // Navigate as soon as auth is confirmed — don't block on profile loading
   useEffect(() => {
-    if (profile) navigate(profile.role === 'owner' ? '/owner' : '/bookkeeper/hello')
-  }, [profile, navigate])
+    if (profile) {
+      navigate(profile.role === 'owner' ? '/bookkeeper/hello' : '/bookkeeper/hello')
+    } else if (user) {
+      // Auth succeeded but profile still loading — go to Hello Board now,
+      // sidebar will update once profile arrives
+      navigate('/bookkeeper/hello')
+    }
+  }, [profile, user, navigate])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
