@@ -49,13 +49,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(!DEV_BYPASS)
 
-  // Fetch our user profile from the backend (has role info)
-  async function fetchProfile() {
+  // Fetch our user profile from the backend (has role info).
+  // Retries up to 3 times if Railway returns a non-JSON startup page.
+  async function fetchProfile(attempt = 0) {
     try {
       const res = await api.get('/users/me')
-      setProfile(res.data)
+      const data = res.data
+      if (data && typeof data === 'object' && !Array.isArray(data) && 'id' in data) {
+        setProfile(data)
+      } else if (attempt < 3) {
+        setTimeout(() => fetchProfile(attempt + 1), 1500)
+      }
     } catch {
-      setProfile(null)
+      if (attempt < 3) {
+        setTimeout(() => fetchProfile(attempt + 1), 1500)
+      } else {
+        setProfile(null)
+      }
     }
   }
 
