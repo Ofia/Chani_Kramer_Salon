@@ -12,7 +12,7 @@ export default function LoginPage() {
   const { profile } = useAuth()
 
   useEffect(() => {
-    if (profile) navigate(profile.role === 'owner' ? '/owner' : '/bookkeeper')
+    if (profile) navigate(profile.role === 'owner' ? '/owner' : '/bookkeeper/hello')
   }, [profile, navigate])
 
   async function handleLogin(e: React.FormEvent) {
