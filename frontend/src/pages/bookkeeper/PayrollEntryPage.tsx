@@ -60,13 +60,13 @@ export default function PayrollEntryPage() {
 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
-    queryFn: () => api.get('/employees/?active_only=true').then(r => r.data),
+    queryFn: () => api.get('/employees/?active_only=true').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   // Weekly: exact week
   const { data: existingData } = useQuery({
     queryKey: ['payroll-weekly', weekStart],
-    queryFn: () => api.get(`/payroll/?week_start=${weekStart}`).then(r => r.data),
+    queryFn: () => api.get(`/payroll/?week_start=${weekStart}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'weekly',
   })
 
@@ -75,7 +75,7 @@ export default function PayrollEntryPage() {
     queryKey: ['payroll-monthly', selYear, selMonth],
     queryFn: () =>
       api.get(`/payroll/?start_date=${firstOfMonth(selYear, selMonth)}&end_date=${lastOfMonth(selYear, selMonth)}`)
-        .then(r => r.data),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'monthly',
   })
 
@@ -84,7 +84,7 @@ export default function PayrollEntryPage() {
     queryKey: ['payroll-range', rangeStart, rangeEnd],
     queryFn: () =>
       api.get(`/payroll/?start_date=${rangeStart}&end_date=${rangeEnd}`)
-        .then(r => r.data),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'range' && !!rangeStart && !!rangeEnd,
   })
 

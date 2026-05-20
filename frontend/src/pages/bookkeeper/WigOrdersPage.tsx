@@ -57,7 +57,7 @@ export default function WigOrdersPage() {
 
   const { data: allWigs = [], isLoading } = useQuery<WigOrder[]>({
     queryKey: ['wig-orders-all'],
-    queryFn: () => api.get('/wig-orders/').then(r => r.data),
+    queryFn: () => api.get('/wig-orders/').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   const deleteMutation = useMutation({

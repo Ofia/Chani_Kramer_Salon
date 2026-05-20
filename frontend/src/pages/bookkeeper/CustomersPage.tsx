@@ -46,7 +46,7 @@ export default function CustomersPage() {
 
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
     queryKey: ['customers', search],
-    queryFn: () => api.get(`/customers/${search ? `?search=${encodeURIComponent(search)}` : ''}`).then(r => r.data),
+    queryFn: () => api.get(`/customers/${search ? `?search=${encodeURIComponent(search)}` : ''}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   const notesMutation = useMutation({

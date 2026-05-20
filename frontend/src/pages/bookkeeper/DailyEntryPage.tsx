@@ -140,14 +140,14 @@ export default function DailyEntryPage() {
   // Load today's wig orders
   const { data: todayWigs = [] } = useQuery<WigOrder[]>({
     queryKey: ['wig-orders-date', summaryDate],
-    queryFn: () => api.get(`/wig-orders/date/${summaryDate}`).then(r => r.data).catch(() => []),
+    queryFn: () => api.get(`/wig-orders/date/${summaryDate}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   // Search wigs for pickup
   const { data: searchResults = [] } = useQuery<WigOrder[]>({
     queryKey: ['wig-search', pickupSearch],
     queryFn: () => pickupSearch.length >= 2
-      ? api.get(`/wig-orders/search?customer=${pickupSearch}`).then(r => r.data)
+      ? api.get(`/wig-orders/search?customer=${pickupSearch}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
       : Promise.resolve([]),
     enabled: pickupSearch.length >= 2,
   })
@@ -155,7 +155,7 @@ export default function DailyEntryPage() {
   // Load today's expenses
   const { data: todayExpenses = [] } = useQuery({
     queryKey: ['expenses-date', summaryDate],
-    queryFn: () => api.get(`/expenses/?start_date=${summaryDate}&end_date=${summaryDate}`).then(r => r.data).catch(() => []),
+    queryFn: () => api.get(`/expenses/?start_date=${summaryDate}&end_date=${summaryDate}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   useEffect(() => {

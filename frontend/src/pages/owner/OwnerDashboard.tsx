@@ -37,7 +37,7 @@ export default function OwnerDashboard() {
     queryFn: () => {
       const end   = now.toISOString().split('T')[0]
       const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      return api.get(`/financials/snapshots?start_date=${start}&end_date=${end}`).then(r => r.data)
+      return api.get(`/financials/snapshots?start_date=${start}&end_date=${end}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => [])
     },
   })
 

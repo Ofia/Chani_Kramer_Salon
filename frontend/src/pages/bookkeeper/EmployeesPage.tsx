@@ -61,7 +61,7 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
     queryKey: ['employees-page', showInactive],
-    queryFn: () => api.get(`/employees/?active_only=${!showInactive}`).then(r => r.data),
+    queryFn: () => api.get(`/employees/?active_only=${!showInactive}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   const deactivateMutation = useMutation({

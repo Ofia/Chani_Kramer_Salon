@@ -76,7 +76,7 @@ export default function ExpensesPage() {
 
   const { data: dailyExpenses = [], isLoading: dailyLoading } = useQuery({
     queryKey: ['expenses-daily', selectedDate],
-    queryFn: () => api.get(`/expenses?start_date=${selectedDate}&end_date=${selectedDate}`).then(r => r.data),
+    queryFn: () => api.get(`/expenses?start_date=${selectedDate}&end_date=${selectedDate}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'daily',
   })
 
@@ -84,7 +84,7 @@ export default function ExpensesPage() {
     queryKey: ['expenses-monthly', selYear, selMonth],
     queryFn: () =>
       api.get(`/expenses?start_date=${firstOfMonth(selYear, selMonth)}&end_date=${lastOfMonth(selYear, selMonth)}`)
-        .then(r => r.data),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'monthly',
   })
 
@@ -92,7 +92,7 @@ export default function ExpensesPage() {
     queryKey: ['expenses-range', rangeStart, rangeEnd],
     queryFn: () =>
       api.get(`/expenses?start_date=${rangeStart}&end_date=${rangeEnd}`)
-        .then(r => r.data),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'range' && !!rangeStart && !!rangeEnd,
   })
 

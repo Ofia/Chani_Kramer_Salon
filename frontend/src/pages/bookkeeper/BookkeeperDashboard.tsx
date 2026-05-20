@@ -58,7 +58,7 @@ export default function BookkeeperDashboard() {
     queryKey: ['snapshots-range', rangeStart, rangeEnd],
     queryFn: () =>
       api.get(`/financials/snapshots?start_date=${rangeStart}&end_date=${rangeEnd}`)
-        .then(r => r.data).catch(() => []),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'range' && !!rangeStart && !!rangeEnd,
   })
 

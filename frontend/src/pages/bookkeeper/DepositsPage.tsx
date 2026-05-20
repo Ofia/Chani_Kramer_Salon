@@ -107,7 +107,7 @@ export default function DepositsPage() {
     queryKey: ['daily-summary-range', firstOfMonth(selYear, selMonth), lastOfMonth(selYear, selMonth)],
     queryFn: () =>
       api.get(`/daily-summary/?start_date=${firstOfMonth(selYear, selMonth)}&end_date=${lastOfMonth(selYear, selMonth)}`)
-        .then(r => r.data),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'monthly',
     staleTime: 0,
     refetchOnMount: 'always',
@@ -117,7 +117,7 @@ export default function DepositsPage() {
     queryKey: ['daily-summary-range', rangeStart, rangeEnd],
     queryFn: () =>
       api.get(`/daily-summary/?start_date=${rangeStart}&end_date=${rangeEnd}`)
-        .then(r => r.data),
+        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'range' && !!rangeStart && !!rangeEnd,
     staleTime: 0,
     refetchOnMount: 'always',
