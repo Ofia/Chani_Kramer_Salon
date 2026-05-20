@@ -2,6 +2,26 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './lib/auth'
 import { ViewingAsProvider } from './lib/viewingAs'
+import { Component, type ReactNode } from 'react'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      const e = this.state.error as Error
+      return (
+        <div style={{ padding: 40, fontFamily: 'monospace' }}>
+          <h2 style={{ color: '#DF5198' }}>Something crashed</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{e.message}</pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, color: '#777' }}>{e.stack}</pre>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 16 }}>Try again</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // Pages
 import LoginPage            from './pages/LoginPage'
@@ -58,7 +78,7 @@ function AppRoutes() {
 
       {/* Bookkeeper routes — both roles can access */}
       <Route path="/bookkeeper" element={<RequireAuth><BookkeeperLayout /></RequireAuth>}>
-        <Route index          element={<BookkeeperDashboard />} />
+        <Route index          element={<Navigate to="/bookkeeper/hello" replace />} />
         <Route path="daily"   element={<DailyEntryPage />} />
         <Route path="payroll" element={<PayrollEntryPage />} />
         <Route path="expenses"element={<ExpensesPage />} />
@@ -85,7 +105,9 @@ export default function App() {
       <AuthProvider>
         <ViewingAsProvider>
           <BrowserRouter>
-            <AppRoutes />
+            <ErrorBoundary>
+              <AppRoutes />
+            </ErrorBoundary>
           </BrowserRouter>
         </ViewingAsProvider>
       </AuthProvider>
