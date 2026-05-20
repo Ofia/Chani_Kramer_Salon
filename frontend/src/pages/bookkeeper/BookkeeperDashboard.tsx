@@ -202,7 +202,7 @@ function DailyView({ summary, isLoading }: { summary: any; isLoading: boolean })
                 </Pie>
                 <Tooltip
                   contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 8, fontSize: 12, fontFamily: 'Inter' }}
-                  formatter={(v: number) => [fmt(v)]}
+                  formatter={(v) => [fmt(v as number)]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -312,7 +312,7 @@ function RangeView({ snapshots, isLoading }: { snapshots: any[]; isLoading: bool
             />
             <Tooltip
               contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 8, fontSize: 12, fontFamily: 'Inter' }}
-              formatter={(v: number) => [fmt(v), 'Revenue']}
+              formatter={(v) => [fmt(v as number), 'Revenue']}
             />
             <Bar dataKey="total_revenue" fill="#DF5198" radius={[4, 4, 0, 0]} />
           </BarChart>

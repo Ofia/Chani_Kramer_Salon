@@ -10,8 +10,9 @@
  *     - signOut() → log out
  */
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { User as SupabaseUser, Session, AuthChangeEvent } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { api } from './api'
 
@@ -62,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (DEV_BYPASS) return
 
     // Check if there's already a session on mount — await profile before un-blocking routes
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }: { data: { session: Session | null } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) await fetchProfile()
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     // Listen for login / logout events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {

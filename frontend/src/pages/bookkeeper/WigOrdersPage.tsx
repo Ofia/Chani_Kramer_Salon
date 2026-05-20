@@ -228,7 +228,7 @@ function fmt(d: string) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
-function Cell({ children, w, right }: { children: React.ReactNode; w: number; right?: boolean }) {
+function Cell({ children, w, right }: { children?: React.ReactNode; w: number; right?: boolean }) {
   return (
     <div style={{ width: w, flexShrink: 0, textAlign: right ? 'right' : 'left', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       {children}

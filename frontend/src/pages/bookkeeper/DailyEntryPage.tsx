@@ -33,13 +33,6 @@ type WigOrder = {
   payments: WigPayment[]
 }
 
-type DailySummaryData = {
-  total_wash_set: number; total_wig_sales: number; total_repairs: number; total_other: number
-  cash_collected: number; quickpay_collected: number; cc_collected: number
-  check_collected: number; zelle_collected: number
-  new_wigs_sold: number; wigs_paid_full: number; chani_cuts: number
-  wig_deposits_total: number; notes: string; is_locked: boolean; total_revenue: number
-}
 
 type NewWigForm = {
   daysmart_serial: string; customer_name: string; customer_phone: string
@@ -505,7 +498,7 @@ export default function DailyEntryPage() {
 // ── Activity Tab ─────────────────────────────────────────────
 
 function ActivityTab({
-  summaryDate, todayWigs, showWigForm, setShowWigForm, newWig, setNewWig,
+  summaryDate: _summaryDate, todayWigs, showWigForm, setShowWigForm, newWig, setNewWig,
   onAddWig, wigMutation, pickupSearch, setPickupSearch, searchResults,
   selectedPickupWig, setSelectedPickupWig, pickupAmount, setPickupAmount,
   pickupMethod, setPickupMethod, onPickupPayment, paymentMutation,
@@ -1154,7 +1147,7 @@ function RevenueTab({ todayWigs, totalWigSales, washSet, repairs, productSales }
 
 // ── Review Tab ───────────────────────────────────────────────
 
-function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, todayWigs, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
+function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, productSales, todayWigs, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
   const wigsPaidFull = todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full').length
 
@@ -1228,9 +1221,9 @@ function WigCard({ wig }: { wig: WigOrder }) {
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 13 }}>${parseFloat(wig.total_price).toFixed(2)}</p>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 13 }}>${Number(wig.total_price).toFixed(2)}</p>
           <p style={{ margin: '2px 0 0', fontSize: 11, color: isPaid ? '#10b981' : '#DF5198', fontWeight: 600 }}>
-            {isPaid ? 'Paid in Full' : `Balance: $${parseFloat(wig.balance_due).toFixed(2)}`}
+            {isPaid ? 'Paid in Full' : `Balance: $${Number(wig.balance_due).toFixed(2)}`}
           </p>
         </div>
       </div>

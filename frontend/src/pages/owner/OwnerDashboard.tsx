@@ -11,7 +11,6 @@ import {
 
 // Costal Glam palette
 const STREAM_COLORS  = ['#DF5198', '#97BBE9', '#E3CD94']       // W&S, Wigs, Repairs
-const COST_COLORS    = ['#DF5198', '#E3CD94', '#5581B1', '#97BBE9'] // Revenue, Expenses, Payroll, Profit
 const SPLIT_COLORS   = ['#212121', '#97BBE9']                  // Bank, Owner
 
 function fmt(n: number | string) {
@@ -154,7 +153,7 @@ function AnalysisTab({ monthly, snapshots, now }: { monthly: any; snapshots: any
                 <XAxis dataKey="snapshot_date" tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={d => d.slice(5)} />
                 <YAxis tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={fmtShort} width={44} />
                 <Tooltip contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 10, fontSize: 12, fontFamily: 'Inter' }}
-                  formatter={(v: number) => [fmt(v), 'Revenue']} />
+                  formatter={(v) => [fmt(v as number), 'Revenue']} />
                 <Line type="monotone" dataKey="total_revenue" stroke="#DF5198" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -177,7 +176,7 @@ function AnalysisTab({ monthly, snapshots, now }: { monthly: any; snapshots: any
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} />
               <YAxis tick={{ fontSize: 10, fill: 'rgba(13,13,13,0.42)', fontFamily: 'Inter' }} tickFormatter={fmtShort} width={44} />
               <Tooltip contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 10, fontSize: 12, fontFamily: 'Inter' }}
-                formatter={(v: number) => [fmt(v), 'Revenue']} />
+                formatter={(v) => [fmt(v as number), 'Revenue']} />
               <Bar dataKey="amount" fill="#DF5198" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -353,7 +352,7 @@ function PieBlock({ title, data, colors, legend }: {
           </Pie>
           <Tooltip
             contentStyle={{ border: '1px solid rgba(13,13,13,0.09)', borderRadius: 8, fontSize: 12, fontFamily: 'Inter' }}
-            formatter={(v: number) => [fmt(v)]}
+            formatter={(v) => [fmt(v as number)]}
           />
         </PieChart>
       </ResponsiveContainer>
