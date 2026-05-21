@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import {
   ResponsiveContainer,
   LineChart, Line,
@@ -21,8 +22,17 @@ function fmtShort(n: number) {
   return `$${n.toFixed(0)}`
 }
 
+function getGreeting(name: string | undefined) {
+  const h = new Date().getHours()
+  const salutation = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = name?.split(' ')[0] ?? ''
+  return { salutation, firstName }
+}
+
 export default function OwnerDashboard() {
   const [view, setView] = useState<'analysis' | 'glance'>('analysis')
+  const { profile } = useAuth()
+  const { salutation, firstName } = getGreeting(profile?.name)
   const now = new Date()
 
   const { data: monthly, isLoading } = useQuery({
@@ -68,7 +78,7 @@ export default function OwnerDashboard() {
     <div>
       <header style={s.header}>
         <div>
-          <h1 style={s.title}>Main Board</h1>
+          <h1 style={s.title}>{salutation}, <span style={{ color: '#DF5198' }}>{firstName}</span></h1>
           <p style={s.subtitle}>{monthLabel}</p>
         </div>
         <div style={s.segmented}>

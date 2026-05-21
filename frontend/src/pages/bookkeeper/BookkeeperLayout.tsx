@@ -26,18 +26,10 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] },
 ]
 
-function getGreeting(name: string | undefined): { salutation: string; firstName: string } {
-  const h = new Date().getHours()
-  const salutation = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
-  const firstName = name?.split(' ')[0] ?? ''
-  return { salutation, firstName }
-}
-
 export default function BookkeeperLayout() {
   const { profile, signOut } = useAuth()
   const effectiveRole: Role = (profile?.role ?? 'bookkeeper') as Role
   const visibleTabs = BOOKKEEPING_TABS.filter(t => t.roles.includes(effectiveRole))
-  const { salutation, firstName } = getGreeting(profile?.name)
 
   return (
     <div style={s.shell}>
@@ -53,12 +45,6 @@ export default function BookkeeperLayout() {
       {/* ── Sidebar ── */}
       <aside style={s.sidebar}>
         <div style={s.top}>
-          {profile && (
-            <div style={s.greetingRow}>
-              <span style={s.greetingText}>{salutation}, </span>
-              <span style={s.greetingName}>{firstName}</span>
-            </div>
-          )}
           <div style={s.utilRow}>
             <button style={s.searchBtn}>
               <Search size={12} color="rgba(13,13,13,0.35)" />
@@ -131,9 +117,6 @@ const s: Record<string, React.CSSProperties> = {
   // Sidebar
   sidebar:        { width: 240, background: '#fafaf9', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flexShrink: 0, position: 'fixed', top: 44, left: 0, height: 'calc(100vh - 44px)', padding: '10px 0 16px', borderRight: BORDER },
   top:            { display: 'flex', flexDirection: 'column', gap: 4 },
-  greetingRow:    { padding: '4px 16px 8px', display: 'flex', flexWrap: 'wrap' as const, alignItems: 'baseline', gap: 3 },
-  greetingText:   { fontSize: 13, fontWeight: 400, color: 'rgba(13,13,13,0.45)', letterSpacing: '-0.01em' },
-  greetingName:   { fontSize: 13, fontWeight: 600, color: '#DF5198', letterSpacing: '-0.01em' },
   utilRow:        { padding: '0 8px', marginBottom: 6 },
   searchBtn:      { width: '100%', display: 'flex', alignItems: 'center', gap: 7, background: '#ffffff', border: '1px solid rgba(13,13,13,0.09)', borderRadius: 8, padding: '6px 10px', color: 'rgba(13,13,13,0.35)', fontSize: 12, cursor: 'pointer', textAlign: 'left' as const },
   searchLabel:    { flex: 1 },
