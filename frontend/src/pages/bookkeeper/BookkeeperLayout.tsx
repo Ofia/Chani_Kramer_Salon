@@ -30,6 +30,7 @@ export default function BookkeeperLayout() {
   const { profile, signOut } = useAuth()
   const effectiveRole: Role = (profile?.role ?? 'bookkeeper') as Role
   const visibleTabs = BOOKKEEPING_TABS.filter(t => t.roles.includes(effectiveRole))
+  console.log('[Layout] profile:', profile, '| effectiveRole:', effectiveRole)
 
   return (
     <div style={s.shell}>
