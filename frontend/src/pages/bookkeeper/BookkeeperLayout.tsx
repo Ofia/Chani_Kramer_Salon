@@ -1,33 +1,34 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
-import type { ViewingAs } from '../../lib/viewingAs'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
   LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 
+type Role = 'owner' | 'bookkeeper' | 'front_desk' | 'sales'
+
 type NavItem =
-  | { to: string; label: string; icon: React.ElementType; end: boolean; roles: ViewingAs[]; divider?: never }
-  | { divider: true; roles: ViewingAs[]; to?: never; label?: never; icon?: never; end?: never }
+  | { to: string; label: string; icon: React.ElementType; end: boolean; roles: Role[]; divider?: never }
+  | { divider: true; roles: Role[]; to?: never; label?: never; icon?: never; end?: never }
 
 const BOOKKEEPING_TABS: NavItem[] = [
-  { to: '/bookkeeper/hello',     label: 'Hello Board',   icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/wigs',      label: 'Wig Orders',    icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/daily',     label: 'Daily Entry',   icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/deposits',  label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper',           label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/payroll',   label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] as ViewingAs[] },
-  { divider: true, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
-  { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] as ViewingAs[] },
+  { to: '/bookkeeper/hello',     label: 'Hello Board',   icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/wigs',      label: 'Wig Orders',    icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/daily',     label: 'Daily Entry',   icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/deposits',  label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper',           label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/payroll',   label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] },
+  { divider: true, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] },
 ]
 
 export default function BookkeeperLayout() {
   const { profile, signOut } = useAuth()
-  const effectiveRole: ViewingAs = (profile?.role ?? 'bookkeeper') as ViewingAs
+  const effectiveRole: Role = (profile?.role ?? 'bookkeeper') as Role
   const visibleTabs = BOOKKEEPING_TABS.filter(t => t.roles.includes(effectiveRole))
 
   return (
