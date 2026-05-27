@@ -173,11 +173,10 @@ export default function POSPage() {
   const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
 
   const qc = useQueryClient()
-  const today = new Date().toISOString().split('T')[0]
 
   const { data: todaySales = [] } = useQuery<PosSale[]>({
-    queryKey: ['pos-sales-today', today],
-    queryFn: () => api.get(`/pos-sales/date/${today}`).then(r => r.data).catch(() => []),
+    queryKey: ['pos-sales-today', saleDate],
+    queryFn: () => api.get(`/pos-sales/date/${saleDate}`).then(r => r.data).catch(() => []),
   })
 
   const saveMutation = useMutation({
@@ -433,9 +432,9 @@ export default function POSPage() {
 
       {/* ── Right: Today's Sales ── */}
       <div style={s.rightPanel}>
-        <h2 style={s.sidePanelTitle}>Today's Sales</h2>
+        <h2 style={s.sidePanelTitle}>Sales — {fmtDate(saleDate)}</h2>
         <p style={s.sidePanelSub}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          {new Date(saleDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
         </p>
 
         {todaySales.length === 0 ? (
