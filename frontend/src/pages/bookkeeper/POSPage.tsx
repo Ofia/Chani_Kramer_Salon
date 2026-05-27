@@ -187,12 +187,11 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['inventory'] })
       // Auto-open receipt
       setReceiptSale(res.data)
-      // Reset form
+      // Reset form — keep saleDate so the right panel stays on the same date
       setCustomer(emptyCustomer())
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
       setNotes('')
-      setSaleDate(new Date().toISOString().split('T')[0])
     },
   })
 
