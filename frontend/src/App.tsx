@@ -31,6 +31,8 @@ import PayrollEntryPage     from './pages/bookkeeper/PayrollEntryPage'
 import ExpensesPage         from './pages/bookkeeper/ExpensesPage'
 import DepositsPage         from './pages/bookkeeper/DepositsPage'
 import WigOrdersPage        from './pages/bookkeeper/WigOrdersPage'
+import SalesManagementPage  from './pages/bookkeeper/SalesManagementPage'
+import POSPage              from './pages/bookkeeper/POSPage'
 import EmployeesPage        from './pages/bookkeeper/EmployeesPage'
 import CustomersPage        from './pages/bookkeeper/CustomersPage'
 import HelloBoardPage       from './pages/bookkeeper/HelloBoardPage'
@@ -56,11 +58,13 @@ function AppRoutes() {
       <Route path="/bookkeeper" element={<RequireAuth><BookkeeperLayout /></RequireAuth>}>
         <Route index            element={<BookkeeperDashboard />} />
         <Route path="hello"     element={<HelloBoardPage />} />
+        <Route path="pos"       element={<POSPage />} />
         <Route path="daily"     element={<DailyEntryPage />} />
         <Route path="payroll"   element={<PayrollEntryPage />} />
         <Route path="expenses"  element={<ExpensesPage />} />
         <Route path="deposits"  element={<DepositsPage />} />
         <Route path="wigs"      element={<WigOrdersPage />} />
+        <Route path="sales"     element={<SalesManagementPage />} />
         <Route path="employees" element={<EmployeesPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="main-board" element={<OwnerDashboard />} />

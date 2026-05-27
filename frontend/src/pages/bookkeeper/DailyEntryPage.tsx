@@ -118,6 +118,7 @@ export default function DailyEntryPage() {
   const [pickupAmount, setPickupAmount] = useState('')
   const [pickupMethod, setPickupMethod] = useState<PaymentMethod>('cash')
   const [selectedPickupWig, setSelectedPickupWig] = useState<WigOrder | null>(null)
+  const [autoFilled, setAutoFilled] = useState(false)
 
   // Payments fields
   const [payments, setPayments] = useState({
@@ -137,6 +138,12 @@ export default function DailyEntryPage() {
     queryFn: () => api.get(`/daily-summary/${summaryDate}`)
       .then(r => (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) ? r.data : null)
       .catch(() => null),
+  })
+
+  // Auto-fill from POS — aggregated totals for the selected date
+  const { data: autoFillData } = useQuery({
+    queryKey: ['pos-auto-fill', summaryDate],
+    queryFn: () => api.get(`/pos-sales/auto-fill/${summaryDate}`).then(r => r.data).catch(() => null),
   })
 
   // Load today's wig orders
@@ -160,24 +167,46 @@ export default function DailyEntryPage() {
     queryFn: () => api.get(`/expenses/?start_date=${summaryDate}&end_date=${summaryDate}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
+  // 1. Load saved daily summary into form when it exists
   useEffect(() => {
     if (existing) {
+      setAutoFilled(false)
       setPayments({
-        cash_collected: String(existing.cash_collected),
+        cash_collected:     String(existing.cash_collected),
         quickpay_collected: String(existing.quickpay_collected),
-        cc_collected: String(existing.cc_collected),
-        check_collected: String(existing.check_collected),
-        zelle_collected: String(existing.zelle_collected),
+        cc_collected:       String(existing.cc_collected),
+        check_collected:    String(existing.check_collected),
+        zelle_collected:    String(existing.zelle_collected),
         wig_deposits_total: String(existing.wig_deposits_total),
       })
       setActivity({
-        wash_set:      existing.total_wash_set  ? String(existing.total_wash_set)  : '',
-        repairs:       existing.total_repairs   ? String(existing.total_repairs)   : '',
-        product_sales: existing.total_other     ? String(existing.total_other)     : '',
+        wash_set:      existing.total_wash_set ? String(existing.total_wash_set) : '',
+        repairs:       existing.total_repairs  ? String(existing.total_repairs)  : '',
+        product_sales: existing.total_other    ? String(existing.total_other)    : '',
         notes:         existing.notes || '',
       })
     }
   }, [existing])
+
+  // 2. Pre-fill from POS when no saved summary exists yet for this date
+  useEffect(() => {
+    if (existing || !autoFillData || autoFillData.pos_sale_count === 0) return
+    setAutoFilled(true)
+    setPayments({
+      cash_collected:     autoFillData.cash_collected     > 0 ? String(autoFillData.cash_collected)     : '',
+      quickpay_collected: autoFillData.quickpay_collected > 0 ? String(autoFillData.quickpay_collected) : '',
+      cc_collected:       autoFillData.cc_collected       > 0 ? String(autoFillData.cc_collected)       : '',
+      check_collected:    autoFillData.check_collected    > 0 ? String(autoFillData.check_collected)    : '',
+      zelle_collected:    autoFillData.zelle_collected    > 0 ? String(autoFillData.zelle_collected)    : '',
+      wig_deposits_total: autoFillData.wig_deposits_total > 0 ? String(autoFillData.wig_deposits_total) : '',
+    })
+    setActivity(prev => ({
+      ...prev,
+      wash_set:      autoFillData.total_wash_set > 0 ? String(autoFillData.total_wash_set) : '',
+      repairs:       autoFillData.total_repairs  > 0 ? String(autoFillData.total_repairs)  : '',
+      product_sales: autoFillData.total_other    > 0 ? String(autoFillData.total_other)    : '',
+    }))
+  }, [existing, autoFillData])
 
   // Save/update daily summary
   const summaryMutation = useMutation({
@@ -328,6 +357,18 @@ export default function DailyEntryPage() {
           </div>
           {isLocked && <span style={s.lockedBadge}>Locked</span>}
         </header>
+
+        {/* Auto-fill banner — shown when POS data pre-populated the form */}
+        {autoFilled && autoFillData && (
+          <div style={s.autoFillBanner}>
+            <span style={s.autoFillDot} />
+            <span>
+              Pre-filled from <strong>{autoFillData.pos_sale_count}</strong> POS {autoFillData.pos_sale_count === 1 ? 'sale' : 'sales'} today.
+              Review each field and save when ready.
+            </span>
+            <button onClick={() => setAutoFilled(false)} style={s.autoFillDismiss}>✕</button>
+          </div>
+        )}
 
         {isLocked ? (
           <div style={s.card}>
@@ -1332,6 +1373,10 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: '0 0 10px', letterSpacing: '-0.03em' },
   dateInput: { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#18181b', background: '#fff', fontFamily: 'inherit', outline: 'none' },
   lockedBadge: { background: '#18181b', color: '#fff', padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' },
+
+  autoFillBanner: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 18, fontSize: 13, color: '#166534' },
+  autoFillDot: { width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0 },
+  autoFillDismiss: { marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#166534', fontSize: 14, lineHeight: 1, padding: 2 },
 
   segmented: { display: 'flex', background: 'rgba(120,120,128,0.12)', borderRadius: 10, padding: 3, marginBottom: 16, gap: 2 },
   seg: { flex: 1, padding: '6px 0', border: 'none', background: 'transparent', borderRadius: 8, fontSize: 12, fontWeight: 500, color: '#71717a', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },

@@ -13,7 +13,7 @@ from sqlalchemy import (
     Boolean, Column, Date, DateTime, Enum, ForeignKey,
     Integer, Numeric, String, Text, UniqueConstraint, func
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -331,10 +331,11 @@ class WigOrder(Base):
     size        = Column(String)   # M, S, L
     front       = Column(String)   # Top Lace, etc.
 
-    base_price       = Column(Numeric(10, 2), nullable=False, default=0)
-    fill_lace_price  = Column(Numeric(10, 2), nullable=False, default=0)
-    total_price      = Column(Numeric(10, 2), nullable=False, default=0)
-    amount_paid      = Column(Numeric(10, 2), nullable=False, default=0)
+    base_price          = Column(Numeric(10, 2), nullable=False, default=0)
+    fill_lace_price     = Column(Numeric(10, 2), nullable=False, default=0)
+    additional_charges  = Column(JSONB, nullable=False, default=list)  # [{"label": str, "amount": float}]
+    total_price         = Column(Numeric(10, 2), nullable=False, default=0)
+    amount_paid         = Column(Numeric(10, 2), nullable=False, default=0)
 
     status      = Column(Enum(WigStatus, name='wig_status'), nullable=False, default=WigStatus.ordered)
     order_date  = Column(Date, nullable=False)
@@ -407,6 +408,89 @@ class StaffCheckin(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "date", name="uq_checkin_user_date"),
     )
+
+
+class PosItemType(str, enum.Enum):
+    wash_set  = "wash_set"
+    repair    = "repair"
+    inventory = "inventory"
+    wig       = "wig"
+
+
+class PosSale(Base):
+    """One row per customer visit at the POS — the cart header."""
+    __tablename__ = "pos_sales"
+
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id    = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"))
+    customer_name  = Column(String, nullable=False)
+    customer_phone = Column(String)
+    sale_date      = Column(Date, nullable=False)
+    notes          = Column(Text)
+    total_amount   = Column(Numeric(10, 2), nullable=False, default=0)
+    amount_paid    = Column(Numeric(10, 2), nullable=False, default=0)
+    entered_by     = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+    items    = relationship("PosSaleItem",    back_populates="pos_sale", cascade="all, delete-orphan")
+    payments = relationship("PosSalePayment", back_populates="pos_sale", cascade="all, delete-orphan")
+
+    @property
+    def balance_due(self) -> Decimal:
+        return (self.total_amount or Decimal(0)) - (self.amount_paid or Decimal(0))
+
+
+class PosSaleItem(Base):
+    """One line item within a POS sale (service, inventory product, or wig)."""
+    __tablename__ = "pos_sale_items"
+
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pos_sale_id       = Column(UUID(as_uuid=True), ForeignKey("pos_sales.id", ondelete="CASCADE"), nullable=False)
+    item_type         = Column(Enum(PosItemType, name="pos_item_type"), nullable=False)
+    description       = Column(String, nullable=False)
+    quantity          = Column(Integer, nullable=False, default=1)
+    unit_price        = Column(Numeric(10, 2), nullable=False, default=0)
+    subtotal          = Column(Numeric(10, 2), nullable=False, default=0)
+    inventory_item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="SET NULL"))
+    wig_order_id      = Column(UUID(as_uuid=True), ForeignKey("wig_orders.id", ondelete="SET NULL"))
+    # Wig specs — filled when item_type = 'wig'
+    wig_serial        = Column(String)
+    wig_brand         = Column(String)
+    wig_length        = Column(String)
+    wig_color         = Column(String)
+    wig_size          = Column(String)
+    wig_front         = Column(String)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+
+    pos_sale = relationship("PosSale", back_populates="items")
+
+
+class PosSalePayment(Base):
+    """A payment record within a POS sale — supports split payments."""
+    __tablename__ = "pos_sale_payments"
+
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pos_sale_id    = Column(UUID(as_uuid=True), ForeignKey("pos_sales.id", ondelete="CASCADE"), nullable=False)
+    payment_method = Column(Enum(PaymentMethod, name="payment_method"), nullable=False)
+    amount         = Column(Numeric(10, 2), nullable=False)
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+
+    pos_sale = relationship("PosSale", back_populates="payments")
+
+
+class InventoryItem(Base):
+    """Non-wig products in stock (care products, accessories, tools, etc.)."""
+    __tablename__ = "inventory_items"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name       = Column(String, nullable=False)
+    category   = Column(String)                          # free text, e.g. "Care Products", "Accessories"
+    quantity   = Column(Integer, nullable=False, default=0)
+    unit_price = Column(Numeric(10, 2), nullable=False, default=0)
+    notes      = Column(Text)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class AiConversation(Base):

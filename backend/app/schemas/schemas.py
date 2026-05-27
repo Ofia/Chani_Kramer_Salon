@@ -21,7 +21,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.models.models import (
     UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
-    WigStatus, WigPaymentType
+    WigStatus, WigPaymentType, PosItemType
 )
 
 
@@ -401,6 +401,12 @@ class SimulationResponse(BaseModel):
 
 # ── Wig Orders ────────────────────────────────────────────────
 
+class AdditionalCharge(BaseModel):
+    """A single extra line item on a wig order (e.g. 'Color roots', 150.00)."""
+    label: str
+    amount: float
+
+
 class WigPaymentCreate(BaseModel):
     payment_date: date
     amount: Decimal
@@ -436,6 +442,7 @@ class WigOrderCreate(BaseModel):
     front: Optional[str] = None
     base_price: Decimal = Decimal("0")
     fill_lace_price: Decimal = Decimal("0")
+    additional_charges: List[AdditionalCharge] = []
     total_price: Decimal = Decimal("0")
     order_date: date
     notes: Optional[str] = None
@@ -454,6 +461,7 @@ class WigOrderUpdate(BaseModel):
     front: Optional[str] = None
     base_price: Optional[Decimal] = None
     fill_lace_price: Optional[Decimal] = None
+    additional_charges: Optional[List[AdditionalCharge]] = None
     total_price: Optional[Decimal] = None
     status: Optional[WigStatus] = None
     pickup_date: Optional[date] = None
@@ -474,6 +482,7 @@ class WigOrderResponse(BaseModel):
     front: Optional[str]
     base_price: float
     fill_lace_price: float
+    additional_charges: List[AdditionalCharge] = []
     total_price: float
     amount_paid: float
     balance_due: float
@@ -482,6 +491,138 @@ class WigOrderResponse(BaseModel):
     pickup_date: Optional[date]
     notes: Optional[str]
     payments: List[WigPaymentResponse] = []
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── POS Sales ────────────────────────────────────────────────
+
+class PosSalePaymentCreate(BaseModel):
+    payment_method: PaymentMethod
+    amount: Decimal
+
+
+class PosSalePaymentResponse(BaseModel):
+    id: UUID
+    payment_method: PaymentMethod
+    amount: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PosSaleItemCreate(BaseModel):
+    item_type: PosItemType
+    description: str
+    quantity: int = 1
+    unit_price: Decimal
+    subtotal: Decimal
+    inventory_item_id: Optional[UUID] = None
+    # Wig specs — only when item_type = 'wig'
+    wig_serial: Optional[str] = None
+    wig_brand: Optional[str] = None
+    wig_length: Optional[str] = None
+    wig_color: Optional[str] = None
+    wig_size: Optional[str] = None
+    wig_front: Optional[str] = None
+    # Deposit paid for this wig at time of sale
+    wig_deposit_amount: Optional[Decimal] = None
+    wig_deposit_method: Optional[PaymentMethod] = None
+
+
+class PosSaleItemResponse(BaseModel):
+    id: UUID
+    item_type: PosItemType
+    description: str
+    quantity: int
+    unit_price: float
+    subtotal: float
+    inventory_item_id: Optional[UUID]
+    wig_order_id: Optional[UUID]
+    wig_serial: Optional[str]
+    wig_brand: Optional[str]
+    wig_length: Optional[str]
+    wig_color: Optional[str]
+    wig_size: Optional[str]
+    wig_front: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PosSaleCreate(BaseModel):
+    customer_id: Optional[UUID] = None
+    customer_name: str
+    customer_phone: Optional[str] = None
+    sale_date: date
+    notes: Optional[str] = None
+    items: List[PosSaleItemCreate]
+    payments: List[PosSalePaymentCreate] = []
+
+
+class PosSaleResponse(BaseModel):
+    id: UUID
+    customer_id: Optional[UUID]
+    customer_name: str
+    customer_phone: Optional[str]
+    sale_date: date
+    notes: Optional[str]
+    total_amount: float
+    amount_paid: float
+    balance_due: float
+    items: List[PosSaleItemResponse] = []
+    payments: List[PosSalePaymentResponse] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DailyAutoFillResponse(BaseModel):
+    """Pre-filled totals for Daily Entry, aggregated from POS sales on a given date."""
+    total_wash_set: float = 0
+    total_repairs: float = 0
+    total_other: float = 0
+    cash_collected: float = 0
+    quickpay_collected: float = 0
+    cc_collected: float = 0
+    check_collected: float = 0
+    zelle_collected: float = 0
+    new_wigs_sold: int = 0
+    wig_deposits_total: float = 0
+    pos_sale_count: int = 0   # how many POS visits contributed
+
+
+# ── Inventory Items ───────────────────────────────────────────
+
+class InventoryItemCreate(BaseModel):
+    name: str
+    category: Optional[str] = None
+    quantity: int = 0
+    unit_price: Decimal = Decimal("0")
+    notes: Optional[str] = None
+
+
+class InventoryItemUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+
+class InventoryItemResponse(BaseModel):
+    id: UUID
+    name: str
+    category: Optional[str]
+    quantity: int
+    unit_price: float
+    notes: Optional[str]
     created_at: datetime
     updated_at: datetime
 

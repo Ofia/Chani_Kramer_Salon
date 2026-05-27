@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
-  LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact,
+  LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact, ShoppingCart,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 
@@ -13,9 +13,10 @@ type NavItem =
   | { divider: true; roles: Role[]; to?: never; label?: never; icon?: never; end?: never }
 
 const BOOKKEEPING_TABS: NavItem[] = [
-  { to: '/bookkeeper/hello',     label: 'Hello Board',   icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/wigs',      label: 'Wig Orders',    icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/daily',     label: 'Daily Entry',   icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/hello',     label: 'Hello Board',       icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/pos',       label: 'Point of Sale',     icon: ShoppingCart,    end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/sales',     label: 'Sales Management',  icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/daily',     label: 'Daily Entry',       icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper/deposits',  label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper',           label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/payroll',   label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] },

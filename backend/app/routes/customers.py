@@ -16,6 +16,7 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 @router.get("/", response_model=List[CustomerResponse])
 def list_customers(
     search: Optional[str] = Query(None, description="Search by name or phone"),
+    limit: Optional[int] = Query(None, description="Max results to return"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -30,7 +31,10 @@ def list_customers(
                 Customer.cell.ilike(term),
             )
         )
-    return q.order_by(Customer.last_name).all()
+    q = q.order_by(Customer.last_name)
+    if limit:
+        q = q.limit(limit)
+    return q.all()
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
