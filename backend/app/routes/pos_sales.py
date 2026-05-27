@@ -286,5 +286,15 @@ def delete_pos_sale(
     sale = db.query(PosSale).filter(PosSale.id == sale_id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="POS sale not found")
-    db.delete(sale)
+
+    # If the sale contained wig items, also delete the WigOrder records
+    # (and their WigPayments, via cascade) so inventory and wig tracking
+    # stay consistent. This handles "client changed their mind" cancellations.
+    for item in sale.items:
+        if item.wig_order_id:
+            wig = db.query(WigOrder).filter(WigOrder.id == item.wig_order_id).first()
+            if wig:
+                db.delete(wig)  # cascades to wig_payments
+
+    db.delete(sale)  # cascades to pos_sale_items and pos_sale_payments
     db.commit()

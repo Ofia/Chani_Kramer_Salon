@@ -726,7 +726,18 @@ function InventoryPickerBtn({ onAdd }: { onAdd: (item: InventoryItem) => void })
 
 function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => void }) {
   const [expanded, setExpanded] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const hasPayment = sale.amount_paid > 0
+  const qc = useQueryClient()
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/pos-sales/${sale.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-sales-today'] })
+      qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
+      qc.invalidateQueries({ queryKey: ['inventory'] })
+    },
+  })
 
   return (
     <div style={s.saleCard}>
@@ -765,6 +776,27 @@ function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => vo
               </div>
             ))}
           </div>
+
+          {/* Delete */}
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} style={s.deleteBtn}>
+              <Trash2 size={12} /> Delete Sale
+            </button>
+          ) : (
+            <div style={s.deleteConfirm}>
+              <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>Delete this sale?</span>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                style={s.deleteConfirmBtn}
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} style={s.ghostBtn}>
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1351,6 +1383,9 @@ const s: Record<string, React.CSSProperties> = {
   saleCardFooter:{ padding: '8px 14px', borderTop: '1px solid rgba(0,0,0,0.06)' },
   miniRow:       { display: 'flex', gap: 8, padding: '4px 0', alignItems: 'center' },
   receiptBtn:    { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#212121', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
+  deleteBtn:     { display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '5px 10px', background: 'transparent', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit' },
+  deleteConfirm: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '8px 10px', background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8 },
+  deleteConfirmBtn: { padding: '5px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
 
