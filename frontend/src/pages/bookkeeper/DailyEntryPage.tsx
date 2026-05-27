@@ -146,10 +146,19 @@ export default function DailyEntryPage() {
     queryFn: () => api.get(`/pos-sales/auto-fill/${summaryDate}`).then(r => r.data).catch(() => null),
   })
 
-  // Load today's wig orders
+  // Wigs ordered on this date (for "New Wig Orders Today" section)
   const { data: todayWigs = [] } = useQuery<WigOrder[]>({
     queryKey: ['wig-orders-date', summaryDate],
     queryFn: () => api.get(`/wig-orders/date/${summaryDate}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+  })
+
+  // Wigs paid in full on this date — revenue is recognized here.
+  // A wig ordered weeks ago and paid today has order_date ≠ today,
+  // so it never appears in todayWigs. We query by pickup_date instead.
+  const { data: wigsPaidFullToday = [] } = useQuery<WigOrder[]>({
+    queryKey: ['wig-orders-paid-full', summaryDate],
+    queryFn: () => api.get('/wig-orders/', { params: { pickup_date: summaryDate, status: 'paid_in_full' } })
+      .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
   // Search wigs for pickup
@@ -242,6 +251,7 @@ export default function DailyEntryPage() {
       api.post(`/wig-orders/${wigId}/payments`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['wig-orders-date'] })
+      qc.invalidateQueries({ queryKey: ['wig-orders-paid-full'] })
       qc.invalidateQueries({ queryKey: ['wig-search'] })
       setSelectedPickupWig(null)
       setPickupSearch('')
@@ -260,11 +270,7 @@ export default function DailyEntryPage() {
   })
 
   function handleSaveSummary() {
-    const totalWigSales = todayWigs
-      .filter(w => w.status === 'paid_in_full')
-      .reduce((sum, w) => sum + parseFloat(w.total_price as unknown as string), 0)
-
-    const wigsPaidFull = todayWigs.filter(w => w.status === 'paid_in_full').length
+    const wigsPaidFull = wigsPaidFullToday.length
 
     summaryMutation.mutate({
       summary_date: summaryDate,
@@ -336,7 +342,7 @@ export default function DailyEntryPage() {
   if (isLoading) return <p style={{ color: '#71717a', fontSize: 14 }}>Loading…</p>
 
   const isLocked = existing?.is_locked
-  const totalWigSales = todayWigs.filter(w => w.status === 'paid_in_full').reduce((s, w) => s + parseFloat(w.total_price as unknown as string), 0)
+  const totalWigSales = wigsPaidFullToday.reduce((s, w) => s + parseFloat(w.total_price as unknown as string), 0)
   const washSetAmt     = parseFloat(activity.wash_set)      || 0
   const repairsAmt     = parseFloat(activity.repairs)       || 0
   const productSalesAmt = parseFloat(activity.product_sales) || 0
@@ -445,7 +451,7 @@ export default function DailyEntryPage() {
 
               {step === 3 && (
                 <RevenueTab
-                  todayWigs={todayWigs}
+                  wigsPaidFullToday={wigsPaidFullToday}
                   totalWigSales={totalWigSales}
                   washSet={washSetAmt}
                   repairs={repairsAmt}
@@ -461,7 +467,7 @@ export default function DailyEntryPage() {
                   washSet={washSetAmt}
                   repairs={repairsAmt}
                   productSales={productSalesAmt}
-                  todayWigs={todayWigs}
+                  wigsPaidFullToday={wigsPaidFullToday}
                   totalWigSales={totalWigSales}
                   totalRevenue={totalRevenue}
                   totalCollected={totalCollected}
@@ -531,7 +537,7 @@ export default function DailyEntryPage() {
 
         <div style={s.countGrid}>
           <CountCard label="New Wigs" value={todayWigs.length} color="#DF5198" />
-          <CountCard label="Paid in Full" value={todayWigs.filter(w => w.status === 'paid_in_full').length} color="#10b981" />
+          <CountCard label="Paid in Full" value={wigsPaidFullToday.length} color="#10b981" />
         </div>
       </div>
     </div>
@@ -1161,9 +1167,9 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
 // ── Revenue Tab ──────────────────────────────────────────────
 
-function RevenueTab({ todayWigs, totalWigSales, washSet, repairs, productSales }: any) {
+function RevenueTab({ wigsPaidFullToday, totalWigSales, washSet, repairs, productSales }: any) {
   const totalRevenue = totalWigSales + washSet + repairs + productSales
-  const paidFullWigs = todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full')
+  const paidFullWigs = wigsPaidFullToday
 
   return (
     <div>
@@ -1204,9 +1210,9 @@ function RevenueTab({ todayWigs, totalWigSales, washSet, repairs, productSales }
 
 // ── Review Tab ───────────────────────────────────────────────
 
-function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, productSales, todayWigs, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
+function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
-  const wigsPaidFull = todayWigs.filter((w: WigOrder) => w.status === 'paid_in_full').length
+  const wigsPaidFull = wigsPaidFullToday.length
 
   return (
     <div>

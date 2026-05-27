@@ -34,6 +34,7 @@ def list_wig_orders(
     status: Optional[WigStatus] = Query(None),
     customer_name: Optional[str] = Query(None),
     customer_id: Optional[UUID] = Query(None),
+    pickup_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -48,6 +49,8 @@ def list_wig_orders(
         q = q.filter(WigOrder.customer_name.ilike(f"%{customer_name}%"))
     if customer_id:
         q = q.filter(WigOrder.customer_id == customer_id)
+    if pickup_date:
+        q = q.filter(WigOrder.pickup_date == pickup_date)
     return q.order_by(WigOrder.order_date.desc()).all()
 
 
