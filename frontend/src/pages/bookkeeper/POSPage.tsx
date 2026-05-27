@@ -329,7 +329,7 @@ export default function POSPage() {
 
         {/* ── Payments ── */}
         <Section title="Payment">
-          {payments.map((p, i) => (
+          {payments.map((p) => (
             <div key={p._key} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
               <select value={p.payment_method} onChange={e => updatePayment(p._key, { payment_method: e.target.value })}
                 style={{ ...s.select, flex: '0 0 160px' }}>
