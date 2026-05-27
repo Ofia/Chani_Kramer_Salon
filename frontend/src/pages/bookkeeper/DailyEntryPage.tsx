@@ -805,6 +805,12 @@ function ExpensesTab({ summaryDate, todayExpenses, showForm, setShowForm, newExp
     setNewExpense((p: NewExpenseForm) => ({ ...p, [field]: value }))
   }
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
+  const qc = useQueryClient()
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/expenses/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['expenses-date', summaryDate] }),
+  })
 
   return (
     <div>
@@ -832,7 +838,15 @@ function ExpensesTab({ summaryDate, todayExpenses, showForm, setShowForm, newExp
                     </span>
                     {e.vendor && <span style={{ fontSize: 12, color: '#71717a' }}> · {e.vendor}</span>}
                   </div>
-                  <span style={{ fontWeight: 700, color: '#18181b' }}>${parseFloat(e.amount).toFixed(2)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontWeight: 700, color: '#18181b' }}>${parseFloat(e.amount).toFixed(2)}</span>
+                    <button
+                      onClick={() => { if (confirm(`Delete this ${e.category.replace(/_/g, ' ')} expense?`)) deleteExpenseMutation.mutate(e.id) }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a1a1aa', padding: 2, display: 'flex' }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                  </div>
                 </div>
               ))}
               <div style={s.subtotal}>
