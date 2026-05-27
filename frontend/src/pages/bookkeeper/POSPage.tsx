@@ -147,6 +147,14 @@ const ITEM_TYPE_COLOR: Record<CartItemType, string> = {
 let keyCounter = 0
 function nextKey() { return String(++keyCounter) }
 
+// Safe date formatter — avoids the UTC-midnight off-by-one bug.
+// new Date("2026-05-26") is parsed as UTC midnight, which is the previous
+// day in US timezones. Splitting the string skips timezone conversion.
+function fmtDate(dateStr: string) {
+  const [y, m, d] = dateStr.split('-')
+  return `${m}/${d}/${y.slice(2)}`
+}
+
 function emptyCustomer() {
   return { id: '', name: '', phone: '' }
 }
@@ -971,7 +979,7 @@ function WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void 
 
           {/* Date */}
           <div style={{ textAlign: 'right', marginBottom: 18, fontSize: 12 }}>
-            Date: {new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+            Date: {fmtDate(new Date().toISOString().split('T')[0])}
           </div>
 
           {/* Customer */}
@@ -1023,7 +1031,7 @@ function WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void 
                       {wig.payments.map(p => (
                         <tr key={p.id}>
                           <td style={r.td}>{METHOD_LABEL[p.payment_method] || p.payment_method}</td>
-                          <td style={r.td}>{new Date(p.payment_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</td>
+                          <td style={r.td}>{fmtDate(p.payment_date)}</td>
                           <td style={r.td}>{p.payment_type.charAt(0).toUpperCase() + p.payment_type.slice(1)}</td>
                           <td style={r.td}>${Number(p.amount).toFixed(2)}</td>
                         </tr>
@@ -1123,7 +1131,7 @@ function ReceiptModal({ sale, onClose }: { sale: PosSale; onClose: () => void })
 
           {/* Date */}
           <div style={{ textAlign: 'right', marginBottom: 18, fontSize: 12 }}>
-            Date: {new Date(sale.sale_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+            Date: {fmtDate(sale.sale_date)}
           </div>
 
           {/* Customer */}
@@ -1186,7 +1194,7 @@ function ReceiptModal({ sale, onClose }: { sale: PosSale; onClose: () => void })
                       {sale.payments.map(p => (
                         <tr key={p.id}>
                           <td style={r.td}>{METHOD_LABEL[p.payment_method] || p.payment_method}</td>
-                          <td style={r.td}>{new Date(sale.sale_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</td>
+                          <td style={r.td}>{fmtDate(sale.sale_date)}</td>
                           <td style={r.td}>${Number(p.amount).toFixed(2)}</td>
                         </tr>
                       ))}

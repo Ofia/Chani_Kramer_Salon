@@ -222,6 +222,42 @@ def auto_fill(
             elif pmt.payment_method == PaymentMethod.zelle:
                 result.zelle_collected += amt
 
+    # Also capture wig balance payments made directly (returning customer flow).
+    # These go through POST /wig-orders/{id}/payments, not through a PosSale,
+    # so they never appear in the loop above. We need their payment method
+    # amounts so Tzipora's cash/CC totals are accurate.
+    #
+    # Guard against double-counting: collect the wig_order_ids that were
+    # already counted as part of a POS sale TODAY. A balance payment for
+    # those same wigs on a DIFFERENT day won't be in this set, so it will
+    # be included correctly.
+    pos_wig_ids = {
+        item.wig_order_id
+        for sale in sales
+        for item in sale.items
+        if item.wig_order_id is not None
+    }
+
+    direct_wig_pmts = (
+        db.query(WigPayment)
+        .filter(WigPayment.payment_date == target_date)
+        .all()
+    )
+    for wp in direct_wig_pmts:
+        if wp.wig_order_id in pos_wig_ids:
+            continue  # Deposit already captured via the POS sale on this date
+        amt = float(wp.amount)
+        if wp.payment_method == PaymentMethod.cash:
+            result.cash_collected += amt
+        elif wp.payment_method == PaymentMethod.credit_card:
+            result.cc_collected += amt
+        elif wp.payment_method == PaymentMethod.quickpay:
+            result.quickpay_collected += amt
+        elif wp.payment_method == PaymentMethod.check:
+            result.check_collected += amt
+        elif wp.payment_method == PaymentMethod.zelle:
+            result.zelle_collected += amt
+
     return result
 
 
