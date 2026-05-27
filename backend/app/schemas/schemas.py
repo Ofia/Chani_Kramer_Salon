@@ -683,3 +683,15 @@ class CheckinResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ── Customer Purchase History ─────────────────────────────────
+
+class CustomerHistoryResponse(BaseModel):
+    """
+    All purchases for a single customer.
+    pos_sales: visits recorded via the POS (may include wigs, services, products).
+    direct_wig_orders: wig orders entered directly (not via a POS sale — avoids double-counting).
+    """
+    pos_sales: List[PosSaleResponse]
+    direct_wig_orders: List[WigOrderResponse]

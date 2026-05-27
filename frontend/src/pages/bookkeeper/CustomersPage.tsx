@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote } from 'lucide-react'
+import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote, History } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -42,6 +42,7 @@ export default function CustomersPage() {
   const [modalMode, setModalMode]   = useState<'new' | Customer | null>(null)
   const [editingNotes, setEditingNotes] = useState(false)
   const [draftNotes, setDraftNotes] = useState('')
+  const [historyOpen, setHistoryOpen] = useState(false)
   const qc = useQueryClient()
 
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
@@ -239,7 +240,23 @@ export default function CustomersPage() {
                 )}
               </div>
             )}
+
+            {/* Purchase History */}
+            <div style={{ padding: '14px 16px' }}>
+              <button onClick={() => setHistoryOpen(true)} style={s.historyBtn}>
+                <History size={13} />
+                See Purchase History
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* History Modal */}
+        {historyOpen && selected && (
+          <PurchaseHistoryModal
+            customer={selected}
+            onClose={() => setHistoryOpen(false)}
+          />
         )}
       </div>
 
@@ -386,6 +403,166 @@ function ContactRow({ icon, label, value }: { icon: React.ReactNode; label: stri
   )
 }
 
+// ── Purchase History Modal ────────────────────────────────────
+
+type PosSalePayment = { id: string; payment_method: string; amount: number }
+type PosSaleItem    = { id: string; item_type: string; description: string; quantity: number; unit_price: number; subtotal: number; wig_brand?: string; wig_serial?: string }
+type PosSale        = { id: string; sale_date: string; total_amount: number; amount_paid: number; balance_due: number; notes?: string; items: PosSaleItem[]; payments: PosSalePayment[] }
+type WigPayment     = { id: string; payment_date: string; amount: number; payment_method: string; payment_type: string }
+type WigOrder       = { id: string; order_date: string; daysmart_serial?: string; brand?: string; length?: string; color?: string; size?: string; total_price: number; amount_paid: number; balance_due: number; status: string; payments: WigPayment[] }
+type CustomerHistory = { pos_sales: PosSale[]; direct_wig_orders: WigOrder[] }
+
+const METHOD_LABEL: Record<string, string> = {
+  cash: 'Cash', credit_card: 'CC', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
+}
+const ITEM_COLOR: Record<string, string> = {
+  wash_set: '#DF5198', repair: '#E3CD94', inventory: '#97BBE9', wig: '#5581B1',
+}
+const ITEM_LABEL: Record<string, string> = {
+  wash_set: 'Wash & Set', repair: 'Repair', inventory: 'Product', wig: 'Wig',
+}
+const STATUS_COLOR: Record<string, string> = {
+  ordered: '#E3CD94', ready: '#97BBE9', paid_in_full: '#10b981',
+}
+
+function safeFmtDate(dateStr: string) {
+  const [y, m, d] = dateStr.split('T')[0].split('-')
+  return `${m}/${d}/${y.slice(2)}`
+}
+
+function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const { data, isLoading } = useQuery<CustomerHistory>({
+    queryKey: ['customer-history', customer.id],
+    queryFn: () => api.get(`/customers/${customer.id}/history`).then(r => r.data).catch(() => ({ pos_sales: [], direct_wig_orders: [] })),
+  })
+
+  const totalSpent = (data?.pos_sales.reduce((s, p) => s + Number(p.amount_paid), 0) ?? 0)
+    + (data?.direct_wig_orders.reduce((s, w) => s + Number(w.amount_paid), 0) ?? 0)
+
+  const totalVisits = (data?.pos_sales.length ?? 0) + (data?.direct_wig_orders.length ?? 0)
+
+  return (
+    <div style={sh.overlay} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={sh.modal}>
+
+        {/* Header */}
+        <div style={sh.header}>
+          <div>
+            <p style={sh.title}>Purchase History</p>
+            <p style={sh.sub}>{customer.first_name} {customer.last_name}</p>
+          </div>
+          <button onClick={onClose} style={sh.closeBtn}>×</button>
+        </div>
+
+        {/* Stats strip */}
+        {!isLoading && data && (
+          <div style={sh.statsStrip}>
+            <StatPill label="Total visits" value={String(totalVisits)} />
+            <StatPill label="POS sales" value={String(data.pos_sales.length)} />
+            <StatPill label="Direct wig orders" value={String(data.direct_wig_orders.length)} />
+            <StatPill label="Total paid" value={`$${totalSpent.toFixed(2)}`} accent />
+          </div>
+        )}
+
+        {/* Body */}
+        <div style={sh.body}>
+          {isLoading && <p style={sh.muted}>Loading…</p>}
+
+          {!isLoading && totalVisits === 0 && (
+            <p style={sh.muted}>No purchases on file for this customer.</p>
+          )}
+
+          {/* POS Sales */}
+          {data?.pos_sales.map(sale => (
+            <div key={sale.id} style={sh.card}>
+              <div style={sh.cardTop}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={sh.dateLabel}>{safeFmtDate(sale.sale_date)}</span>
+                  <span style={sh.badge}>POS Sale</span>
+                </div>
+                <span style={sh.amount}>${Number(sale.total_amount).toFixed(2)}</span>
+              </div>
+
+              {/* Line items */}
+              <div style={sh.itemList}>
+                {sale.items.map(item => (
+                  <div key={item.id} style={sh.itemRow}>
+                    <span style={{ ...sh.typeDot, background: ITEM_COLOR[item.item_type] ?? '#ccc' }} />
+                    <span style={sh.itemLabel}>{ITEM_LABEL[item.item_type] ?? item.item_type}</span>
+                    <span style={sh.itemDesc}>{item.description}{item.wig_serial ? ` · ${item.wig_serial}` : ''}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</span>
+                    <span style={sh.itemAmt}>${Number(item.subtotal).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Payments */}
+              <div style={sh.payRow}>
+                {sale.payments.map(p => (
+                  <span key={p.id} style={sh.payChip}>
+                    {METHOD_LABEL[p.payment_method] ?? p.payment_method} ${Number(p.amount).toFixed(2)}
+                  </span>
+                ))}
+                {sale.balance_due > 0 && (
+                  <span style={{ ...sh.payChip, background: '#fef2f2', color: '#ef4444' }}>
+                    Due ${Number(sale.balance_due).toFixed(2)}
+                  </span>
+                )}
+                {sale.notes && <span style={sh.noteChip}>📝 {sale.notes}</span>}
+              </div>
+            </div>
+          ))}
+
+          {/* Direct Wig Orders */}
+          {data?.direct_wig_orders.map(wig => (
+            <div key={wig.id} style={sh.card}>
+              <div style={sh.cardTop}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={sh.dateLabel}>{safeFmtDate(wig.order_date)}</span>
+                  <span style={{ ...sh.badge, background: '#5581B1' + '22', color: '#5581B1' }}>Wig Order</span>
+                  <span style={{ ...sh.badge, background: STATUS_COLOR[wig.status] + '22', color: STATUS_COLOR[wig.status] }}>
+                    {wig.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <span style={sh.amount}>${Number(wig.total_price).toFixed(2)}</span>
+              </div>
+
+              {/* Wig specs */}
+              <p style={sh.wigSpecs}>
+                {[wig.brand, wig.daysmart_serial, wig.length, wig.color, wig.size]
+                  .filter(Boolean).join(' · ') || 'No specs recorded'}
+              </p>
+
+              {/* Payment history */}
+              <div style={sh.payRow}>
+                {wig.payments.map(p => (
+                  <span key={p.id} style={sh.payChip}>
+                    {METHOD_LABEL[p.payment_method] ?? p.payment_method} ${Number(p.amount).toFixed(2)}
+                    {' '}·{' '}{safeFmtDate(p.payment_date)}
+                  </span>
+                ))}
+                {Number(wig.balance_due) > 0 && (
+                  <span style={{ ...sh.payChip, background: '#fef2f2', color: '#ef4444' }}>
+                    Due ${Number(wig.balance_due).toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatPill({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: accent ? '#DF5198' : '#18181b' }}>{value}</p>
+      <p style={{ margin: 0, fontSize: 11, color: '#a1a1aa' }}>{label}</p>
+    </div>
+  )
+}
+
 // ── Styles ────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
@@ -440,4 +617,37 @@ const s: Record<string, React.CSSProperties> = {
   primaryBtn: { flex: 1, background: '#212121', color: '#fff', border: 'none', borderRadius: 12, padding: '13px', fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
   ghostBtn:   { background: 'none', border: '1px solid rgba(0,0,0,0.14)', borderRadius: 12, padding: '13px 20px', fontSize: 14, cursor: 'pointer', color: '#71717a', fontFamily: 'inherit' },
   errorMsg:   { color: '#ff3b30', fontSize: 13, marginTop: 10 },
+  historyBtn: { display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '9px 14px', background: '#f7f7f5', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#18181b', cursor: 'pointer', fontFamily: 'inherit' },
+}
+
+// History modal styles
+const sh: Record<string, React.CSSProperties> = {
+  overlay:    { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modal:      { background: '#fff', borderRadius: 18, width: '90%', maxWidth: 660, maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.2)' },
+  header:     { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: '1px solid rgba(0,0,0,0.07)' },
+  title:      { margin: 0, fontSize: 16, fontWeight: 700, color: '#18181b', letterSpacing: '-0.02em' },
+  sub:        { margin: '2px 0 0', fontSize: 13, color: '#71717a' },
+  closeBtn:   { background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', fontSize: 22, lineHeight: 1, padding: 0, flexShrink: 0 },
+  statsStrip: { display: 'flex', justifyContent: 'space-around', padding: '14px 24px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#fafaf9' },
+  body:       { flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 },
+  muted:      { fontSize: 13, color: '#a1a1aa', textAlign: 'center', padding: '32px 0', margin: 0 },
+
+  card:       { border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, overflow: 'hidden' },
+  cardTop:    { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#fafaf9', borderBottom: '1px solid rgba(0,0,0,0.05)' },
+  dateLabel:  { fontSize: 12, fontWeight: 600, color: '#18181b' },
+  badge:      { fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: 'rgba(0,0,0,0.06)', color: '#71717a', letterSpacing: '0.02em' },
+  amount:     { fontSize: 15, fontWeight: 700, color: '#18181b' },
+
+  itemList:   { padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: 5 },
+  itemRow:    { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 },
+  typeDot:    { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
+  itemLabel:  { fontWeight: 600, color: '#18181b', minWidth: 70, flexShrink: 0 },
+  itemDesc:   { color: '#71717a', flex: 1 },
+  itemAmt:    { fontWeight: 600, color: '#18181b', flexShrink: 0 },
+
+  wigSpecs:   { margin: 0, padding: '8px 14px', fontSize: 13, color: '#71717a' },
+
+  payRow:     { display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 14px 12px', borderTop: '1px solid rgba(0,0,0,0.05)' },
+  payChip:    { fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#f0fdf4', color: '#15803d' },
+  noteChip:   { fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#fefce8', color: '#713f12' },
 }

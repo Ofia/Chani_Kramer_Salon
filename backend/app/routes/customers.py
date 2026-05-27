@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.database import get_db
-from app.models.models import Customer, User
-from app.schemas.schemas import CustomerCreate, CustomerUpdate, CustomerResponse
+from app.models.models import Customer, User, PosSale, WigOrder
+from app.schemas.schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerHistoryResponse
 from app.core.security import get_current_user
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -35,6 +35,51 @@ def list_customers(
     if limit:
         q = q.limit(limit)
     return q.all()
+
+
+@router.get("/{customer_id}/history", response_model=CustomerHistoryResponse)
+def get_customer_history(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    All purchases for a customer:
+    - POS sales (visits recorded via the Point of Sale)
+    - Direct wig orders (entered via Wig Orders page, not through a POS sale)
+
+    Wig orders that originated from a POS sale are excluded from direct_wig_orders
+    to avoid showing the same wig twice.
+    """
+    # All POS sales for this customer, newest first
+    pos_sales = (
+        db.query(PosSale)
+        .filter(PosSale.customer_id == customer_id)
+        .order_by(PosSale.sale_date.desc(), PosSale.created_at.desc())
+        .all()
+    )
+
+    # Collect wig_order_ids that were created via POS — don't show them again
+    pos_wig_ids = {
+        item.wig_order_id
+        for sale in pos_sales
+        for item in sale.items
+        if item.wig_order_id is not None
+    }
+
+    # Wig orders for this customer that were NOT from a POS sale
+    all_wig_orders = (
+        db.query(WigOrder)
+        .filter(WigOrder.customer_id == customer_id)
+        .order_by(WigOrder.order_date.desc())
+        .all()
+    )
+    direct_wig_orders = [w for w in all_wig_orders if w.id not in pos_wig_ids]
+
+    return CustomerHistoryResponse(
+        pos_sales=pos_sales,
+        direct_wig_orders=direct_wig_orders,
+    )
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
