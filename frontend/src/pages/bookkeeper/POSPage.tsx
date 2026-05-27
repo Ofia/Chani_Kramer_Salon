@@ -15,7 +15,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Plus, X, Printer, ChevronDown, ChevronUp,
-  Scissors, Wrench, Package, Sparkles, Trash2,
+  Scissors, Wrench, Package, Sparkles, Trash2, CreditCard,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
@@ -64,6 +64,35 @@ type Payment = {
   _key: string
   payment_method: string
   amount: string
+}
+
+type WigPaymentRecord = {
+  id: string
+  payment_date: string
+  amount: number
+  payment_method: string
+  payment_type: string
+}
+
+type WigOrder = {
+  id: string
+  customer_name: string
+  customer_phone?: string
+  customer_id?: string
+  daysmart_serial?: string
+  daysmart_receipt_no?: string
+  brand?: string
+  length?: string
+  color?: string
+  size?: string
+  front?: string
+  total_price: number
+  amount_paid: number
+  balance_due: number
+  status: string
+  order_date: string
+  pickup_date?: string
+  payments: WigPaymentRecord[]
 }
 
 type PosSaleItem = {
@@ -133,6 +162,7 @@ export default function POSPage() {
   const [notes, setNotes] = useState('')
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
+  const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
 
   const qc = useQueryClient()
   const today = new Date().toISOString().split('T')[0]
@@ -298,6 +328,15 @@ export default function POSPage() {
           )}
         </Section>
 
+        {/* ── Pending wig orders for this customer ── */}
+        {customer.id && (
+          <PendingOrdersPanel
+            customerId={customer.id}
+            saleDate={saleDate}
+            onReceiptReady={setReceiptWig}
+          />
+        )}
+
         {/* ── Add items ── */}
         <Section title="Cart">
           <div style={s.addBtns}>
@@ -406,9 +445,14 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* ── Receipt Modal ── */}
+      {/* ── Receipt Modal (new POS sale) ── */}
       {receiptSale && (
         <ReceiptModal sale={receiptSale} onClose={() => setReceiptSale(null)} />
+      )}
+
+      {/* ── Receipt Modal (wig balance payment) ── */}
+      {receiptWig && (
+        <WigReceiptModal wig={receiptWig} onClose={() => setReceiptWig(null)} />
       )}
     </div>
   )
@@ -727,6 +771,291 @@ function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => vo
   )
 }
 
+// ── Pending Orders Panel ──────────────────────────────────────
+
+function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
+  customerId: string
+  saleDate: string
+  onReceiptReady: (wig: WigOrder) => void
+}) {
+  const qc = useQueryClient()
+  const [payingWigId, setPayingWigId] = useState<string | null>(null)
+  const [payAmount, setPayAmount] = useState('')
+  const [payMethod, setPayMethod] = useState('cash')
+
+  const { data: openWigs = [], isLoading } = useQuery<WigOrder[]>({
+    queryKey: ['pending-wigs', customerId],
+    queryFn: () =>
+      api.get('/wig-orders/', { params: { customer_id: customerId } })
+        .then(r => (Array.isArray(r.data) ? r.data : []).filter((w: WigOrder) => w.status !== 'paid_in_full'))
+        .catch(() => []),
+    enabled: !!customerId,
+  })
+
+  const payMutation = useMutation({
+    mutationFn: ({ wigId, data }: { wigId: string; data: object }) =>
+      api.post(`/wig-orders/${wigId}/payments`, data),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['pending-wigs', customerId] })
+      qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
+      qc.invalidateQueries({ queryKey: ['pos-auto-fill'] })
+      setPayingWigId(null)
+      setPayAmount('')
+      setPayMethod('cash')
+      // Show receipt if wig is now paid in full
+      if (res.data?.status === 'paid_in_full') {
+        onReceiptReady(res.data)
+      }
+    },
+  })
+
+  if (isLoading || openWigs.length === 0) return null
+
+  return (
+    <div style={s.pendingPanel}>
+      <p style={s.pendingTitle}>
+        <CreditCard size={13} style={{ marginRight: 6 }} />
+        Pending Wig Orders — {openWigs.length} open
+      </p>
+
+      {openWigs.map(wig => {
+        const balance = Number(wig.balance_due)
+        const isPaying = payingWigId === wig.id
+
+        return (
+          <div key={wig.id} style={s.pendingRow}>
+            {/* Wig summary */}
+            <div style={{ flex: 1 }}>
+              <div style={s.pendingWigName}>
+                {[wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'}
+              </div>
+              <div style={s.pendingWigMeta}>
+                Total ${Number(wig.total_price).toFixed(2)} · Paid ${Number(wig.amount_paid).toFixed(2)}
+              </div>
+            </div>
+
+            {/* Balance + action */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={s.pendingBalance}>Due ${balance.toFixed(2)}</span>
+              {!isPaying && (
+                <button
+                  onClick={() => { setPayingWigId(wig.id); setPayAmount(balance.toFixed(2)) }}
+                  style={s.payBalanceBtn}
+                >
+                  Pay Balance
+                </button>
+              )}
+            </div>
+
+            {/* Inline payment form */}
+            {isPaying && (
+              <div style={s.pendingPayForm}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+                    style={{ ...s.select, width: 150 }}>
+                    {METHODS.map(m => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
+                  </select>
+                  <div style={{ ...s.moneyRow, width: 130 }}>
+                    <span style={s.moneySym}>$</span>
+                    <input type="number" min="0" step="0.01"
+                      value={payAmount}
+                      onChange={e => setPayAmount(e.target.value)}
+                      style={s.moneyInput} />
+                  </div>
+                  <button
+                    onClick={() => {
+                      const amt = parseFloat(payAmount)
+                      if (!amt || amt <= 0) return
+                      payMutation.mutate({
+                        wigId: wig.id,
+                        data: {
+                          payment_date: saleDate,
+                          amount: amt,
+                          payment_method: payMethod,
+                          payment_type: amt >= balance ? 'final' : 'partial',
+                        },
+                      })
+                    }}
+                    disabled={payMutation.isPending || !payAmount}
+                    style={s.primaryBtn}
+                  >
+                    {payMutation.isPending ? 'Saving…' : 'Record'}
+                  </button>
+                  <button onClick={() => { setPayingWigId(null); setPayAmount('') }} style={s.ghostBtn}>
+                    Cancel
+                  </button>
+                </div>
+                {parseFloat(payAmount) > 0 && parseFloat(payAmount) < balance && (
+                  <p style={{ fontSize: 11, color: '#71717a', marginTop: 6 }}>
+                    Remaining after this payment: ${(balance - (parseFloat(payAmount) || 0)).toFixed(2)}
+                  </p>
+                )}
+                {parseFloat(payAmount) >= balance && (
+                  <p style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 6 }}>
+                    Paid in full — receipt will be generated
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+
+// ── Wig Receipt Modal (for balance payments) ──────────────────
+
+function WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void }) {
+  const printRef = useRef<HTMLDivElement>(null)
+
+  function handlePrint() {
+    if (!printRef.current) return
+    const content = printRef.current.innerHTML
+    const win = window.open('', '_blank', 'width=700,height=960')
+    if (!win) return
+    win.document.write(`
+      <html>
+        <head>
+          <title>Receipt — ${wig.customer_name}</title>
+          <style>
+            * { margin:0; padding:0; box-sizing:border-box; }
+            body { font-family: Arial, sans-serif; font-size: 13px; color: #000; padding: 32px; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #222; color: #fff; padding: 5px 8px; text-align: left; font-size: 11px; }
+            td { padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
+            .balance-box { padding: 4px 10px; font-weight: 700; font-size: 14px; color: #fff; display: inline-block; }
+          </style>
+        </head>
+        <body>${content}</body>
+      </html>
+    `)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print(); win.close() }, 400)
+  }
+
+  const total   = Number(wig.total_price)
+  const paid    = Number(wig.amount_paid)
+  const balance = Number(wig.balance_due)
+
+  return (
+    <div style={s.modalOverlay} onClick={onClose}>
+      <div style={s.modalBox} onClick={e => e.stopPropagation()}>
+
+        <div style={s.modalHeader}>
+          <span style={s.modalTitle}>Receipt — {wig.customer_name}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handlePrint} style={s.printBtn}><Printer size={14} /> Print</button>
+            <button onClick={onClose} style={s.iconBtn}><X size={16} /></button>
+          </div>
+        </div>
+
+        <div ref={printRef} style={s.receiptBody}>
+
+          {/* Salon header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={r.logoBox}><div style={r.logoCircle} /></div>
+              <div>
+                <div style={r.salonName}>CHANI</div>
+                <div style={r.salonName}>KRAMER</div>
+                <div style={r.salonSub}>WIGS SALON</div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={r.receiptNum}>Receipt #: {(wig.daysmart_receipt_no || wig.id.slice(0, 8)).toUpperCase()}</div>
+            </div>
+          </div>
+
+          {/* Date */}
+          <div style={{ textAlign: 'right', marginBottom: 18, fontSize: 12 }}>
+            Date: {new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+          </div>
+
+          {/* Customer */}
+          <div style={{ marginBottom: 20 }}>
+            <InfoRow label="Name"    value={wig.customer_name} />
+            <InfoRow label="Address" value="" />
+            <div style={{ height: 6 }} />
+            <InfoRow label="Phone"   value={wig.customer_phone || ''} />
+            <InfoRow label="Cell"    value="" />
+          </div>
+
+          {/* Wig table */}
+          <table style={{ marginBottom: 20 }}>
+            <thead>
+              <tr>
+                {['Wig', 'Company', 'Length', 'Color', 'Size', 'Front', 'Total'].map(h => (
+                  <th key={h} style={r.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={r.td}>{wig.daysmart_serial || '—'}</td>
+                <td style={r.td}>{wig.brand || '—'}</td>
+                <td style={r.td}>{wig.length || '—'}</td>
+                <td style={r.td}>{wig.color || '—'}</td>
+                <td style={r.td}>{wig.size || '—'}</td>
+                <td style={r.td}>{wig.front || '—'}</td>
+                <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${total.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Payments + Summary */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
+            <div style={{ flex: 1 }}>
+              {wig.payments.length > 0 && (
+                <>
+                  <div style={r.paymentsLabel}>Payment History</div>
+                  <table>
+                    <thead>
+                      <tr>
+                        {['Method', 'Date', 'Type', 'Amount'].map(h => (
+                          <th key={h} style={{ ...r.th, fontSize: 10 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {wig.payments.map(p => (
+                        <tr key={p.id}>
+                          <td style={r.td}>{METHOD_LABEL[p.payment_method] || p.payment_method}</td>
+                          <td style={r.td}>{new Date(p.payment_date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</td>
+                          <td style={r.td}>{p.payment_type.charAt(0).toUpperCase() + p.payment_type.slice(1)}</td>
+                          <td style={r.td}>${Number(p.amount).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+
+            <div style={{ minWidth: 170, textAlign: 'right' }}>
+              <SummaryLine label="Total:" value={`$${total.toFixed(2)}`} />
+              <div style={{ height: 8 }} />
+              <SummaryLine label="Paid:" value={`$${paid.toFixed(2)}`} />
+              <div style={{ height: 8 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>Balance Due:</span>
+                <span style={{ ...r.balanceBox, background: balance > 0 ? '#222' : '#10b981' }}>
+                  ${balance > 0 ? balance.toFixed(2) : '0.00'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={r.footer}>1474 60th st Brooklyn NY 11219&nbsp;&nbsp;(718) 676-6003</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 // ── Receipt Modal ─────────────────────────────────────────────
 
 function ReceiptModal({ sale, onClose }: { sale: PosSale; onClose: () => void }) {
@@ -1016,6 +1345,16 @@ const s: Record<string, React.CSSProperties> = {
   receiptBtn:    { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#212121', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
+
+  // Pending orders panel
+  pendingPanel:  { marginBottom: 22, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 14 },
+  pendingTitle:  { display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 700, color: '#92400e', textTransform: 'uppercase' as const, letterSpacing: '0.05em', margin: '0 0 10px' },
+  pendingRow:    { background: '#fff', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: '10px 12px', marginBottom: 8, display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' as const },
+  pendingWigName:{ fontSize: 13, fontWeight: 600, color: '#18181b' },
+  pendingWigMeta:{ fontSize: 11, color: '#71717a', marginTop: 2 },
+  pendingBalance:{ fontSize: 13, fontWeight: 700, color: '#DF5198', flexShrink: 0 },
+  payBalanceBtn: { padding: '6px 12px', background: '#5581B1', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 },
+  pendingPayForm:{ width: '100%', marginTop: 10, padding: '10px 12px', background: '#f7f7f5', borderRadius: 8 },
 
   modalOverlay:  { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   modalBox:      { background: '#fff', borderRadius: 16, width: '90%', maxWidth: 700, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
