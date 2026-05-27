@@ -468,6 +468,7 @@ export default function DailyEntryPage() {
                   repairs={repairsAmt}
                   productSales={productSalesAmt}
                   wigsPaidFullToday={wigsPaidFullToday}
+                  newWigsCount={todayWigs.length}
                   totalWigSales={totalWigSales}
                   totalRevenue={totalRevenue}
                   totalCollected={totalCollected}
@@ -1210,7 +1211,7 @@ function RevenueTab({ wigsPaidFullToday, totalWigSales, washSet, repairs, produc
 
 // ── Review Tab ───────────────────────────────────────────────
 
-function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
+function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, newWigsCount, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
   const wigsPaidFull = wigsPaidFullToday.length
 
@@ -1219,7 +1220,7 @@ function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, prod
       <SectionTitle>Review & Save</SectionTitle>
 
       <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>Activity</p>
-      <ReviewRow label="New Wig Orders" value={String(todayWigs.length)} />
+      <ReviewRow label="New Wig Orders" value={String(newWigsCount)} />
       <ReviewRow label="Wigs Paid in Full" value={String(wigsPaidFull)} />
       <ReviewRow label="Chani Cuts (= wigs paid in full)" value={String(wigsPaidFull)} />
 
