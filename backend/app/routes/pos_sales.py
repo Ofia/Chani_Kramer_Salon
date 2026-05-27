@@ -197,10 +197,16 @@ def auto_fill(
             elif item.item_type == PosItemType.inventory:
                 result.total_other += amt
             elif item.item_type == PosItemType.wig:
-                # Wig deposit goes to wig_deposits_total (not revenue until paid in full)
-                wig_deposit = float(item.wig_deposit_amount or 0) if hasattr(item, 'wig_deposit_amount') else 0
-                result.wig_deposits_total += float(item.subtotal)
                 result.new_wigs_sold += 1
+                # Only count what was actually received as a deposit.
+                # Revenue ($4,000) is NOT recognized until status = paid_in_full —
+                # that's handled separately by the wig_orders query in Daily Entry.
+                if item.wig_order_id:
+                    wig = db.query(WigOrder).filter(WigOrder.id == item.wig_order_id).first()
+                    if wig and wig.status != WigStatus.paid_in_full:
+                        # Partial deposit — only the amount actually collected
+                        result.wig_deposits_total += float(wig.amount_paid)
+                    # If paid_in_full, revenue is already captured via wig_orders in the UI
 
         # Payment method breakdown
         for pmt in sale.payments:
