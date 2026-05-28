@@ -396,7 +396,7 @@ function CustomerModal({
 
 // ── Sub-components ────────────────────────────────────────────
 
-function Cell({ children, w }: { children: React.ReactNode; w: number }) {
+function Cell({ children, w }: { children?: React.ReactNode; w: number }) {
   return (
     <div style={{ width: w, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
       {children}

@@ -354,7 +354,6 @@ export default function POSPage() {
         {customer.id && (
           <PendingOrdersPanel
             customerId={customer.id}
-            saleDate={saleDate}
             staged={stagedWigPayments}
             onStage={sp => setStagedWigPayments(prev =>
               prev.some(x => x.wigId === sp.wigId)
@@ -860,9 +859,8 @@ function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => vo
 
 // ── Pending Orders Panel ──────────────────────────────────────
 
-function PendingOrdersPanel({ customerId, saleDate, staged, onStage, onUnstage }: {
+function PendingOrdersPanel({ customerId, staged, onStage, onUnstage }: {
   customerId: string
-  saleDate: string
   staged: StagedWigPayment[]
   onStage: (sp: StagedWigPayment) => void
   onUnstage: (wigId: string) => void
