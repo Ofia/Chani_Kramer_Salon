@@ -1211,9 +1211,25 @@ function RevenueTab({ wigsPaidFullToday, totalWigSales, washSet, repairs, produc
 
 // ── Review Tab ───────────────────────────────────────────────
 
-function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, newWigsCount, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
+function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, newWigsCount, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
   const wigsPaidFull = wigsPaidFullToday.length
+
+  const weekStart = getWeekStart(summaryDate)
+  const weekEnd   = getWeekEnd(weekStart)
+
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['employees'],
+    queryFn: () => api.get('/employees/?active_only=true').then(r => r.data),
+  })
+
+  const { data: weekPayroll = [] } = useQuery<any[]>({
+    queryKey: ['payroll-weekly', weekStart],
+    queryFn: () => api.get(`/payroll/?week_start=${weekStart}`).then(r => r.data),
+  })
+
+  const totalPayroll = (weekPayroll as any[]).reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+  const bankDeposit  = totalRevenue * 0.40
 
   return (
     <div>
@@ -1243,13 +1259,46 @@ function ReviewTab({ summaryDate: _summaryDate, payments, washSet, repairs, prod
       {productSales > 0 && <ReviewRow label="Product Sales" value={`$${productSales.toFixed(2)}`} />}
       <ReviewRow label="Total Revenue" value={`$${totalRevenue.toFixed(2)}`} />
 
-      {totalExpenses > 0 && (
+      {todayExpenses.length > 0 && (
         <>
           <div style={{ height: 12 }} />
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>Expenses</p>
-          <ReviewRow label="Total Expenses" value={`$${totalExpenses.toFixed(2)}`} last />
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>Expenses Today</p>
+          {todayExpenses.map((e: any) => (
+            <ReviewRow
+              key={e.id}
+              label={`${e.category.replace(/_/g, ' ')}${e.vendor ? ` · ${e.vendor}` : ''}`}
+              value={`$${parseFloat(e.amount).toFixed(2)}`}
+            />
+          ))}
+          <ReviewRow label="Total Expenses" value={`$${totalExpenses.toFixed(2)}`} />
         </>
       )}
+
+      {weekPayroll.length > 0 && (
+        <>
+          <div style={{ height: 12 }} />
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginBottom: 8 }}>
+            Payroll — Week of {fmtDate(weekStart)}–{fmtDate(weekEnd)}
+          </p>
+          {(weekPayroll as any[]).map((p: any) => {
+            const emp = (employees as any[]).find((e: any) => e.id === p.employee_id)
+            return (
+              <ReviewRow
+                key={p.id}
+                label={emp ? `${emp.first_name} ${emp.last_name}` : '—'}
+                value={`$${Number(p.amount).toFixed(2)}`}
+              />
+            )
+          })}
+          <ReviewRow label="Total Payroll This Week" value={`$${totalPayroll.toFixed(2)}`} />
+        </>
+      )}
+
+      <div style={{ height: 12 }} />
+      <div style={{ ...s.subtotal, background: '#f0fdf4' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#166534' }}>40% Bank Deposit</span>
+        <span style={{ fontWeight: 700, fontSize: 17, color: '#166534' }}>${bankDeposit.toFixed(2)}</span>
+      </div>
 
       <div style={s.actions}>
         <button onClick={onSave} disabled={isSaving} style={s.primaryBtn}>
