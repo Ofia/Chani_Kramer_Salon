@@ -11,7 +11,12 @@
 import axios from 'axios'
 import { supabase } from './supabase'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+const _raw = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+// If the page is served over HTTPS, upgrade any http:// API URL to https://
+// so browsers don't block it as Mixed Content.
+const BASE_URL = typeof window !== 'undefined' && window.location.protocol === 'https:' && _raw.startsWith('http:')
+  ? _raw.replace('http:', 'https:')
+  : _raw
 
 export const api = axios.create({ baseURL: BASE_URL })
 
