@@ -176,9 +176,35 @@ export default function DailyEntryPage() {
     queryFn: () => api.get(`/expenses/?start_date=${summaryDate}&end_date=${summaryDate}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
   })
 
-  // 1. Load saved daily summary into form when it exists
+  // Single effect — runs once both queries have resolved.
+  //
+  // Priority:
+  //   • POS fields (payments, services) → always from live auto-fill when POS sales exist.
+  //     This means a deleted POS sale is reflected immediately without manual cleanup.
+  //   • notes → always from the saved daily_summary (manual entry, never in POS).
+  //   • If no POS sales today → fall back to saved summary for all fields.
   useEffect(() => {
-    if (existing) {
+    if (autoFillData === undefined || existing === undefined) return  // still loading
+
+    if (autoFillData && autoFillData.pos_sale_count > 0) {
+      // Live POS data drives the form — always current, never stale
+      setAutoFilled(existing === null)  // show banner only on first-time entry
+      setPayments({
+        cash_collected:     autoFillData.cash_collected     > 0 ? String(autoFillData.cash_collected)     : '',
+        quickpay_collected: autoFillData.quickpay_collected > 0 ? String(autoFillData.quickpay_collected) : '',
+        cc_collected:       autoFillData.cc_collected       > 0 ? String(autoFillData.cc_collected)       : '',
+        check_collected:    autoFillData.check_collected    > 0 ? String(autoFillData.check_collected)    : '',
+        zelle_collected:    autoFillData.zelle_collected    > 0 ? String(autoFillData.zelle_collected)    : '',
+        wig_deposits_total: autoFillData.wig_deposits_total > 0 ? String(autoFillData.wig_deposits_total) : '',
+      })
+      setActivity({
+        wash_set:      autoFillData.total_wash_set > 0 ? String(autoFillData.total_wash_set) : '',
+        repairs:       autoFillData.total_repairs  > 0 ? String(autoFillData.total_repairs)  : '',
+        product_sales: autoFillData.total_other    > 0 ? String(autoFillData.total_other)    : '',
+        notes:         existing?.notes || '',  // notes are manual, preserve them
+      })
+    } else if (existing) {
+      // No POS sales today — load from saved summary (manual-entry day)
       setAutoFilled(false)
       setPayments({
         cash_collected:     String(existing.cash_collected),
@@ -195,27 +221,8 @@ export default function DailyEntryPage() {
         notes:         existing.notes || '',
       })
     }
-  }, [existing])
-
-  // 2. Pre-fill from POS when no saved summary exists yet for this date
-  useEffect(() => {
-    if (existing || !autoFillData || autoFillData.pos_sale_count === 0) return
-    setAutoFilled(true)
-    setPayments({
-      cash_collected:     autoFillData.cash_collected     > 0 ? String(autoFillData.cash_collected)     : '',
-      quickpay_collected: autoFillData.quickpay_collected > 0 ? String(autoFillData.quickpay_collected) : '',
-      cc_collected:       autoFillData.cc_collected       > 0 ? String(autoFillData.cc_collected)       : '',
-      check_collected:    autoFillData.check_collected    > 0 ? String(autoFillData.check_collected)    : '',
-      zelle_collected:    autoFillData.zelle_collected    > 0 ? String(autoFillData.zelle_collected)    : '',
-      wig_deposits_total: autoFillData.wig_deposits_total > 0 ? String(autoFillData.wig_deposits_total) : '',
-    })
-    setActivity(prev => ({
-      ...prev,
-      wash_set:      autoFillData.total_wash_set > 0 ? String(autoFillData.total_wash_set) : '',
-      repairs:       autoFillData.total_repairs  > 0 ? String(autoFillData.total_repairs)  : '',
-      product_sales: autoFillData.total_other    > 0 ? String(autoFillData.total_other)    : '',
-    }))
-  }, [existing, autoFillData])
+    // else: no POS sales, no saved summary → form stays blank (new manual entry)
+  }, [autoFillData, existing])
 
   // Save/update daily summary
   const summaryMutation = useMutation({
