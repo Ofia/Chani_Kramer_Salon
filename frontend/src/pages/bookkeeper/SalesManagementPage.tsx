@@ -208,6 +208,22 @@ function WigOrdersTab({ tab }: { tab: 'in_progress' | 'completed' }) {
               {expanded === w.id && (
                 <div style={s.expandedRow}>
                   <div style={s.expandedInner}>
+
+                    {/* Wig Specs */}
+                    {(w.daysmart_serial || w.brand || w.length || w.color || w.size || w.front) && (
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={s.expandedTitle}>Wig Details</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px' }}>
+                          {w.daysmart_serial && <SpecPair label="Serial"  value={w.daysmart_serial} />}
+                          {w.brand          && <SpecPair label="Brand"   value={w.brand} />}
+                          {w.length         && <SpecPair label="Length"  value={w.length} />}
+                          {w.color          && <SpecPair label="Color"   value={w.color} />}
+                          {w.size           && <SpecPair label="Size"    value={w.size} />}
+                          {w.front          && <SpecPair label="Front"   value={w.front} />}
+                        </div>
+                      </div>
+                    )}
+
                     <p style={s.expandedTitle}>Payment History</p>
                     {w.payments.length === 0 ? (
                       <p style={{ fontSize: 12, color: '#a1a1aa' }}>No payments recorded.</p>
@@ -434,6 +450,15 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
         pointerEvents: 'none',
       }} />
     </button>
+  )
+}
+
+function SpecPair({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#18181b', fontFamily: 'monospace' }}>{value}</span>
+    </div>
   )
 }
 
