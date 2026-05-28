@@ -413,7 +413,7 @@ function InventoryTab() {
 // ── Sub-components ───────────────────────────────────────────
 
 function fmt(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
 function Cell({ children, w, right }: { children?: React.ReactNode; w: number; right?: boolean }) {
