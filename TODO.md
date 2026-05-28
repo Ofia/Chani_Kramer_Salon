@@ -1,3 +1,16 @@
+## Deployment — Live on Railway + Vercel ✓
+
+**Status:** Fully deployed and working as of 2026-05-20.
+- Backend: Railway (FastAPI + uvicorn, `$PORT` env var)
+- Frontend: Vercel (React/Vite, SPA rewrites via `vercel.json`)
+- DB + Auth: Supabase (unchanged)
+
+**Known production quirk:** Railway cold-starts sometimes return an HTML page with HTTP 200 for the first few requests. All list queries are guarded with `Array.isArray(r.data) ? r.data : []` and single-record queries with `typeof r.data === 'object'` checks. Auth profile fetch has a persistent retry every 3s until it succeeds.
+
+**Open:** Super Board (owner dashboard) tab still not rendering in production sidebar — profile fetch from `/users/me` may be failing silently. Persistent retry added; needs live verification.
+
+---
+
 ## Phase 2 — Roles & In-Salon Workflow
 
 [ ] Create `sales` role — sales floor staff can view wig inventory and log a sale (prints receipt with DaySmart serial, fills in wig details). This eliminates the manual paper receipt step.

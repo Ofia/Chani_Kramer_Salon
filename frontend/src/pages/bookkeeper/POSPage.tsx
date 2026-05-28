@@ -568,10 +568,14 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const showNewRef = useRef(false)
   const [newFirst, setNewFirst] = useState('')
   const [newLast, setNewLast] = useState('')
   const [newPhone, setNewPhone] = useState('')
   const qc = useQueryClient()
+
+  function openNewForm() { showNewRef.current = true; setShowNew(true) }
+  function closeNewForm() { showNewRef.current = false; setShowNew(false) }
 
   const { data: results = [] } = useQuery<Customer[]>({
     queryKey: ['customer-search-pos', query],
@@ -585,8 +589,9 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
     mutationFn: (data: object) => api.post('/customers/', data),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['customer-search-pos'] })
+      qc.invalidateQueries({ queryKey: ['customers'] })
       onSelect(res.data)
-      setShowNew(false); setNewFirst(''); setNewLast(''); setNewPhone('')
+      closeNewForm(); setNewFirst(''); setNewLast(''); setNewPhone('')
       setOpen(false); setQuery('')
     },
   })
@@ -611,7 +616,7 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
           value={open ? query : customer.name}
           onChange={e => { setQuery(e.target.value); onType(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 180)}
+          onBlur={() => setTimeout(() => { if (!showNewRef.current) setOpen(false) }, 180)}
           style={{ ...s.input, border: 'none', flex: 1, padding: '0 4px' }}
           placeholder="Search by name, or type a new name…"
         />
@@ -626,7 +631,7 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
             </button>
           ))}
           {!showNew && (
-            <button onMouseDown={() => setShowNew(true)} style={{ ...s.dropdownItem, color: '#5581B1', fontWeight: 600 }}>
+            <button onMouseDown={() => openNewForm()} style={{ ...s.dropdownItem, color: '#5581B1', fontWeight: 600 }}>
               <Plus size={13} /> Add "{query}" as new customer
             </button>
           )}
@@ -656,7 +661,7 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
                 >
                   {createCustomerMutation.isPending ? 'Saving…' : 'Save Customer'}
                 </button>
-                <button onMouseDown={() => setShowNew(false)} style={{ ...s.ghostBtn, fontSize: 12, padding: '6px 12px' }}>Cancel</button>
+                <button onMouseDown={() => { closeNewForm(); setOpen(false) }} style={{ ...s.ghostBtn, fontSize: 12, padding: '6px 12px' }}>Cancel</button>
               </div>
             </div>
           )}

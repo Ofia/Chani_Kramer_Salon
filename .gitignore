@@ -27,3 +27,6 @@ Thumbs.db
 # Excel / PDF source files (large binaries, not needed in repo)
 Reports_from_Avi/
 test-ui/
+
+# Time tracking (local only)
+dev_time.json
