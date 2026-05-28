@@ -124,3 +124,16 @@ def update_customer(
     db.commit()
     db.refresh(c)
     return c
+
+
+@router.delete("/{customer_id}", status_code=204)
+def delete_customer(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    c = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    db.delete(c)
+    db.commit()

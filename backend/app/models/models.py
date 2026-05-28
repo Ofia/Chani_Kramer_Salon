@@ -360,6 +360,7 @@ class WigPayment(Base):
 
     id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     wig_order_id  = Column(UUID(as_uuid=True), ForeignKey("wig_orders.id", ondelete="CASCADE"), nullable=False)
+    pos_sale_id   = Column(UUID(as_uuid=True), ForeignKey("pos_sales.id", ondelete="SET NULL"), nullable=True)
     payment_date  = Column(Date, nullable=False)
     amount        = Column(Numeric(10, 2), nullable=False)
     payment_method = Column(Enum(PaymentMethod, name='payment_method'), nullable=False)

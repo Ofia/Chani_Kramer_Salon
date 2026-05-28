@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote, History } from 'lucide-react'
+import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote, History, Trash2 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -48,6 +48,14 @@ export default function CustomersPage() {
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
     queryKey: ['customers', search],
     queryFn: () => api.get(`/customers/${search ? `?search=${encodeURIComponent(search)}` : ''}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/customers/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] })
+      setSelected(null)
+    },
   })
 
   const notesMutation = useMutation({
@@ -119,6 +127,7 @@ export default function CustomersPage() {
                 <Cell w={140}>Phone</Cell>
                 <Cell w={140}>City</Cell>
                 <Cell w={120}>Since</Cell>
+                <Cell w={36} />
               </div>
               {customers.map((c, i) => (
                 <div
@@ -142,6 +151,19 @@ export default function CustomersPage() {
                   </Cell>
                   <Cell w={120}>
                     <span style={s.muted}>{fmtDate(c.created_at)}</span>
+                  </Cell>
+                  <Cell w={36}>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (!confirm(`Delete ${c.first_name} ${c.last_name}? This cannot be undone.`)) return
+                        deleteMutation.mutate(c.id)
+                      }}
+                      style={s.deleteRowBtn}
+                      title="Delete customer"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </Cell>
                 </div>
               ))}
@@ -581,6 +603,7 @@ const s: Record<string, React.CSSProperties> = {
   tableRow:  { display: 'flex', gap: 12, padding: '12px 16px', transition: 'background 0.1s' },
 
   custName:  { fontSize: 13, fontWeight: 600, color: '#18181b' },
+  deleteRowBtn: { background: 'none', border: 'none', cursor: 'pointer', color: '#a1a1aa', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' },
   muted:     { fontSize: 12, color: '#71717a', margin: 0 },
 
   empty:     { padding: '60px 0', textAlign: 'center' },

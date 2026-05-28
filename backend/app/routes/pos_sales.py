@@ -26,7 +26,7 @@ from app.models.models import (
     PosItemType, WigStatus, WigPaymentType, PaymentMethod, User,
 )
 from app.schemas.schemas import (
-    PosSaleCreate, PosSaleResponse, DailyAutoFillResponse,
+    PosSaleCreate, PosSaleResponse, DailyAutoFillResponse, WigBalancePaymentIn,
 )
 from app.core.security import get_current_user
 
@@ -42,8 +42,10 @@ def create_pos_sale(
     current_user: User = Depends(get_current_user),
 ):
     # 1. Compute totals
-    total = sum(item.subtotal for item in data.items)
-    paid  = sum(p.amount for p in data.payments)
+    #    Cart items + wig balance payments are separate buckets.
+    wig_balance_total = sum(wbp.amount for wbp in data.wig_balance_payments)
+    total = sum(item.subtotal for item in data.items) + wig_balance_total
+    paid  = sum(p.amount for p in data.payments) + wig_balance_total
 
     # 2. Create the sale header
     sale = PosSale(
@@ -135,7 +137,7 @@ def create_pos_sale(
 
         db.add(item)
 
-    # 4. Record payments
+    # 4. Record cart payments
     for pmt_data in data.payments:
         pmt = PosSalePayment(
             pos_sale_id    = sale.id,
@@ -143,6 +145,40 @@ def create_pos_sale(
             amount         = pmt_data.amount,
         )
         db.add(pmt)
+
+    # 5. Process wig balance payments (returning customer paying off existing orders).
+    #    Each one: updates the WigOrder, creates a WigPayment, and adds a PosSalePayment
+    #    so it appears in the daily panel and auto-fill naturally.
+    for wbp in data.wig_balance_payments:
+        wig = db.query(WigOrder).filter(WigOrder.id == wbp.wig_order_id).first()
+        if not wig:
+            continue
+
+        balance  = wig.total_price - wig.amount_paid
+        pay_type = WigPaymentType.final if wbp.amount >= balance else WigPaymentType.partial
+
+        wig_pmt = WigPayment(
+            wig_order_id   = wig.id,
+            pos_sale_id    = sale.id,   # marks it as captured via POS — excluded from direct_wig_pmts loop
+            payment_date   = data.sale_date,
+            amount         = wbp.amount,
+            payment_method = wbp.payment_method,
+            payment_type   = pay_type,
+        )
+        db.add(wig_pmt)
+
+        wig.amount_paid += wbp.amount
+        if wig.amount_paid >= wig.total_price:
+            wig.status      = WigStatus.paid_in_full
+            wig.pickup_date = data.sale_date
+
+        # Add to sale's payment records so the daily panel and receipt show it
+        sale_pmt = PosSalePayment(
+            pos_sale_id    = sale.id,
+            payment_method = wbp.payment_method,
+            amount         = wbp.amount,
+        )
+        db.add(sale_pmt)
 
     db.commit()
     db.refresh(sale)
@@ -241,6 +277,7 @@ def auto_fill(
     direct_wig_pmts = (
         db.query(WigPayment)
         .filter(WigPayment.payment_date == target_date)
+        .filter(WigPayment.pos_sale_id == None)  # exclude those already captured via POS sale payments
         .all()
     )
     for wp in direct_wig_pmts:

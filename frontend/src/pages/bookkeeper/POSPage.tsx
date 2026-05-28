@@ -66,6 +66,14 @@ type Payment = {
   amount: string
 }
 
+type StagedWigPayment = {
+  wigId: string
+  wigName: string   // display label (brand · serial)
+  balance: number   // current balance due before this payment
+  amount: number    // amount being paid now
+  method: string
+}
+
 type WigPaymentRecord = {
   id: string
   payment_date: string
@@ -171,6 +179,7 @@ export default function POSPage() {
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
+  const [stagedWigPayments, setStagedWigPayments] = useState<StagedWigPayment[]>([])
 
   const qc = useQueryClient()
 
@@ -192,6 +201,7 @@ export default function POSPage() {
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
       setNotes('')
+      setStagedWigPayments([])
     },
   })
 
@@ -268,7 +278,8 @@ export default function POSPage() {
   // ── Save ──────────────────────────────────────────────────
 
   function handleSave() {
-    if (!customer.name.trim() || cart.length === 0) return
+    if (!customer.name.trim()) return
+    if (cart.length === 0 && stagedWigPayments.length === 0) return
 
     const items = cart.map(i => ({
       item_type: i.item_type,
@@ -300,10 +311,15 @@ export default function POSPage() {
       notes: notes || undefined,
       items,
       payments: pmts,
+      wig_balance_payments: stagedWigPayments.map(sp => ({
+        wig_order_id: sp.wigId,
+        amount: sp.amount,
+        payment_method: sp.method,
+      })),
     })
   }
 
-  const canSave = customer.name.trim() && cart.length > 0 && !saveMutation.isPending
+  const canSave = customer.name.trim() && (cart.length > 0 || stagedWigPayments.length > 0) && !saveMutation.isPending
 
   return (
     <div style={s.pageLayout}>
@@ -339,7 +355,13 @@ export default function POSPage() {
           <PendingOrdersPanel
             customerId={customer.id}
             saleDate={saleDate}
-            onReceiptReady={setReceiptWig}
+            staged={stagedWigPayments}
+            onStage={sp => setStagedWigPayments(prev =>
+              prev.some(x => x.wigId === sp.wigId)
+                ? prev.map(x => x.wigId === sp.wigId ? sp : x)
+                : [...prev, sp]
+            )}
+            onUnstage={wigId => setStagedWigPayments(prev => prev.filter(x => x.wigId !== wigId))}
           />
         )}
 
@@ -371,6 +393,28 @@ export default function POSPage() {
             </div>
           )}
         </Section>
+
+        {/* ── Staged wig balance payments ── */}
+        {stagedWigPayments.length > 0 && (
+          <div style={s.stagedSection}>
+            <p style={s.stagedTitle}>
+              <CreditCard size={12} style={{ marginRight: 5 }} />
+              Wig Balance Payments
+            </p>
+            {stagedWigPayments.map(sp => (
+              <div key={sp.wigId} style={s.stagedRow}>
+                <div style={{ flex: 1 }}>
+                  <span style={s.stagedName}>{sp.wigName}</span>
+                  <span style={s.stagedMeta}>{METHOD_LABEL[sp.method]} · Was due ${sp.balance.toFixed(2)}</span>
+                </div>
+                <span style={s.stagedAmt}>${sp.amount.toFixed(2)}</span>
+                <button onClick={() => setStagedWigPayments(p => p.filter(x => x.wigId !== sp.wigId))} style={s.iconBtn}>
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* ── Payments ── */}
         <Section title="Payment">
@@ -453,7 +497,7 @@ export default function POSPage() {
 
       {/* ── Receipt Modal (new POS sale) ── */}
       {receiptSale && (
-        <ReceiptModal sale={receiptSale} onClose={() => setReceiptSale(null)} />
+        <ReceiptModal sale={receiptSale} wigPayments={stagedWigPayments} onClose={() => setReceiptSale(null)} />
       )}
 
       {/* ── Receipt Modal (wig balance payment) ── */}
@@ -816,13 +860,14 @@ function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => vo
 
 // ── Pending Orders Panel ──────────────────────────────────────
 
-function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
+function PendingOrdersPanel({ customerId, saleDate, staged, onStage, onUnstage }: {
   customerId: string
   saleDate: string
-  onReceiptReady: (wig: WigOrder) => void
+  staged: StagedWigPayment[]
+  onStage: (sp: StagedWigPayment) => void
+  onUnstage: (wigId: string) => void
 }) {
-  const qc = useQueryClient()
-  const [payingWigId, setPayingWigId] = useState<string | null>(null)
+  const [openId, setOpenId]     = useState<string | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('cash')
 
@@ -835,24 +880,22 @@ function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
     enabled: !!customerId,
   })
 
-  const payMutation = useMutation({
-    mutationFn: ({ wigId, data }: { wigId: string; data: object }) =>
-      api.post(`/wig-orders/${wigId}/payments`, data),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['pending-wigs', customerId] })
-      qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
-      qc.invalidateQueries({ queryKey: ['pos-auto-fill'] })
-      setPayingWigId(null)
-      setPayAmount('')
-      setPayMethod('cash')
-      // Show receipt if wig is now paid in full
-      if (res.data?.status === 'paid_in_full') {
-        onReceiptReady(res.data)
-      }
-    },
-  })
-
   if (isLoading || openWigs.length === 0) return null
+
+  function openForm(wig: WigOrder) {
+    setOpenId(wig.id)
+    setPayAmount(Number(wig.balance_due).toFixed(2))
+    setPayMethod('cash')
+  }
+
+  function stagePayment(wig: WigOrder) {
+    const amt = parseFloat(payAmount)
+    if (!amt || amt <= 0) return
+    const wigName = [wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'
+    onStage({ wigId: wig.id, wigName, balance: Number(wig.balance_due), amount: amt, method: payMethod })
+    setOpenId(null)
+    setPayAmount('')
+  }
 
   return (
     <div style={s.pendingPanel}>
@@ -862,16 +905,16 @@ function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
       </p>
 
       {openWigs.map(wig => {
-        const balance = Number(wig.balance_due)
-        const isPaying = payingWigId === wig.id
+        const balance    = Number(wig.balance_due)
+        const isOpen     = openId === wig.id
+        const isStaged   = staged.some(x => x.wigId === wig.id)
+        const wigName    = [wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'
 
         return (
           <div key={wig.id} style={s.pendingRow}>
             {/* Wig summary */}
             <div style={{ flex: 1 }}>
-              <div style={s.pendingWigName}>
-                {[wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'}
-              </div>
+              <div style={s.pendingWigName}>{wigName}</div>
               <div style={s.pendingWigMeta}>
                 Total ${Number(wig.total_price).toFixed(2)} · Paid ${Number(wig.amount_paid).toFixed(2)}
               </div>
@@ -880,18 +923,19 @@ function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
             {/* Balance + action */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={s.pendingBalance}>Due ${balance.toFixed(2)}</span>
-              {!isPaying && (
-                <button
-                  onClick={() => { setPayingWigId(wig.id); setPayAmount(balance.toFixed(2)) }}
-                  style={s.payBalanceBtn}
-                >
-                  Pay Balance
-                </button>
+              {!isOpen && !isStaged && (
+                <button onClick={() => openForm(wig)} style={s.payBalanceBtn}>Pay Balance</button>
+              )}
+              {isStaged && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>Staged ✓</span>
+                  <button onClick={() => onUnstage(wig.id)} style={{ ...s.ghostBtn, padding: '3px 8px', fontSize: 11 }}>Remove</button>
+                </div>
               )}
             </div>
 
-            {/* Inline payment form */}
-            {isPaying && (
+            {/* Inline form — enter amount + method, then "Add to Sale" */}
+            {isOpen && (
               <div style={s.pendingPayForm}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
@@ -906,27 +950,13 @@ function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
                       style={s.moneyInput} />
                   </div>
                   <button
-                    onClick={() => {
-                      const amt = parseFloat(payAmount)
-                      if (!amt || amt <= 0) return
-                      payMutation.mutate({
-                        wigId: wig.id,
-                        data: {
-                          payment_date: saleDate,
-                          amount: amt,
-                          payment_method: payMethod,
-                          payment_type: amt >= balance ? 'final' : 'partial',
-                        },
-                      })
-                    }}
-                    disabled={payMutation.isPending || !payAmount}
+                    onClick={() => stagePayment(wig)}
+                    disabled={!payAmount || parseFloat(payAmount) <= 0}
                     style={s.primaryBtn}
                   >
-                    {payMutation.isPending ? 'Saving…' : 'Record'}
+                    Add to Sale
                   </button>
-                  <button onClick={() => { setPayingWigId(null); setPayAmount('') }} style={s.ghostBtn}>
-                    Cancel
-                  </button>
+                  <button onClick={() => setOpenId(null)} style={s.ghostBtn}>Cancel</button>
                 </div>
                 {parseFloat(payAmount) > 0 && parseFloat(payAmount) < balance && (
                   <p style={{ fontSize: 11, color: '#71717a', marginTop: 6 }}>
@@ -935,7 +965,7 @@ function PendingOrdersPanel({ customerId, saleDate, onReceiptReady }: {
                 )}
                 {parseFloat(payAmount) >= balance && (
                   <p style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 6 }}>
-                    Paid in full — receipt will be generated
+                    Paid in full — will save with the sale
                   </p>
                 )}
               </div>
@@ -1101,7 +1131,7 @@ function WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void 
 
 // ── Receipt Modal ─────────────────────────────────────────────
 
-function ReceiptModal({ sale, onClose }: { sale: PosSale; onClose: () => void }) {
+function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigPayments?: StagedWigPayment[]; onClose: () => void }) {
   const printRef = useRef<HTMLDivElement>(null)
 
   function handlePrint() {
@@ -1224,6 +1254,28 @@ function ReceiptModal({ sale, onClose }: { sale: PosSale; onClose: () => void })
                     <td style={r.td}>{item.wig_size || '—'}</td>
                     <td style={r.td}>{item.wig_front || '—'}</td>
                     <td style={{ ...r.td, textAlign: 'right', fontWeight: 700 }}>${item.subtotal.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Wig balance payments on this receipt */}
+          {wigPayments.length > 0 && (
+            <table style={{ marginBottom: 16 }}>
+              <thead>
+                <tr>
+                  {['Wig Balance Payment', 'Method', 'Amount'].map(h => (
+                    <th key={h} style={r.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {wigPayments.map(wp => (
+                  <tr key={wp.wigId}>
+                    <td style={r.td}>{wp.wigName}</td>
+                    <td style={r.td}>{METHOD_LABEL[wp.method] || wp.method}</td>
+                    <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${wp.amount.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1411,6 +1463,14 @@ const s: Record<string, React.CSSProperties> = {
   deleteConfirmBtn: { padding: '5px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
+
+  // Staged wig balance payments summary
+  stagedSection:  { marginBottom: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12 },
+  stagedTitle:    { display: 'flex', alignItems: 'center', fontSize: 11, fontWeight: 700, color: '#14532d', textTransform: 'uppercase' as const, letterSpacing: '0.05em', margin: '0 0 8px' },
+  stagedRow:      { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, background: '#fff', borderRadius: 7, padding: '7px 10px', border: '1px solid rgba(0,0,0,0.07)' },
+  stagedName:     { fontSize: 12, fontWeight: 600, color: '#18181b', display: 'block' },
+  stagedMeta:     { fontSize: 11, color: '#71717a', display: 'block' },
+  stagedAmt:      { fontSize: 13, fontWeight: 700, color: '#15803d', flexShrink: 0 },
 
   // Pending orders panel
   pendingPanel:  { marginBottom: 22, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 14 },

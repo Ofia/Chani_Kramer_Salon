@@ -555,14 +555,21 @@ class PosSaleItemResponse(BaseModel):
         from_attributes = True
 
 
+class WigBalancePaymentIn(BaseModel):
+    wig_order_id: UUID
+    amount: Decimal
+    payment_method: PaymentMethod
+
+
 class PosSaleCreate(BaseModel):
     customer_id: Optional[UUID] = None
     customer_name: str
     customer_phone: Optional[str] = None
     sale_date: date
     notes: Optional[str] = None
-    items: List[PosSaleItemCreate]
+    items: List[PosSaleItemCreate] = []
     payments: List[PosSalePaymentCreate] = []
+    wig_balance_payments: List[WigBalancePaymentIn] = []
 
 
 class PosSaleResponse(BaseModel):
