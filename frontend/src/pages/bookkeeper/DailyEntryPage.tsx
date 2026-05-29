@@ -229,7 +229,7 @@ export default function DailyEntryPage() {
     mutationFn: (data: object) =>
       existing
         ? api.patch(`/daily-summary/${summaryDate}`, data)
-        : api.post('/daily-summary', data),
+        : api.post('/daily-summary/', data),
     onSuccess: () => {
       setSaved(true)
       qc.invalidateQueries({ queryKey: ['daily-summary'] })
