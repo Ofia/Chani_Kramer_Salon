@@ -98,12 +98,19 @@ export default function ExpensesPage() {
 
   // ── Mutations ────────────────────────────────────────────────
 
+  const [createError, setCreateError] = useState<string | null>(null)
+
   const createMutation = useMutation({
-    mutationFn: (data: object) => api.post('/expenses', data),
+    mutationFn: (data: object) => api.post('/expenses/', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses-daily'] })
       setForm(EMPTY)
       setShowForm(false)
+      setCreateError(null)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail ?? err?.message ?? 'Failed to save expense'
+      setCreateError(typeof msg === 'string' ? msg : JSON.stringify(msg))
     },
   })
 
@@ -221,11 +228,12 @@ export default function ExpensesPage() {
                 <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} style={s.input} placeholder="Optional" />
               </div>
             </div>
+            {createError && <p style={s.errorMsg}>{createError}</p>}
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button type="submit" disabled={createMutation.isPending} style={s.submitBtn}>
                 {createMutation.isPending ? 'Saving…' : 'Add Expense'}
               </button>
-              <button type="button" onClick={() => setShowForm(false)} style={s.cancelFormBtn}>Cancel</button>
+              <button type="button" onClick={() => { setShowForm(false); setCreateError(null) }} style={s.cancelFormBtn}>Cancel</button>
             </div>
           </form>
         </div>
@@ -314,6 +322,7 @@ const s: Record<string, React.CSSProperties> = {
   moneySym:  { padding: '7px 8px', color: 'rgba(13,13,13,0.4)', fontSize: 12, borderRight: '1px solid rgba(13,13,13,0.08)' },
   moneyInput:{ flex: 1, border: 'none', padding: '7px 8px', fontSize: 13, color: '#0d0d0d', outline: 'none', background: 'transparent', fontFamily: "'Inter', sans-serif" },
   submitBtn: { padding: '7px 18px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', background: '#212121', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
+  errorMsg:  { fontSize: 12, color: '#dc2626', margin: '0 0 8px', padding: '8px 10px', background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca' },
 
   muted:        { color: 'rgba(13,13,13,0.42)', fontSize: 14 },
   sectionLabel: { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.35)', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' },

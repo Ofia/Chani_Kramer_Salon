@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { Trash2 } from 'lucide-react'
 
 // ── Date helpers ─────────────────────────────────────────────
 
@@ -126,6 +127,20 @@ export default function PayrollEntryPage() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/payroll/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payroll-weekly'] })
+    },
+  })
+
+  function handleDeleteEntry(emp: any) {
+    const existingEntry = (existingData as any[] ?? []).find((e: any) => e.employee_id === emp.id)
+    if (!existingEntry) return
+    deleteMutation.mutate(existingEntry.id)
+    setAmounts(prev => { const next = { ...prev }; delete next[emp.id]; return next })
+  }
+
   function handleCancel() {
     const map: Record<string, string> = {}
     ;(existingData as any[] ?? []).forEach((e: any) => { map[e.employee_id] = Number(e.amount).toFixed(2) })
@@ -227,14 +242,26 @@ export default function PayrollEntryPage() {
                 <span style={s.empName}>{emp.first_name} {emp.last_name}</span>
                 <span style={s.empRole}>{emp.job_title}</span>
                 {isEditing ? (
-                  <div style={s.moneyCell}>
-                    <span style={s.moneySym}>$</span>
-                    <input
-                      type="number" min="0" step="0.01"
-                      value={amounts[emp.id] || ''}
-                      onChange={e => setAmounts(prev => ({ ...prev, [emp.id]: e.target.value }))}
-                      style={s.moneyInput} placeholder="0.00"
-                    />
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                    <div style={s.moneyCell}>
+                      <span style={s.moneySym}>$</span>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={amounts[emp.id] || ''}
+                        onChange={e => setAmounts(prev => ({ ...prev, [emp.id]: e.target.value }))}
+                        style={s.moneyInput} placeholder="0.00"
+                      />
+                    </div>
+                    {(existingData as any[] ?? []).find((e: any) => e.employee_id === emp.id) && (
+                      <button
+                        onClick={() => handleDeleteEntry(emp)}
+                        disabled={deleteMutation.isPending}
+                        style={s.deleteBtn}
+                        title="Delete entry"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <span style={s.amountView}>
@@ -362,7 +389,8 @@ const s: Record<string, React.CSSProperties> = {
   amountView:  { flex: 1, textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em' },
   amountEmpty: { fontSize: 13, color: 'rgba(13,13,13,0.2)', fontWeight: 400 },
 
-  moneyCell:  { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, overflow: 'hidden', maxWidth: 120, background: '#fafaf9', marginLeft: 'auto' },
+  moneyCell:  { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, overflow: 'hidden', width: 120, background: '#fafaf9' },
+  deleteBtn:  { background: 'none', border: 'none', color: 'rgba(13,13,13,0.25)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6, flexShrink: 0 },
   moneySym:   { padding: '5px 8px', color: 'rgba(13,13,13,0.4)', fontSize: 12, borderRight: '1px solid rgba(13,13,13,0.07)' },
   moneyInput: { flex: 1, border: 'none', padding: '5px 8px', fontSize: 13, color: '#0d0d0d', outline: 'none', background: 'transparent', fontFamily: "'Inter', sans-serif", width: 70 },
 
