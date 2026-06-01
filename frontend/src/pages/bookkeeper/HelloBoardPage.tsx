@@ -24,14 +24,6 @@ interface Notification {
   created_at: string
 }
 
-interface Checkin {
-  id: string
-  user_id: string
-  user_name: string
-  date: string
-  checked_in_at: string
-}
-
 interface Employee {
   id: string
   first_name: string
