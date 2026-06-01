@@ -87,12 +87,18 @@ function EmployeeRow({
       setCash(entry.cash_amount > 0 ? entry.cash_amount.toFixed(2) : '')
       setNotes(entry.notes ?? '')
     } else {
-      setTotal('')
+      // Auto-fill from clock data or weekly rate — still editable
+      const suggested =
+        hours?.suggested_pay != null ? hours.suggested_pay   // hourly: hours × rate
+        : emp.pay_type === 'weekly_flat' && emp.weekly_rate   // flat: fixed weekly rate
+          ? Number(emp.weekly_rate)
+          : null
+      setTotal(suggested != null ? suggested.toFixed(2) : '')
       setCash('')
       setNotes('')
     }
     setError('')
-  }, [entry, weekStart])
+  }, [entry, weekStart, hours])
 
   const totalNum = parseFloat(total) || 0
   const cashNum  = parseFloat(cash)  || 0
@@ -153,11 +159,6 @@ function EmployeeRow({
     mutationFn: () => api.delete(`/payroll/${entry!.id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); setOpen(false) },
   })
-
-  function applySuggested() {
-    if (!hours?.suggested_pay) return
-    setTotal(hours.suggested_pay.toFixed(2))
-  }
 
   return (
     <div style={{ borderBottom: '1px solid rgba(13,13,13,0.06)' }}>
@@ -234,13 +235,15 @@ function EmployeeRow({
       {open && !isPaid && (
         <div style={s.expandPanel}>
 
-          {/* Suggested pay pill */}
-          {hours?.suggested_pay != null && (
+          {/* Clock log info line */}
+          {hours && (
             <div style={s.suggestRow}>
-              <span style={s.suggestLabel}>Hourly suggestion:</span>
-              <button onClick={applySuggested} style={s.suggestPill}>
-                {fmt(hours.suggested_pay)} ({hours.total_hours}h × ${hours.hourly_rate}/h)
-              </button>
+              <Clock size={11} color="#5581B1" />
+              <span style={s.suggestLabel}>
+                {hours.total_hours}h logged this week
+                {hours.suggested_pay != null && ` · ${fmt(hours.suggested_pay)} at $${hours.hourly_rate}/h`}
+                {emp.pay_type === 'weekly_flat' && emp.weekly_rate && ` · flat rate ${fmt(emp.weekly_rate)}`}
+              </span>
             </div>
           )}
 
