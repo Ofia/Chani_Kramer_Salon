@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import WeeklyPayroll, Employee, User
+from app.models.models import WeeklyPayroll, Employee, User, PayrollStatus
 from app.schemas.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
 from app.core.security import get_current_user
 
@@ -108,3 +108,37 @@ def delete_payroll_entry(
         raise HTTPException(status_code=404, detail="Payroll entry not found")
     db.delete(entry)
     db.commit()
+
+
+@router.post("/{payroll_id}/mark-paid", response_model=PayrollResponse)
+def mark_paid(
+    payroll_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a payroll entry as paid (sets status=paid and stamps paid_at)."""
+    entry = db.query(WeeklyPayroll).filter(WeeklyPayroll.id == payroll_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Payroll entry not found")
+    entry.status  = PayrollStatus.paid
+    entry.paid_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+@router.post("/{payroll_id}/mark-pending", response_model=PayrollResponse)
+def mark_pending(
+    payroll_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Undo a paid mark — resets status back to pending."""
+    entry = db.query(WeeklyPayroll).filter(WeeklyPayroll.id == payroll_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Payroll entry not found")
+    entry.status  = PayrollStatus.pending
+    entry.paid_at = None
+    db.commit()
+    db.refresh(entry)
+    return entry

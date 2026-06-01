@@ -38,6 +38,10 @@ class PayType(str, enum.Enum):
     commission_pct = "commission_pct"
     hourly = "hourly"
 
+class PayrollStatus(str, enum.Enum):
+    pending = "pending"
+    paid    = "paid"
+
 class PaymentMethod(str, enum.Enum):
     cash = "cash"
     credit_card = "credit_card"
@@ -253,6 +257,10 @@ class WeeklyPayroll(Base):
     week_end          = Column(Date, nullable=False)
     employee_id       = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="RESTRICT"), nullable=False)
     amount            = Column(Numeric(10, 2), nullable=False)
+    cash_amount       = Column(Numeric(10, 2), nullable=False, default=0)
+    bank_amount       = Column(Numeric(10, 2), nullable=False, default=0)
+    status            = Column(String, nullable=False, default=PayrollStatus.pending)
+    paid_at           = Column(DateTime(timezone=True), nullable=True)
     pay_type_snapshot = Column(Enum(PayType), nullable=False)
     notes             = Column(Text)
     entered_by        = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))

@@ -21,7 +21,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.models.models import (
     UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
-    WigStatus, WigPaymentType, PosItemType
+    WigStatus, WigPaymentType, PosItemType, PayrollStatus
 )
 
 
@@ -299,12 +299,18 @@ class PayrollCreate(BaseModel):
     week_end: date
     employee_id: UUID
     amount: Decimal
+    cash_amount: Decimal = Decimal("0")
+    bank_amount: Decimal = Decimal("0")
     pay_type_snapshot: PayType
     notes: Optional[str] = None
 
 
 class PayrollUpdate(BaseModel):
     amount: Optional[Decimal] = None
+    cash_amount: Optional[Decimal] = None
+    bank_amount: Optional[Decimal] = None
+    status: Optional[PayrollStatus] = None
+    paid_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 
@@ -314,6 +320,10 @@ class PayrollResponse(BaseModel):
     week_end: date
     employee_id: UUID
     amount: float
+    cash_amount: float
+    bank_amount: float
+    status: str
+    paid_at: Optional[datetime]
     pay_type_snapshot: PayType
     notes: Optional[str]
     created_at: datetime
