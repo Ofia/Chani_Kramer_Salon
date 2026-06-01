@@ -702,3 +702,40 @@ class CustomerHistoryResponse(BaseModel):
     """
     pos_sales: List[PosSaleResponse]
     direct_wig_orders: List[WigOrderResponse]
+
+
+# ── Employee Time Logs ────────────────────────────────────────
+
+class TimeLogClockIn(BaseModel):
+    employee_id: UUID
+    notes: Optional[str] = None
+
+
+class TimeLogClockOut(BaseModel):
+    notes: Optional[str] = None
+
+
+class TimeLogResponse(BaseModel):
+    id: UUID
+    employee_id: UUID
+    employee_name: str          # first + last, resolved in route
+    clock_in: datetime
+    clock_out: Optional[datetime]
+    date: date
+    hours: Optional[float]      # None while still clocked in
+    logged_by: Optional[UUID]
+    notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WeekHoursSummaryItem(BaseModel):
+    """Hours worked by one employee for a given week."""
+    employee_id: UUID
+    employee_name: str
+    pay_type: PayType
+    hourly_rate: Optional[float]
+    total_hours: float
+    suggested_pay: Optional[float]  # hours × rate for hourly employees; None otherwise

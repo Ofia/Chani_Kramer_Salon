@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Pin, PinOff, Plus, LogIn, LogOut, CalendarDays, Cloud, Send } from 'lucide-react'
+import { Trash2, Pin, PinOff, Plus, LogIn, LogOut, CalendarDays, Cloud, Send, Clock } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 
@@ -30,6 +30,24 @@ interface Checkin {
   user_name: string
   date: string
   checked_in_at: string
+}
+
+interface Employee {
+  id: string
+  first_name: string
+  last_name: string
+  job_title: string
+  is_active: boolean
+}
+
+interface TimeLog {
+  id: string
+  employee_id: string
+  employee_name: string
+  clock_in: string
+  clock_out: string | null
+  date: string
+  hours: number | null
 }
 
 interface Weather {
@@ -434,70 +452,119 @@ function NotificationsWidget() {
   )
 }
 
-// ── Check-in Widget ───────────────────────────────────────────
+// ── Employee Clock-In Widget ──────────────────────────────────
 
 function CheckinWidget() {
-  const { profile } = useAuth()
   const qc = useQueryClient()
+  const [selectedId, setSelectedId] = useState('')
+  const [error, setError] = useState('')
 
-  const { data: checkins = [] } = useQuery<Checkin[]>({
-    queryKey: ['checkins-today'],
-    queryFn: () => api.get('/checkins/today').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['employees-active'],
+    queryFn: () => api.get('/employees/?active_only=true').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+  })
+
+  const { data: logs = [] } = useQuery<TimeLog[]>({
+    queryKey: ['time-logs-today'],
+    queryFn: () => api.get('/time-logs/today').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     refetchInterval: 60000,
   })
 
-  const checkInMutation = useMutation({
-    mutationFn: () => api.post('/checkins/', {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkins-today'] }),
+  const clockInMutation = useMutation({
+    mutationFn: (employee_id: string) => api.post('/time-logs/clock-in', { employee_id }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['time-logs-today'] }); setSelectedId(''); setError('') },
+    onError: (e: any) => setError(e?.response?.data?.detail ?? 'Clock-in failed'),
   })
 
-  const checkOutMutation = useMutation({
-    mutationFn: () => api.delete('/checkins/today'),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['checkins-today'] }),
+  const clockOutMutation = useMutation({
+    mutationFn: (employee_id: string) => api.post(`/time-logs/clock-out/${employee_id}`, {}),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['time-logs-today'] }); setError('') },
+    onError: (e: any) => setError(e?.response?.data?.detail ?? 'Clock-out failed'),
   })
 
-  const myCheckin = checkins.find(c => c.user_id === profile?.id)
+  // employees currently clocked in (open log = no clock_out)
+  const openLogs = logs.filter(l => !l.clock_out)
+  const openIds  = new Set(openLogs.map(l => l.employee_id))
+
+  const selectedIsIn = selectedId ? openIds.has(selectedId) : false
+
+  function handleAction() {
+    if (!selectedId) return
+    setError('')
+    if (selectedIsIn) {
+      clockOutMutation.mutate(selectedId)
+    } else {
+      clockInMutation.mutate(selectedId)
+    }
+  }
 
   return (
     <div style={{ ...w.card, borderTop: '3px solid #5581B1' }}>
       <div style={w.widgetHeader}>
         <span style={w.widgetTitle}>Who's In</span>
-        <span style={w.widgetSub}>{checkins.length} today</span>
+        <span style={w.widgetSub}>{openLogs.length} clocked in</span>
       </div>
 
-      {/* My status */}
-      <div style={{ ...w.checkinStatus, background: myCheckin ? 'rgba(85,129,177,0.07)' : '#fafaf9' }}>
-        <div style={{ ...w.statusDot, background: myCheckin ? '#22c55e' : 'rgba(13,13,13,0.2)' }} />
-        <span style={w.statusText}>
-          {myCheckin ? `Checked in at ${checkinTime(myCheckin.checked_in_at)}` : 'You are not checked in'}
-        </span>
-        {myCheckin ? (
-          <button onClick={() => checkOutMutation.mutate()} style={w.checkOutBtn} title="Check out">
-            <LogOut size={12} />
-            Check Out
-          </button>
-        ) : (
-          <button onClick={() => checkInMutation.mutate()} style={w.checkInBtn} title="Check in">
-            <LogIn size={12} />
-            Check In
-          </button>
-        )}
+      {/* Dropdown + action */}
+      <div style={w.clockRow}>
+        <select
+          value={selectedId}
+          onChange={e => { setSelectedId(e.target.value); setError('') }}
+          style={w.empSelect}
+        >
+          <option value="">Select employee…</option>
+          {[...employees]
+            .sort((a, b) => a.first_name.localeCompare(b.first_name))
+            .map(emp => (
+              <option key={emp.id} value={emp.id}>
+                {emp.first_name} {emp.last_name}
+                {openIds.has(emp.id) ? ' ✓' : ''}
+              </option>
+            ))
+          }
+        </select>
+        <button
+          onClick={handleAction}
+          disabled={!selectedId || clockInMutation.isPending || clockOutMutation.isPending}
+          style={{
+            ...(selectedIsIn ? w.checkOutBtn : w.checkInBtn),
+            opacity: !selectedId ? 0.45 : 1,
+          }}
+        >
+          {selectedIsIn ? <><LogOut size={12} /> Clock Out</> : <><LogIn size={12} /> Clock In</>}
+        </button>
       </div>
 
-      {/* Everyone in today */}
-      {checkins.length > 0 && (
+      {error && <div style={w.clockError}>{error}</div>}
+
+      {/* Grid of who's currently in */}
+      {openLogs.length > 0 && (
         <div style={w.checkinGrid}>
-          {checkins.map(c => {
-            const bg = avatarColor(c.user_name)
-            const fg = avatarText(c.user_name)
+          {openLogs.map(l => {
+            const bg = avatarColor(l.employee_name)
+            const fg = avatarText(l.employee_name)
             return (
-              <div key={c.id} style={w.checkinPerson}>
-                <div style={{ ...w.checkinAvatar, background: bg, color: fg }}>{initials(c.user_name)}</div>
-                <div style={w.checkinName}>{c.user_name.split(' ')[0]}</div>
-                <div style={w.checkinTime}>{checkinTime(c.checked_in_at)}</div>
+              <div key={l.id} style={w.checkinPerson}>
+                <div style={{ ...w.checkinAvatar, background: bg, color: fg }}>{initials(l.employee_name)}</div>
+                <div style={w.checkinName}>{l.employee_name.split(' ')[0]}</div>
+                <div style={w.checkinTime}>{checkinTime(l.clock_in)}</div>
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Compact list of clocked-out employees (left today) */}
+      {logs.filter(l => l.clock_out).length > 0 && (
+        <div style={w.doneSection}>
+          <div style={w.doneSectionLabel}><Clock size={10} color="rgba(13,13,13,0.35)" /> Left today</div>
+          <div style={w.doneList}>
+            {logs.filter(l => l.clock_out).map(l => (
+              <span key={l.id} style={w.doneChip}>
+                {l.employee_name.split(' ')[0]} · {l.hours != null ? `${l.hours}h` : '—'}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -611,7 +678,7 @@ const w: Record<string, React.CSSProperties> = {
   notifBody:       { fontSize: 11, color: 'rgba(13,13,13,0.6)', marginTop: 2 },
   notifDateBadge:  { display: 'inline-block', marginTop: 5, fontSize: 10, fontWeight: 500, color: '#fff', background: '#5581B1', borderRadius: 4, padding: '2px 7px' },
 
-  // Check-in
+  // Check-in (legacy — kept for reference)
   checkinStatus: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 8 },
   statusDot:     { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
   statusText:    { fontSize: 11, color: 'rgba(13,13,13,0.6)', flex: 1 },
@@ -620,6 +687,14 @@ const w: Record<string, React.CSSProperties> = {
   checkinAvatar: { width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 },
   checkinName:   { fontSize: 10, fontWeight: 500, color: '#0d0d0d', textAlign: 'center' as const },
   checkinTime:   { fontSize: 9, color: 'rgba(13,13,13,0.4)', textAlign: 'center' as const },
+  // Employee clock widget
+  clockRow:      { display: 'flex', gap: 8, alignItems: 'center' },
+  empSelect:     { flex: 1, border: BORDER, borderRadius: 7, padding: '7px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit', background: '#fafaf9', color: '#0d0d0d', cursor: 'pointer' },
+  clockError:    { fontSize: 11, color: '#DF5198', padding: '4px 0' },
+  doneSection:   { borderTop: BORDER, paddingTop: 10, display: 'flex', flexDirection: 'column' as const, gap: 6 },
+  doneSectionLabel: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'rgba(13,13,13,0.4)', fontWeight: 500 },
+  doneList:      { display: 'flex', flexWrap: 'wrap' as const, gap: 5 },
+  doneChip:      { fontSize: 10, color: 'rgba(13,13,13,0.55)', background: '#f5f4f2', borderRadius: 5, padding: '3px 8px' },
 
   // Calendar placeholder
   calPlaceholder:     { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px 0' },

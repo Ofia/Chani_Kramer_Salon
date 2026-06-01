@@ -494,6 +494,23 @@ class InventoryItem(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class EmployeeTimeLog(Base):
+    """One row per clock-in event. clock_out is NULL while the employee is still in."""
+    __tablename__ = "employee_time_logs"
+
+    id          = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="RESTRICT"), nullable=False)
+    clock_in    = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    clock_out   = Column(DateTime(timezone=True), nullable=True)
+    date        = Column(Date, nullable=False, server_default=func.current_date())
+    logged_by   = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    notes       = Column(Text)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("Employee", foreign_keys=[employee_id])
+    logger   = relationship("User",     foreign_keys=[logged_by])
+
+
 class AiConversation(Base):
     __tablename__ = "ai_conversations"
 
