@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Plus, Package } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ────────────────────────────────────────────────────
@@ -36,17 +36,6 @@ type WigOrder = {
   payments: WigPayment[]
 }
 
-type InventoryItem = {
-  id: string
-  name: string
-  category?: string
-  quantity: number
-  unit_price: number
-  notes?: string
-  created_at: string
-  updated_at: string
-}
-
 // ── Constants ────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
@@ -68,14 +57,14 @@ const METHOD_LABEL: Record<string, string> = {
 // ── Page ─────────────────────────────────────────────────────
 
 export default function SalesManagementPage() {
-  const [tab, setTab] = useState<'in_progress' | 'completed' | 'inventory'>('in_progress')
+  const [tab, setTab] = useState<'in_progress' | 'completed'>('in_progress')
 
   return (
     <div>
       <header style={s.header}>
         <div>
           <h1 style={s.title}>Sales Management</h1>
-          <p style={s.subtitle}>Wig orders, completed sales, and product inventory</p>
+          <p style={s.subtitle}>Wig orders and completed sales</p>
         </div>
       </header>
 
@@ -83,14 +72,9 @@ export default function SalesManagementPage() {
       <div style={s.tabRow}>
         <TabBtn active={tab === 'in_progress'} onClick={() => setTab('in_progress')}>In Progress</TabBtn>
         <TabBtn active={tab === 'completed'} onClick={() => setTab('completed')}>Completed</TabBtn>
-        <TabBtn active={tab === 'inventory'} onClick={() => setTab('inventory')}>Inventory</TabBtn>
       </div>
 
-      {tab === 'inventory' ? (
-        <InventoryTab />
-      ) : (
-        <WigOrdersTab tab={tab} />
-      )}
+      <WigOrdersTab tab={tab} />
     </div>
   )
 }
@@ -271,161 +255,6 @@ function WigOrdersTab({ tab }: { tab: 'in_progress' | 'completed' }) {
   )
 }
 
-// ── Inventory Tab ────────────────────────────────────────────
-
-const EMPTY_ITEM = { name: '', category: '', quantity: 0, unit_price: '', notes: '' }
-
-function InventoryTab() {
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ ...EMPTY_ITEM })
-  const qc = useQueryClient()
-
-  const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
-    queryKey: ['inventory'],
-    queryFn: () => api.get('/inventory/').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (data: typeof EMPTY_ITEM) => api.post('/inventory/', {
-      ...data,
-      quantity: Number(data.quantity),
-      unit_price: parseFloat(data.unit_price as string) || 0,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory'] })
-      setForm({ ...EMPTY_ITEM })
-      setShowForm(false)
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/inventory/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['inventory'] }),
-  })
-
-  function set(field: string, value: string | number) {
-    setForm(p => ({ ...p, [field]: value }))
-  }
-
-  const totalValue = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-
-  return (
-    <>
-      <div style={{ ...s.statsRow, marginBottom: 20 }}>
-        <StatPill label="SKUs" value={items.length} color="#5581B1" />
-        <StatPill label="Total Stock Value" value={`$${totalValue.toFixed(0)}`} color="#E3CD94" />
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-        <button onClick={() => setShowForm(v => !v)} style={s.addItemBtn}>
-          <Plus size={14} />
-          Add Item
-        </button>
-      </div>
-
-      {showForm && (
-        <div style={s.invFormPanel}>
-          <p style={s.wigFormTitle}>New Inventory Item</p>
-          <div style={s.invFormGrid}>
-            <div style={s.field}>
-              <label style={s.fieldLabel}>Item Name *</label>
-              <input value={form.name} onChange={e => set('name', e.target.value)}
-                style={s.input} placeholder="e.g. Wig brush" />
-            </div>
-            <div style={s.field}>
-              <label style={s.fieldLabel}>Category</label>
-              <input value={form.category} onChange={e => set('category', e.target.value)}
-                style={s.input} placeholder="e.g. Care Products" />
-            </div>
-            <div style={s.field}>
-              <label style={s.fieldLabel}>Quantity</label>
-              <input type="number" min="0" value={form.quantity}
-                onChange={e => set('quantity', e.target.value)}
-                style={s.input} placeholder="0" />
-            </div>
-            <div style={s.field}>
-              <label style={s.fieldLabel}>Unit Price</label>
-              <div style={s.moneyRow}>
-                <span style={s.moneySym}>$</span>
-                <input type="number" min="0" step="0.01" value={form.unit_price}
-                  onChange={e => set('unit_price', e.target.value)}
-                  style={s.moneyInput} placeholder="0.00" />
-              </div>
-            </div>
-          </div>
-          <div style={{ ...s.field, marginTop: 10 }}>
-            <label style={s.fieldLabel}>Notes</label>
-            <input value={form.notes} onChange={e => set('notes', e.target.value)}
-              style={s.input} placeholder="Optional notes" />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button
-              onClick={() => createMutation.mutate(form)}
-              disabled={createMutation.isPending || !form.name}
-              style={s.primaryBtn}
-            >
-              {createMutation.isPending ? 'Saving…' : 'Add Item'}
-            </button>
-            <button onClick={() => setShowForm(false)} style={s.ghostBtn}>Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <p style={{ color: '#71717a', fontSize: 14 }}>Loading…</p>
-      ) : items.length === 0 ? (
-        <div style={s.empty}>
-          <Package size={28} color="#d4d4d8" />
-          <p style={{ ...s.emptyText, marginTop: 10 }}>No inventory items yet. Add your first item above.</p>
-        </div>
-      ) : (
-        <div style={s.table}>
-          <div style={s.tableHead}>
-            <Cell w={200}>Item</Cell>
-            <Cell w={140}>Category</Cell>
-            <Cell w={80} right>Qty</Cell>
-            <Cell w={100} right>Unit Price</Cell>
-            <Cell w={100} right>Stock Value</Cell>
-            <Cell w={36} />
-          </div>
-          {items.map(item => (
-            <div key={item.id} style={s.tableRow}>
-              <Cell w={200}>
-                <span style={s.clientName}>{item.name}</span>
-                {item.notes && <span style={s.phone}>{item.notes}</span>}
-              </Cell>
-              <Cell w={140}>
-                <span style={s.specs}>{item.category || '—'}</span>
-              </Cell>
-              <Cell w={80} right>
-                <span style={{ ...s.price, color: item.quantity === 0 ? '#DF5198' : '#18181b' }}>
-                  {item.quantity}
-                </span>
-              </Cell>
-              <Cell w={100} right>
-                <span style={s.price}>${Number(item.unit_price).toFixed(2)}</span>
-              </Cell>
-              <Cell w={100} right>
-                <span style={s.price}>${(item.quantity * item.unit_price).toFixed(2)}</span>
-              </Cell>
-              <Cell w={36}>
-                <button
-                  onClick={() => { if (confirm(`Delete "${item.name}"?`)) deleteMutation.mutate(item.id) }}
-                  disabled={deleteMutation.isPending}
-                  style={s.deleteBtn}
-                  title="Delete item"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </Cell>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
-
 // ── Sub-components ───────────────────────────────────────────
 
 function fmt(d: string) {
@@ -533,37 +362,4 @@ const s: Record<string, React.CSSProperties> = {
   paymentMethod: { fontSize: 12, color: '#71717a', width: 80 },
   paymentAmount: { fontSize: 13, fontWeight: 600, color: '#18181b', marginLeft: 'auto' },
 
-  // Inventory form
-  addItemBtn: {
-    display: 'flex', alignItems: 'center', gap: 6,
-    padding: '8px 16px', background: '#212121', color: '#fff',
-    border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
-    cursor: 'pointer', fontFamily: 'inherit',
-  },
-  invFormPanel: {
-    background: '#fafaf9', border: '1px solid rgba(0,0,0,0.08)',
-    borderRadius: 12, padding: 20, marginBottom: 20,
-  },
-  invFormGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 },
-  wigFormTitle: { fontSize: 14, fontWeight: 700, color: '#18181b', margin: '0 0 14px' },
-  field: { display: 'flex', flexDirection: 'column', gap: 4 },
-  fieldLabel: { fontSize: 11, fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  input: {
-    padding: '8px 10px', border: '1px solid rgba(0,0,0,0.12)',
-    borderRadius: 7, fontSize: 13, fontFamily: 'inherit',
-    background: '#fff', outline: 'none',
-  },
-  moneyRow: { display: 'flex', alignItems: 'center', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 7, background: '#fff', overflow: 'hidden' },
-  moneySym: { padding: '0 8px', fontSize: 13, color: '#71717a', borderRight: '1px solid rgba(0,0,0,0.08)' },
-  moneyInput: { flex: 1, padding: '8px 10px', border: 'none', fontSize: 13, fontFamily: 'inherit', background: 'transparent', outline: 'none' },
-  primaryBtn: {
-    padding: '8px 18px', background: '#212121', color: '#fff',
-    border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
-    cursor: 'pointer', fontFamily: 'inherit',
-  },
-  ghostBtn: {
-    padding: '8px 18px', background: 'transparent', color: '#71717a',
-    border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, fontSize: 13,
-    cursor: 'pointer', fontFamily: 'inherit',
-  },
 }
