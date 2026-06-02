@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { useAuth } from '../../lib/auth'
 import { Plus, Pencil, UserX, UserCheck, Clock, Trash2, X } from 'lucide-react'
-
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -365,8 +362,6 @@ type TimeLog = {
 }
 
 function TimeLogModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
-  const { session } = useAuth()
-  const token = session?.access_token ?? null
   const qc = useQueryClient()
 
   const [showAdd, setShowAdd] = useState(false)
@@ -375,15 +370,9 @@ function TimeLogModal({ employee, onClose }: { employee: Employee; onClose: () =
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
-  const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-
   const { data: logs = [], isLoading, isError } = useQuery<TimeLog[]>({
     queryKey: ['time-logs-employee', employee.id],
-    queryFn: async () => {
-      const r = await fetch(`${API}/api/v1/time-logs/employee/${employee.id}`, { headers })
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
-      return r.json()
-    },
+    queryFn: () => api.get(`/time-logs/employee/${employee.id}`).then(r => Array.isArray(r.data) ? r.data : []),
   })
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['time-logs-employee', employee.id] }) }
@@ -421,26 +410,27 @@ function TimeLogModal({ employee, onClose }: { employee: Employee; onClose: () =
     setSaving(true); setErr('')
     try {
       if (editId) {
-        const r = await fetch(`${API}/api/v1/time-logs/${editId}`, {
-          method: 'PATCH', headers,
-          body: JSON.stringify({ log_date: form.log_date, clock_in_time: form.clock_in_time, clock_out_time: form.clock_out_time || null }),
+        await api.patch(`/time-logs/${editId}`, {
+          log_date: form.log_date,
+          clock_in_time: form.clock_in_time,
+          clock_out_time: form.clock_out_time || null,
         })
-        if (!r.ok) throw new Error(await r.text())
       } else {
-        const r = await fetch(`${API}/api/v1/time-logs/manual`, {
-          method: 'POST', headers,
-          body: JSON.stringify({ employee_id: employee.id, log_date: form.log_date, clock_in_time: form.clock_in_time, clock_out_time: form.clock_out_time || null }),
+        await api.post('/time-logs/manual', {
+          employee_id: employee.id,
+          log_date: form.log_date,
+          clock_in_time: form.clock_in_time,
+          clock_out_time: form.clock_out_time || null,
         })
-        if (!r.ok) throw new Error(await r.text())
       }
       invalidate(); resetForm()
-    } catch (e: any) { setErr(e.message) }
+    } catch (e: any) { setErr(e.response?.data?.detail ?? e.message) }
     finally { setSaving(false) }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this time entry?')) return
-    await fetch(`${API}/api/v1/time-logs/${id}`, { method: 'DELETE', headers })
+    await api.delete(`/time-logs/${id}`)
     invalidate()
   }
 

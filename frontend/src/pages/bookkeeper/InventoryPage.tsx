@@ -11,9 +11,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Package, Plus, X, ChevronRight, Tag } from 'lucide-react'
-import { useAuth } from '../../lib/auth'
-
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+import { api } from '../../lib/api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -119,10 +117,6 @@ const WIG_STATUSES: WigStatus[] = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function authHeaders(token: string | null) {
-  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-}
-
 function fmt(n: number | null | undefined) {
   if (n == null) return '—'
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -136,8 +130,6 @@ function wigLabel(w: InventoryItem) {
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
-  const { session } = useAuth()
-  const token = session?.access_token ?? null
   const qc = useQueryClient()
 
   const [tab, setTab] = useState<ItemType>('wig')
@@ -157,55 +149,35 @@ export default function InventoryPage() {
 
   const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['inventory', tab, statusFilter, brandFilter],
-    queryFn: async () => {
+    queryFn: () => {
       const params = new URLSearchParams({ item_type: tab })
       if (statusFilter) params.set('wig_status', statusFilter)
       if (brandFilter) params.set('brand', brandFilter)
-      const r = await fetch(`${API}/api/v1/inventory/?${params}`, { headers: authHeaders(token) })
-      if (!r.ok) throw new Error('Failed to load inventory')
-      return r.json()
+      return api.get(`/inventory/?${params}`).then(r => Array.isArray(r.data) ? r.data : [])
     },
   })
 
   const { data: markups = [] } = useQuery<BrandMarkup[]>({
     queryKey: ['brand-markups'],
-    queryFn: async () => {
-      const r = await fetch(`${API}/api/v1/inventory/brand-markups`, { headers: authHeaders(token) })
-      if (!r.ok) throw new Error('Failed to load markups')
-      return r.json()
-    },
+    queryFn: () => api.get('/inventory/brand-markups').then(r => Array.isArray(r.data) ? r.data : []),
   })
 
   const { data: drawerEvents = [] } = useQuery<InventoryEvent[]>({
     queryKey: ['inventory-events', drawerWig?.id],
     enabled: !!drawerWig,
-    queryFn: async () => {
-      const r = await fetch(`${API}/api/v1/inventory/${drawerWig!.id}/events`, { headers: authHeaders(token) })
-      if (!r.ok) throw new Error('Failed to load events')
-      return r.json()
-    },
+    queryFn: () => api.get(`/inventory/${drawerWig!.id}/events`).then(r => Array.isArray(r.data) ? r.data : []),
   })
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const deleteItem = useMutation({
-    mutationFn: async (id: string) => {
-      const r = await fetch(`${API}/api/v1/inventory/${id}`, { method: 'DELETE', headers: authHeaders(token) })
-      if (!r.ok) throw new Error('Delete failed')
-    },
+    mutationFn: (id: string) => api.delete(`/inventory/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['inventory'] }),
   })
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, wig_status }: { id: string; wig_status: WigStatus }) => {
-      const r = await fetch(`${API}/api/v1/inventory/${id}`, {
-        method: 'PATCH',
-        headers: authHeaders(token),
-        body: JSON.stringify({ wig_status }),
-      })
-      if (!r.ok) throw new Error('Update failed')
-      return r.json()
-    },
+    mutationFn: ({ id, wig_status }: { id: string; wig_status: WigStatus }) =>
+      api.patch(`/inventory/${id}`, { wig_status }).then(r => r.data),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['inventory'] })
       qc.invalidateQueries({ queryKey: ['inventory-events', updated.id] })
@@ -381,7 +353,6 @@ export default function InventoryPage() {
       {/* ── Modals ── */}
       {showAddWig && (
         <AddWigModal
-          token={token}
           markups={markups}
           onClose={() => setShowAddWig(false)}
           onSaved={() => { setShowAddWig(false); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
@@ -390,7 +361,6 @@ export default function InventoryPage() {
 
       {showAddProduct && (
         <AddProductModal
-          token={token}
           item={editItem}
           onClose={() => { setShowAddProduct(false); setEditItem(null) }}
           onSaved={() => { setShowAddProduct(false); setEditItem(null); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
@@ -399,7 +369,6 @@ export default function InventoryPage() {
 
       {editItem && !showAddProduct && (
         <AddProductModal
-          token={token}
           item={editItem}
           onClose={() => setEditItem(null)}
           onSaved={() => { setEditItem(null); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
@@ -408,7 +377,6 @@ export default function InventoryPage() {
 
       {showMarkups && (
         <BrandMarkupsModal
-          token={token}
           markups={markups}
           onClose={() => setShowMarkups(false)}
           onSaved={() => qc.invalidateQueries({ queryKey: ['brand-markups'] })}
@@ -523,8 +491,7 @@ function ProductTable({ products, onEdit, onDelete }: {
 
 // ── Add Wig Modal ──────────────────────────────────────────────────────────
 
-function AddWigModal({ token, markups, onClose, onSaved }: {
-  token: string | null
+function AddWigModal({ markups, onClose, onSaved }: {
   markups: BrandMarkup[]
   onClose: () => void
   onSaved: () => void
@@ -557,7 +524,7 @@ function AddWigModal({ token, markups, onClose, onSaved }: {
     e.preventDefault()
     setSaving(true); setErr('')
     try {
-      const body = {
+      await api.post('/inventory/', {
         item_type: 'wig',
         name: [form.brand, form.length, form.color].filter(Boolean).join(' ') || 'Wig',
         daysmart_serial: form.daysmart_serial || null,
@@ -572,16 +539,10 @@ function AddWigModal({ token, markups, onClose, onSaved }: {
         arrival_date: form.arrival_date || null,
         notes: form.notes || null,
         wig_status: 'in_stock',
-      }
-      const r = await fetch(`${API}/api/v1/inventory/`, {
-        method: 'POST',
-        headers: authHeaders(token),
-        body: JSON.stringify(body),
       })
-      if (!r.ok) throw new Error(await r.text())
       onSaved()
     } catch (e: any) {
-      setErr(e.message)
+      setErr(e.response?.data?.detail ?? e.message)
     } finally {
       setSaving(false)
     }
@@ -632,8 +593,7 @@ function AddWigModal({ token, markups, onClose, onSaved }: {
 
 // ── Add / Edit Product Modal ───────────────────────────────────────────────
 
-function AddProductModal({ token, item, onClose, onSaved }: {
-  token: string | null
+function AddProductModal({ item, onClose, onSaved }: {
   item: InventoryItem | null
   onClose: () => void
   onSaved: () => void
@@ -660,13 +620,14 @@ function AddProductModal({ token, item, onClose, onSaved }: {
         unit_price: parseFloat(form.unit_price) || 0,
         notes: form.notes || null,
       }
-      const url = item ? `${API}/api/v1/inventory/${item.id}` : `${API}/api/v1/inventory/`
-      const method = item ? 'PATCH' : 'POST'
-      const r = await fetch(url, { method, headers: authHeaders(token), body: JSON.stringify(body) })
-      if (!r.ok) throw new Error(await r.text())
+      if (item) {
+        await api.patch(`/inventory/${item.id}`, body)
+      } else {
+        await api.post('/inventory/', body)
+      }
       onSaved()
     } catch (e: any) {
-      setErr(e.message)
+      setErr(e.response?.data?.detail ?? e.message)
     } finally {
       setSaving(false)
     }
@@ -700,8 +661,7 @@ function AddProductModal({ token, item, onClose, onSaved }: {
 
 // ── Brand Markups Modal ────────────────────────────────────────────────────
 
-function BrandMarkupsModal({ token, markups, onClose, onSaved }: {
-  token: string | null
+function BrandMarkupsModal({ markups, onClose, onSaved }: {
   markups: BrandMarkup[]
   onClose: () => void
   onSaved: () => void
@@ -716,23 +676,18 @@ function BrandMarkupsModal({ token, markups, onClose, onSaved }: {
     if (!brand || !pct) return
     setSaving(true); setErr('')
     try {
-      const r = await fetch(`${API}/api/v1/inventory/brand-markups`, {
-        method: 'POST',
-        headers: authHeaders(token),
-        body: JSON.stringify({ brand, markup_pct: parseFloat(pct) }),
-      })
-      if (!r.ok) throw new Error(await r.text())
+      await api.post('/inventory/brand-markups', { brand, markup_pct: parseFloat(pct) })
       setBrand(''); setPct('')
       onSaved()
     } catch (e: any) {
-      setErr(e.message)
+      setErr(e.response?.data?.detail ?? e.message)
     } finally {
       setSaving(false)
     }
   }
 
   async function deleteMarkup(id: string) {
-    await fetch(`${API}/api/v1/inventory/brand-markups/${id}`, { method: 'DELETE', headers: authHeaders(token) })
+    await api.delete(`/inventory/brand-markups/${id}`)
     onSaved()
   }
 
