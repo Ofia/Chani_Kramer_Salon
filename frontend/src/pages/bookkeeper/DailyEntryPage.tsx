@@ -56,7 +56,7 @@ const EMPTY_EXPENSE: NewExpenseForm = {
   category: 'misc', amount: '', vendor: '', notes: '',
 }
 
-const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'quickpay', 'check', 'zelle']
+const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'check', 'zelle']
 const METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Cash', credit_card: 'Credit Card', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
 }

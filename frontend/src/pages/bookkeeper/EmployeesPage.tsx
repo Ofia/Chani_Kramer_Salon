@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { Plus, Pencil, UserX, UserCheck } from 'lucide-react'
+import { useAuth } from '../../lib/auth'
+import { Plus, Pencil, UserX, UserCheck, Clock, Trash2, X } from 'lucide-react'
+
+const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -56,7 +59,8 @@ const EMPTY_FORM = {
 
 export default function EmployeesPage() {
   const [showInactive, setShowInactive] = useState(false)
-  const [modalEmp, setModalEmp] = useState<Employee | null | 'new'>(null) // null=closed, 'new'=add, Employee=edit
+  const [modalEmp, setModalEmp] = useState<Employee | null | 'new'>(null)
+  const [timeLogEmp, setTimeLogEmp] = useState<Employee | null>(null)
   const qc = useQueryClient()
 
   const { data: employees = [], isLoading } = useQuery<Employee[]>({
@@ -122,7 +126,7 @@ export default function EmployeesPage() {
             <Cell w={100} right>Rate</Cell>
             <Cell w={110}>Hired</Cell>
             <Cell w={70}>Status</Cell>
-            <Cell w={80} right>Actions</Cell>
+            <Cell w={100} right>Actions</Cell>
           </div>
 
           {shown.map((emp, i) => (
@@ -147,8 +151,11 @@ export default function EmployeesPage() {
                   {emp.is_active ? 'Active' : 'Inactive'}
                 </span>
               </Cell>
-              <Cell w={80} right>
+              <Cell w={100} right>
                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  <IconBtn title="Time Log" onClick={() => setTimeLogEmp(emp)}>
+                    <Clock size={13} />
+                  </IconBtn>
                   <IconBtn title="Edit" onClick={() => setModalEmp(emp)}>
                     <Pencil size={13} />
                   </IconBtn>
@@ -174,12 +181,20 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* ── Modal ── */}
+      {/* ── Employee edit modal ── */}
       {modalEmp !== null && (
         <EmployeeModal
           employee={modalEmp === 'new' ? null : modalEmp}
           onClose={() => setModalEmp(null)}
           onSaved={() => { invalidateAll(); setModalEmp(null) }}
+        />
+      )}
+
+      {/* ── Time log modal ── */}
+      {timeLogEmp !== null && (
+        <TimeLogModal
+          employee={timeLogEmp}
+          onClose={() => setTimeLogEmp(null)}
         />
       )}
     </div>
@@ -333,6 +348,171 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function IconBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
   return (
     <button onClick={onClick} title={title} style={s.iconBtn}>{children}</button>
+  )
+}
+
+// ── Time Log Modal ────────────────────────────────────────────
+
+type TimeLog = {
+  id: string
+  employee_id: string
+  employee_name: string
+  clock_in: string
+  clock_out: string | null
+  date: string
+  hours: number | null
+  notes: string | null
+}
+
+function TimeLogModal({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+  const { session } = useAuth()
+  const token = session?.access_token ?? null
+  const qc = useQueryClient()
+
+  const [showAdd, setShowAdd] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [form, setForm] = useState({ log_date: '', clock_in_time: '', clock_out_time: '' })
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+
+  const { data: logs = [], isLoading } = useQuery<TimeLog[]>({
+    queryKey: ['time-logs-employee', employee.id],
+    queryFn: async () => {
+      const r = await fetch(`${API}/api/v1/time-logs/employee/${employee.id}`, { headers })
+      if (!r.ok) throw new Error('Failed to load')
+      return r.json()
+    },
+  })
+
+  function invalidate() { qc.invalidateQueries({ queryKey: ['time-logs-employee', employee.id] }) }
+
+  function fmtTime(iso: string | null) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+  }
+
+  function toTimeInput(iso: string | null) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  }
+
+  function startEdit(log: TimeLog) {
+    setEditId(log.id)
+    setForm({
+      log_date: log.date,
+      clock_in_time: toTimeInput(log.clock_in),
+      clock_out_time: toTimeInput(log.clock_out),
+    })
+    setShowAdd(false)
+  }
+
+  function resetForm() {
+    setForm({ log_date: '', clock_in_time: '', clock_out_time: '' })
+    setShowAdd(false)
+    setEditId(null)
+    setErr('')
+  }
+
+  async function handleSave() {
+    if (!form.log_date || !form.clock_in_time) { setErr('Date and clock-in time are required.'); return }
+    setSaving(true); setErr('')
+    try {
+      if (editId) {
+        const r = await fetch(`${API}/api/v1/time-logs/${editId}`, {
+          method: 'PATCH', headers,
+          body: JSON.stringify({ log_date: form.log_date, clock_in_time: form.clock_in_time, clock_out_time: form.clock_out_time || null }),
+        })
+        if (!r.ok) throw new Error(await r.text())
+      } else {
+        const r = await fetch(`${API}/api/v1/time-logs/manual`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ employee_id: employee.id, log_date: form.log_date, clock_in_time: form.clock_in_time, clock_out_time: form.clock_out_time || null }),
+        })
+        if (!r.ok) throw new Error(await r.text())
+      }
+      invalidate(); resetForm()
+    } catch (e: any) { setErr(e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this time entry?')) return
+    await fetch(`${API}/api/v1/time-logs/${id}`, { method: 'DELETE', headers })
+    invalidate()
+  }
+
+  return (
+    <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ ...s.modalBox, maxWidth: 560 }}>
+
+        <div style={s.modalHeader}>
+          <div>
+            <p style={s.modalTitle}>{employee.first_name} {employee.last_name} — Time Log</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#71717a' }}>{logs.length} entr{logs.length === 1 ? 'y' : 'ies'}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setShowAdd(true); setEditId(null); setForm({ log_date: '', clock_in_time: '', clock_out_time: '' }) }} style={{ ...s.primaryBtn, flex: 'none', padding: '7px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={13} /> Add Entry
+            </button>
+            <button onClick={onClose} style={{ ...s.closeBtn }}><X size={16} /></button>
+          </div>
+        </div>
+
+        {/* Add / Edit form */}
+        {(showAdd || editId) && (
+          <div style={{ background: '#f9f9f8', borderRadius: 10, padding: 16, margin: '0 0 16px', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: '#18181b' }}>{editId ? 'Edit Entry' : 'New Entry'}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <Field label="Date">
+                <input type="date" style={s.input} value={form.log_date} onChange={e => setForm(f => ({ ...f, log_date: e.target.value }))} />
+              </Field>
+              <Field label="Clock In">
+                <input type="time" style={s.input} value={form.clock_in_time} onChange={e => setForm(f => ({ ...f, clock_in_time: e.target.value }))} />
+              </Field>
+              <Field label="Clock Out">
+                <input type="time" style={s.input} value={form.clock_out_time} onChange={e => setForm(f => ({ ...f, clock_out_time: e.target.value }))} />
+              </Field>
+            </div>
+            {err && <p style={{ ...s.errorMsg, marginTop: 8 }}>{err}</p>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button onClick={handleSave} disabled={saving} style={{ ...s.primaryBtn, flex: 'none', padding: '8px 16px', fontSize: 13 }}>
+                {saving ? 'Saving…' : editId ? 'Save' : 'Add'}
+              </button>
+              <button onClick={resetForm} style={{ ...s.ghostBtn, padding: '8px 14px', fontSize: 13 }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Log list */}
+        {isLoading ? (
+          <p style={{ color: '#71717a', fontSize: 13 }}>Loading…</p>
+        ) : logs.length === 0 ? (
+          <p style={{ color: '#a1a1aa', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No time entries yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 400, overflowY: 'auto' }}>
+            {logs.map(log => (
+              <div key={log.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                <span style={{ width: 90, fontSize: 12, fontWeight: 600, color: '#18181b', flexShrink: 0 }}>{log.date}</span>
+                <span style={{ width: 80, fontSize: 12, color: '#5581B1', flexShrink: 0 }}>{fmtTime(log.clock_in)}</span>
+                <span style={{ width: 10, fontSize: 11, color: '#a1a1aa' }}>→</span>
+                <span style={{ width: 80, fontSize: 12, color: log.clock_out ? '#DF5198' : '#f59e0b', flexShrink: 0 }}>{fmtTime(log.clock_out)}</span>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#18181b' }}>
+                  {log.hours != null ? `${log.hours}h` : <span style={{ color: '#f59e0b', fontSize: 11 }}>open</span>}
+                </span>
+                {log.notes && <span style={{ fontSize: 11, color: '#a1a1aa', flex: 1 }}>{log.notes}</span>}
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <IconBtn title="Edit" onClick={() => startEdit(log)}><Pencil size={12} /></IconBtn>
+                  <IconBtn title="Delete" onClick={() => handleDelete(log.id)}><Trash2 size={12} /></IconBtn>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

@@ -141,7 +141,7 @@ type PosSale = {
 // ── Constants ────────────────────────────────────────────────
 
 const BRANDS = ['RINA', 'RINA ELITE', 'BK', 'ROCHI LIPSKER', 'SARY', 'ZEHAVA', 'ELITE']
-const METHODS = ['cash', 'credit_card', 'quickpay', 'check', 'zelle']
+const METHODS = ['cash', 'credit_card', 'check', 'zelle']
 const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash', credit_card: 'Credit Card', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
 }

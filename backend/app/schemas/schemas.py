@@ -813,6 +813,22 @@ class TimeLogClockOut(BaseModel):
     notes: Optional[str] = None
 
 
+class TimeLogManualCreate(BaseModel):
+    """Create a time log entry manually (for corrections / historical edits)."""
+    employee_id: UUID
+    log_date: date
+    clock_in_time: str   # "HH:MM" — combined with log_date server-side
+    clock_out_time: Optional[str] = None  # "HH:MM" or None if still open
+    notes: Optional[str] = None
+
+
+class TimeLogUpdate(BaseModel):
+    """Patch any field on an existing time log entry."""
+    log_date: Optional[date] = None
+    clock_in_time: Optional[str] = None   # "HH:MM"
+    clock_out_time: Optional[str] = None  # "HH:MM" or "" to clear
+
+
 class TimeLogResponse(BaseModel):
     id: UUID
     employee_id: UUID

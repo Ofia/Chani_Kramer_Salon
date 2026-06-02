@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import Employee, EmployeeTimeLog, User
 from app.schemas.schemas import (
-    TimeLogClockIn, TimeLogClockOut, TimeLogResponse, WeekHoursSummaryItem
+    TimeLogClockIn, TimeLogClockOut, TimeLogResponse, WeekHoursSummaryItem,
+    TimeLogManualCreate, TimeLogUpdate,
 )
 from app.core.security import get_current_user
 
@@ -188,3 +189,95 @@ def get_week_summary(
 
     result.sort(key=lambda x: x.employee_name)
     return result
+
+
+# ── Employee History (for modal) ─────────────────────────────
+
+@router.get("/employee/{employee_id}", response_model=List[TimeLogResponse])
+def get_employee_logs(
+    employee_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """All time log entries for one employee, newest first."""
+    logs = (
+        db.query(EmployeeTimeLog)
+        .filter(EmployeeTimeLog.employee_id == employee_id)
+        .order_by(EmployeeTimeLog.date.desc(), EmployeeTimeLog.clock_in.desc())
+        .all()
+    )
+    return [_log_to_response(l) for l in logs]
+
+
+# ── Manual Entry ─────────────────────────────────────────────
+
+def _combine(d: date, time_str: str) -> datetime:
+    """Combine a date and 'HH:MM' string into a UTC datetime."""
+    h, m = map(int, time_str.split(":"))
+    return datetime(d.year, d.month, d.day, h, m, 0)
+
+
+@router.post("/manual", response_model=TimeLogResponse, status_code=201)
+def create_manual_log(
+    data: TimeLogManualCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a time log entry manually (historical correction or missed punch)."""
+    emp = db.query(Employee).filter(Employee.id == data.employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    clock_in_dt  = _combine(data.log_date, data.clock_in_time)
+    clock_out_dt = _combine(data.log_date, data.clock_out_time) if data.clock_out_time else None
+
+    log = EmployeeTimeLog(
+        employee_id=data.employee_id,
+        clock_in=clock_in_dt,
+        clock_out=clock_out_dt,
+        date=data.log_date,
+        logged_by=current_user.id,
+        notes=data.notes,
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return _log_to_response(log)
+
+
+# ── Edit / Delete ─────────────────────────────────────────────
+
+@router.patch("/{log_id}", response_model=TimeLogResponse)
+def update_log(
+    log_id: UUID,
+    data: TimeLogUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    log = db.query(EmployeeTimeLog).filter(EmployeeTimeLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Time log not found")
+
+    if data.log_date is not None:
+        log.date = data.log_date
+    if data.clock_in_time is not None:
+        log.clock_in = _combine(log.date, data.clock_in_time)
+    if data.clock_out_time is not None:
+        log.clock_out = _combine(log.date, data.clock_out_time) if data.clock_out_time else None
+
+    db.commit()
+    db.refresh(log)
+    return _log_to_response(log)
+
+
+@router.delete("/{log_id}", status_code=204)
+def delete_log(
+    log_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    log = db.query(EmployeeTimeLog).filter(EmployeeTimeLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Time log not found")
+    db.delete(log)
+    db.commit()
