@@ -100,6 +100,28 @@ class DataSource(str, enum.Enum):
     manual = "manual"
     ai_extracted = "ai_extracted"
 
+class InventoryItemType(str, enum.Enum):
+    wig     = "wig"
+    product = "product"
+
+class WigItemStatus(str, enum.Enum):
+    in_stock             = "in_stock"
+    sold                 = "sold"
+    on_service           = "on_service"
+    damaged              = "damaged"
+    returned_to_supplier = "returned_to_supplier"
+    transferred          = "transferred"
+
+class InventoryEventType(str, enum.Enum):
+    arrived         = "arrived"
+    sold            = "sold"
+    service         = "service"
+    payment_received = "payment_received"
+    damaged         = "damaged"
+    returned        = "returned"
+    transferred     = "transferred"
+    note            = "note"
+
 
 # ── Tables ──────────────────────────────────────────────────
 
@@ -488,18 +510,70 @@ class PosSalePayment(Base):
 
 
 class InventoryItem(Base):
-    """Non-wig products in stock (care products, accessories, tools, etc.)."""
+    """
+    Unified inventory — wigs and non-wig products.
+    item_type = 'wig'     → serial, brand, specs, cost/retail price, wig_status
+    item_type = 'product' → name, category, quantity, unit_price
+    """
     __tablename__ = "inventory_items"
 
     id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name       = Column(String, nullable=False)
-    category   = Column(String)                          # free text, e.g. "Care Products", "Accessories"
-    quantity   = Column(Integer, nullable=False, default=0)
-    unit_price = Column(Numeric(10, 2), nullable=False, default=0)
+    item_type  = Column(Enum(InventoryItemType, name="inventory_item_type"), nullable=False, default=InventoryItemType.product)
+
+    # ── Shared fields ──
+    name       = Column(String, nullable=False)          # product name OR auto-label for wigs
     notes      = Column(Text)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # ── Product-only fields ──
+    category   = Column(String)                          # free text, e.g. "Care Products"
+    quantity   = Column(Integer, nullable=False, default=0)
+    unit_price = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # ── Wig-only fields ──
+    daysmart_serial = Column(String, unique=True)        # e.g. "rina44871"
+    brand           = Column(String)                     # RINA, BK, Jon Renau, etc.
+    color           = Column(String)
+    length          = Column(String)
+    size            = Column(String)
+    front           = Column(String)
+    cost_price      = Column(Numeric(10, 2))             # what salon paid/will pay supplier
+    retail_price    = Column(Numeric(10, 2))             # auto-calc from brand markup, can be overridden
+    wig_status      = Column(Enum(WigItemStatus, name="wig_item_status"))
+    supplier        = Column(String)
+    arrival_date    = Column(Date)
+
+    events = relationship("InventoryEvent", back_populates="inventory_item", cascade="all, delete-orphan")
+
+
+class BrandMarkup(Base):
+    """Markup percentage per wig brand. retail_price = cost_price * (1 + markup_pct/100)."""
+    __tablename__ = "brand_markups"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brand      = Column(String, nullable=False, unique=True)
+    markup_pct = Column(Numeric(5, 2), nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InventoryEvent(Base):
+    """Full history log per inventory item — every meaningful event appended here."""
+    __tablename__ = "inventory_events"
+
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    inventory_item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    event_type        = Column(Enum(InventoryEventType, name="inventory_event_type"), nullable=False)
+    customer_id       = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"))
+    amount            = Column(Numeric(10, 2))
+    description       = Column(Text)
+    event_date        = Column(Date, nullable=False, server_default=func.current_date())
+    created_by        = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+
+    inventory_item = relationship("InventoryItem", back_populates="events")
 
 
 class EmployeeTimeLog(Base):

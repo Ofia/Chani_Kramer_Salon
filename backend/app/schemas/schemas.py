@@ -21,7 +21,8 @@ from pydantic import BaseModel, EmailStr
 
 from app.models.models import (
     UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
-    WigStatus, WigPaymentType, PosItemType, PayrollStatus
+    WigStatus, WigPaymentType, PosItemType, PayrollStatus,
+    InventoryItemType, WigItemStatus, InventoryEventType
 )
 
 
@@ -618,30 +619,117 @@ class DailyAutoFillResponse(BaseModel):
 # ── Inventory Items ───────────────────────────────────────────
 
 class InventoryItemCreate(BaseModel):
+    item_type: InventoryItemType = InventoryItemType.product
     name: str
+    notes: Optional[str] = None
+    # product fields
     category: Optional[str] = None
     quantity: int = 0
     unit_price: Decimal = Decimal("0")
-    notes: Optional[str] = None
+    # wig fields
+    daysmart_serial: Optional[str] = None
+    brand: Optional[str] = None
+    color: Optional[str] = None
+    length: Optional[str] = None
+    size: Optional[str] = None
+    front: Optional[str] = None
+    cost_price: Optional[Decimal] = None
+    retail_price: Optional[Decimal] = None
+    wig_status: Optional[WigItemStatus] = None
+    supplier: Optional[str] = None
+    arrival_date: Optional[date] = None
 
 
 class InventoryItemUpdate(BaseModel):
     name: Optional[str] = None
+    notes: Optional[str] = None
+    # product fields
     category: Optional[str] = None
     quantity: Optional[int] = None
     unit_price: Optional[Decimal] = None
-    notes: Optional[str] = None
+    # wig fields
+    daysmart_serial: Optional[str] = None
+    brand: Optional[str] = None
+    color: Optional[str] = None
+    length: Optional[str] = None
+    size: Optional[str] = None
+    front: Optional[str] = None
+    cost_price: Optional[Decimal] = None
+    retail_price: Optional[Decimal] = None
+    wig_status: Optional[WigItemStatus] = None
+    supplier: Optional[str] = None
+    arrival_date: Optional[date] = None
 
 
 class InventoryItemResponse(BaseModel):
     id: UUID
+    item_type: InventoryItemType
     name: str
-    category: Optional[str]
-    quantity: int
-    unit_price: float
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime
+    # product fields
+    category: Optional[str]
+    quantity: int
+    unit_price: float
+    # wig fields
+    daysmart_serial: Optional[str]
+    brand: Optional[str]
+    color: Optional[str]
+    length: Optional[str]
+    size: Optional[str]
+    front: Optional[str]
+    cost_price: Optional[float]
+    retail_price: Optional[float]
+    wig_status: Optional[WigItemStatus]
+    supplier: Optional[str]
+    arrival_date: Optional[date]
+
+    class Config:
+        from_attributes = True
+
+
+# ── Brand Markups ─────────────────────────────────────────────
+
+class BrandMarkupCreate(BaseModel):
+    brand: str
+    markup_pct: Decimal
+
+
+class BrandMarkupUpdate(BaseModel):
+    markup_pct: Decimal
+
+
+class BrandMarkupResponse(BaseModel):
+    id: UUID
+    brand: str
+    markup_pct: float
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Inventory Events ──────────────────────────────────────────
+
+class InventoryEventCreate(BaseModel):
+    event_type: InventoryEventType
+    customer_id: Optional[UUID] = None
+    amount: Optional[Decimal] = None
+    description: Optional[str] = None
+    event_date: Optional[date] = None
+
+
+class InventoryEventResponse(BaseModel):
+    id: UUID
+    inventory_item_id: UUID
+    event_type: InventoryEventType
+    customer_id: Optional[UUID]
+    amount: Optional[float]
+    description: Optional[str]
+    event_date: date
+    created_by: Optional[UUID]
+    created_at: datetime
 
     class Config:
         from_attributes = True

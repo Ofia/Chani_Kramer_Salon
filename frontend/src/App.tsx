@@ -37,6 +37,7 @@ import EmployeesPage        from './pages/bookkeeper/EmployeesPage'
 import CustomersPage        from './pages/bookkeeper/CustomersPage'
 import HelloBoardPage       from './pages/bookkeeper/HelloBoardPage'
 import OwnerDashboard       from './pages/owner/OwnerDashboard'
+import InventoryPage        from './pages/bookkeeper/InventoryPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
@@ -65,6 +66,7 @@ function AppRoutes() {
         <Route path="deposits"  element={<DepositsPage />} />
         <Route path="wigs"      element={<WigOrdersPage />} />
         <Route path="sales"     element={<SalesManagementPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="employees" element={<EmployeesPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="main-board" element={<OwnerDashboard />} />

@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
   LayoutDashboard, ClipboardList, Users, Receipt, Building2,
-  LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact, ShoppingCart,
+  LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact, ShoppingCart, Package,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 
@@ -23,6 +23,7 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] },
   { divider: true, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/inventory', label: 'Inventory',     icon: Package,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] },
 ]
