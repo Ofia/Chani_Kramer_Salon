@@ -377,11 +377,11 @@ function TimeLogModal({ employee, onClose }: { employee: Employee; onClose: () =
 
   const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
 
-  const { data: logs = [], isLoading } = useQuery<TimeLog[]>({
+  const { data: logs = [], isLoading, isError } = useQuery<TimeLog[]>({
     queryKey: ['time-logs-employee', employee.id],
     queryFn: async () => {
       const r = await fetch(`${API}/api/v1/time-logs/employee/${employee.id}`, { headers })
-      if (!r.ok) throw new Error('Failed to load')
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
       return r.json()
     },
   })
@@ -489,6 +489,8 @@ function TimeLogModal({ employee, onClose }: { employee: Employee; onClose: () =
         {/* Log list */}
         {isLoading ? (
           <p style={{ color: '#71717a', fontSize: 13 }}>Loading…</p>
+        ) : isError ? (
+          <p style={{ color: '#ef4444', fontSize: 13, padding: '12px 0' }}>Failed to load time logs. Check that the backend is running and deployed.</p>
         ) : logs.length === 0 ? (
           <p style={{ color: '#a1a1aa', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>No time entries yet.</p>
         ) : (
