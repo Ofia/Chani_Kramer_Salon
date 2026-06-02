@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Package, Plus, Settings, X, ChevronRight, Tag } from 'lucide-react'
+import { Package, Plus, X, ChevronRight, Tag } from 'lucide-react'
 import { useAuth } from '../../lib/auth'
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
