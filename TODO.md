@@ -1,3 +1,28 @@
+## June 1 Avi Meeting — Feature Backlog
+
+| # | Task | Area | Status | Commit |
+|---|------|-------|--------|--------|
+| 1 | Appointments calendar (DaySmart API or in-house) | New | ⬜ | — |
+| 2 | Inventory management tools (add, edit, view stock) | New | ✅ Done | 775eca3 |
+| 3 | Inventory from PDF — supplier delivery slip | Inventory | ⬜ | — |
+| 4 | Auto markup calculator (cost → retail price per brand) | Inventory | ✅ Done | 775eca3 |
+| 5 | Repair service notes field | POS | ⬜ | — |
+| 6 | Full DaySmart service list in POS dropdown | POS | ⬜ | — |
+| 7 | Delete sale — role-gated (Tzipora + Owners only) | POS | ⬜ | — |
+| 8 | Edit sale/receipt for Tzipora | Bookkeeper | ⬜ | — |
+| 9 | Remove QuickPay from payment options | POS | ✅ Done | 65a0973 |
+| 10 | POS: sales tax toggle (NY vs non-resident) | POS | ⬜ | — |
+| 11 | POS: shipping option + address for wig deliveries | POS | ⬜ | — |
+| 12 | Expense categories (food, shipping, transport…) | Expenses | ⬜ | — |
+| 13 | Bank/Cash source tag on each expense | Expenses | ⬜ | — |
+| 14 | Bank statement auto-import for expenses | Expenses | ⬜ | — |
+| 15 | Persist unsaved form data on navigation | UX | ⬜ | — |
+| 16 | Employee page: time log modal (view + add + edit + delete) | Employees | ✅ Done | 65a0973 |
+
+**Recommended next:** #12 + #13 (Expense categories + Bank/Cash tag), then POS → Inventory connection, then #10.
+
+---
+
 ## Deployment — Live on Railway + Vercel ✓
 
 **Status:** Fully deployed and working as of 2026-05-20.

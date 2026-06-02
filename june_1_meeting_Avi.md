@@ -45,27 +45,33 @@ This decouples the POS from hardcoded categories permanently.
 - Surface as a widget on the Super Board dashboard
 - Avi defines the department breakdown logic
 
+## 8. remove the 40% rule from the daily entry
+- the 40% was just Avi's way to proximate the expenses he has
+- now, when we have a cosolidated system he will have an accurate overview on expensess
+- we remove that 40% calculator from the daily entry and work towards well structure reporting system
+
 ---
 
 ## Specific Feature Tasks
 
-| # | Task | Area | Priority |
-|---|------|------|----------|
-| 1 | Appointments calendar (DaySmart integration or build in-house) | New Feature | High |
-| 2 | Inventory management tools (add, edit, view stock) | New Feature | High |
-| 3 | Inventory from PDF — supplier delivery slip auto-import | New Feature | Medium |
-| 4 | Auto markup calculator for wigs (cost → retail price) | Inventory | Medium |
-| 5 | Repair service notes field (describe repair details) | POS / Services | High |
-| 6 | Sub-categories for W&S and Repairs (full DaySmart service list) | POS | High |
-| 7 | Delete sale — role-gated (Tzipora + Owners only, not frontdesk/sales) | POS / Permissions | High |
-| 8 | Edit sale / receipt for Tzipora (standalone, not inside daily entry) | Bookkeeper | High |
-| 9 | Remove QuickPay from payment options | POS | Quick Win |
-| 10 | POS: sales tax toggle (NY resident = 8.875% / non-resident = 0%) | POS | High |
-| 11 | POS: shipping option + shipping address field for wig deliveries | POS | Medium |
-| 12 | Expense categories (food, shipping, transport, etc.) | Expenses | High |
-| 13 | Bank / Cash source tag on each expense | Expenses | High |
-| 14 | Bank statement auto-import for expenses | Expenses | Medium |
-| 15 | Persist unsaved form data on navigation — if user starts filling a form and leaves the page, fields are restored when they return (no data lost mid-entry) | UX / All Forms | High |
+| # | Task | Area | Priority | Status |
+|---|------|------|----------|--------|
+| 1 | Appointments calendar (DaySmart integration or build in-house) | New Feature | High | ⬜ |
+| 2 | Inventory management tools (add, edit, view stock) | New Feature | High | ✅ 775eca3 |
+| 3 | Inventory from PDF — supplier delivery slip auto-import | New Feature | Medium | ⬜ |
+| 4 | Auto markup calculator for wigs (cost → retail price) | Inventory | Medium | ✅ 775eca3 |
+| 5 | Repair service notes field (describe repair details) | POS / Services | High | ⬜ |
+| 6 | Sub-categories for W&S and Repairs (full DaySmart service list) | POS | High | ⬜ |
+| 7 | Delete sale — role-gated (Tzipora + Owners only, not frontdesk/sales) | POS / Permissions | High | ⬜ |
+| 8 | Edit sale / receipt for Tzipora (standalone, not inside daily entry) | Bookkeeper | High | ⬜ |
+| 9 | Remove QuickPay from payment options | POS | Quick Win | ✅ 65a0973 |
+| 10 | POS: sales tax toggle (NY resident = 8.875% / non-resident = 0%) | POS | High | ⬜ |
+| 11 | POS: shipping option + shipping address field for wig deliveries | POS | Medium | ⬜ |
+| 12 | Expense categories (food, shipping, transport, etc.) | Expenses | High | ⬜ |
+| 13 | Bank / Cash source tag on each expense | Expenses | High | ⬜ |
+| 14 | Bank statement auto-import for expenses | Expenses | Medium | ⬜ |
+| 15 | Persist unsaved form data on navigation — if user starts filling a form and leaves the page, fields are restored when they return (no data lost mid-entry) | UX / All Forms | High | ⬜ |
+| 16 | Employee page: each row has a small button that opens a centered modal with the employee's full time log (clock-in/out history), editable — add, edit, delete individual entries | Employees / Time Logs | High | ✅ 65a0973 |
 
 ---
 
