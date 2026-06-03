@@ -90,3 +90,36 @@ The salon runs DaySmart as their POS/appointment system. Screenshots show:
 - [ ] Which bank does the statement parser need to support? (format varies per bank)
 - [ ] Full DaySmart service list still needed — Ofir to pull and share
 - [ ] Department definitions for PnL: exactly which categories count as "departments"?
+
+---
+
+## Build Log
+
+### 2026-06-01
+- ✅ Clock-in/out system (migration 007), payroll accordion + cash/bank split (migration 008), employee time log modal
+- ✅ Inventory overhaul (migration 009) — wig + product inventory, brand markups, inventory events
+- ✅ Remove QuickPay from POS (task #9)
+
+### 2026-06-03 — Session 1 (06:56–08:00)
+- ✅ Providers page — full stack (migration 010: providers + repair_services, 8 provider seeds, 28 repair service seeds), ProvidersPage.tsx with filter tabs + add/edit modal
+- ✅ Unified Add to Inventory modal — single modal with Wig/Other Product tabs, cost/markup/retail auto-calc, Provider dropdown
+- ✅ Hello Board 50/50 split
+- Commits: 63e33bd, 619caed
+
+### 2026-06-03 — Session 2 (12:47–14:00)
+- ✅ Migration 011: consolidated wig_orders into inventory_items (one source of truth)
+  - 12 sale columns added to inventory_items (customer, total_price, sale_status, order_date, additional_charges, provider_id, markup_pct, etc.)
+  - wig_payments FK moved from wig_order_id → inventory_item_id
+  - wig_orders table dropped
+  - Backend: models.py, schemas.py, wig_orders.py (rewritten), pos_sales.py, customers.py updated
+  - Frontend: all WigOrder consumers updated (status→sale_status, direct_wig_orders→wig_sales)
+  - TypeScript clean, 0 errors
+  - Commit: 5a5a7e7
+  - ⚠️ Run migration 011 SQL in Supabase SQL Editor
+
+## ⚠️ POS Page — Must Test + Overhaul Next
+- DB/backend foundation complete (Migration 011 + inventory-first architecture)
+- **POS page UI still shows old hardcoded buttons** (New Wig, W&S, Repair, From Inventory)
+- Need to: (1) run Migration 011, (2) test existing POS still works, (3) build new POS UI
+- New POS UI needs: services dropdown (28 repair types + W&S), wig picker from inventory, product picker, sales tax 3-mode toggle (4.5% services / 8.875% goods / 0% exempt), shipping option, role-gated delete
+- Tasks remaining: #5, #6, #7, #8, #10, #11, #12, #13, #14, #15

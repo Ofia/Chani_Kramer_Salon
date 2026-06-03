@@ -15,7 +15,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Plus, X, Printer, ChevronDown, ChevronUp,
-  Scissors, Wrench, Package, Sparkles, Trash2, CreditCard,
+  Scissors, Wrench, Package, Trash2, CreditCard,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
@@ -33,9 +33,19 @@ type Customer = {
 type InventoryItem = {
   id: string
   name: string
+  item_type: string          // 'wig' | 'product'
   category?: string
   quantity: number
   unit_price: number
+  // wig physical fields (present when item_type = 'wig')
+  brand?: string
+  daysmart_serial?: string
+  length?: string
+  color?: string
+  size?: string
+  front?: string
+  wig_status?: string        // 'in_stock' | 'on_order' | ...
+  sale_status?: string | null // null = unsold, set = already on a sale
 }
 
 type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig'
@@ -222,7 +232,7 @@ export default function POSPage() {
   }
 
   function addInventoryItem(inv: InventoryItem) {
-    const isWig = inv.category?.toLowerCase().includes('wig')
+    const isWig = inv.item_type === 'wig'
     setCart(c => [...c, {
       _key: nextKey(),
       item_type: isWig ? 'wig' : 'inventory',
@@ -232,14 +242,15 @@ export default function POSPage() {
       inventory_item_id: inv.id,
       showWigSpecs: isWig,
       wig_deposit_method: 'cash',
-    }])
-  }
-
-  function addBlankWig() {
-    setCart(c => [...c, {
-      _key: nextKey(), item_type: 'wig',
-      description: 'Wig', quantity: 1, unit_price: '',
-      showWigSpecs: true, wig_deposit_method: 'cash',
+      // Pre-fill wig specs from inventory — no need to re-enter
+      ...(isWig ? {
+        wig_serial:  inv.daysmart_serial,
+        wig_brand:   inv.brand,
+        wig_length:  inv.length,
+        wig_color:   inv.color,
+        wig_size:    inv.size,
+        wig_front:   inv.front,
+      } : {}),
     }])
   }
 
@@ -370,7 +381,6 @@ export default function POSPage() {
             <AddBtn icon={<Scissors size={13} />} label="Wash & Set" color="#DF5198" onClick={addWashSet} />
             <AddBtn icon={<Wrench size={13} />} label="Repair" color="#E3CD94" onClick={addRepair} />
             <InventoryPickerBtn onAdd={addInventoryItem} />
-            <AddBtn icon={<Sparkles size={13} />} label="New Wig" color="#5581B1" onClick={addBlankWig} />
           </div>
 
           {cart.length === 0 ? (
@@ -725,9 +735,13 @@ function InventoryPickerBtn({ onAdd }: { onAdd: (item: InventoryItem) => void })
     queryFn: () => api.get('/inventory/').then(r => r.data).catch(() => []),
   })
 
-  const filtered = items.filter(i =>
+  // Exclude wigs that already have an active sale
+  const available = items.filter(i => !(i.item_type === 'wig' && i.sale_status != null))
+  const filtered = available.filter(i =>
     i.name.toLowerCase().includes(query.toLowerCase()) ||
-    (i.category || '').toLowerCase().includes(query.toLowerCase())
+    (i.category || '').toLowerCase().includes(query.toLowerCase()) ||
+    (i.brand || '').toLowerCase().includes(query.toLowerCase()) ||
+    (i.daysmart_serial || '').toLowerCase().includes(query.toLowerCase())
   )
 
   return (
@@ -755,9 +769,19 @@ function InventoryPickerBtn({ onAdd }: { onAdd: (item: InventoryItem) => void })
                 onClick={() => { onAdd(item); setOpen(false); setQuery('') }}
                 style={s.dropdownItem}
               >
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    background: item.item_type === 'wig' ? '#5581B122' : '#97BBE922',
+                    color: item.item_type === 'wig' ? '#5581B1' : '#6b7280' }}>
+                    {item.item_type === 'wig' ? 'WIG' : 'PRODUCT'}
+                  </span>
+                </div>
                 <span style={{ fontSize: 11, color: '#71717a' }}>
-                  {item.category} · ${item.unit_price.toFixed(2)} · {item.quantity} in stock
+                  {item.item_type === 'wig'
+                    ? [item.brand, item.daysmart_serial, item.length, item.color].filter(Boolean).join(' · ')
+                    : `${item.category || ''} · ${item.quantity} in stock`
+                  }{' '}· ${item.unit_price.toFixed(2)}
                 </span>
               </button>
             ))}
