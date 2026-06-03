@@ -28,7 +28,7 @@ type WigOrder = {
   total_price: number
   amount_paid: number
   balance_due: number
-  status: WigStatus
+  sale_status: WigStatus
   order_date: string
   payments: WigPayment[]
 }
@@ -310,8 +310,6 @@ export default function DailyEntryPage() {
       color: newWig.color || null,
       size: newWig.size || null,
       front: newWig.front || null,
-      base_price: parseFloat(newWig.base_price) || 0,
-      fill_lace_price: parseFloat(newWig.fill_lace_price) || 0,
       total_price: totalPrice,
       order_date: summaryDate,
       initial_payment: depositAmt > 0 ? {
@@ -562,7 +560,7 @@ function ActivityTab({
   washSet, setWashSet, repairs, setRepairs, productSales, setProductSales,
   notes, setNotes,
 }: any) {
-  const pendingWigs = searchResults.filter((w: WigOrder) => w.status !== 'paid_in_full')
+  const pendingWigs = searchResults.filter((w: WigOrder) => w.sale_status !== 'paid_in_full')
 
   return (
     <div>
@@ -1330,7 +1328,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function WigCard({ wig }: { wig: WigOrder }) {
-  const isPaid = wig.status === 'paid_in_full'
+  const isPaid = wig.sale_status === 'paid_in_full'
   return (
     <div style={{ ...s.wigCard, borderLeft: `3px solid ${isPaid ? '#10b981' : '#DF5198'}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

@@ -428,7 +428,7 @@ class WigPaymentCreate(BaseModel):
 
 class WigPaymentResponse(BaseModel):
     id: UUID
-    wig_order_id: UUID
+    inventory_item_id: UUID
     payment_date: date
     amount: float
     payment_method: PaymentMethod
@@ -440,27 +440,33 @@ class WigPaymentResponse(BaseModel):
         from_attributes = True
 
 
-class WigOrderCreate(BaseModel):
+# ── Wig Sale (create/update a wig sale record on an inventory_item) ───────────
+
+class WigSaleCreate(BaseModel):
+    """Attach a sale to an existing inventory wig (or create a new wig+sale together)."""
+    # If inventory_item_id is omitted, a new inventory item will be created.
+    inventory_item_id: Optional[UUID] = None
+    # Wig physical fields (used when creating a new inventory item)
     daysmart_serial: Optional[str] = None
     daysmart_receipt_no: Optional[str] = None
-    customer_name: str
-    customer_phone: Optional[str] = None
-    customer_id: Optional[UUID] = None
     brand: Optional[str] = None
     length: Optional[str] = None
     color: Optional[str] = None
     size: Optional[str] = None
     front: Optional[str] = None
-    base_price: Decimal = Decimal("0")
-    fill_lace_price: Decimal = Decimal("0")
-    additional_charges: List[AdditionalCharge] = []
+    # Sale fields
+    customer_name: str
+    customer_phone: Optional[str] = None
+    customer_id: Optional[UUID] = None
     total_price: Decimal = Decimal("0")
+    additional_charges: List[AdditionalCharge] = []
     order_date: date
     notes: Optional[str] = None
     initial_payment: Optional[WigPaymentCreate] = None  # deposit paid at time of sale
 
 
-class WigOrderUpdate(BaseModel):
+class WigSaleUpdate(BaseModel):
+    """Patch sale fields on an inventory wig."""
     daysmart_serial: Optional[str] = None
     daysmart_receipt_no: Optional[str] = None
     customer_name: Optional[str] = None
@@ -470,43 +476,17 @@ class WigOrderUpdate(BaseModel):
     color: Optional[str] = None
     size: Optional[str] = None
     front: Optional[str] = None
-    base_price: Optional[Decimal] = None
-    fill_lace_price: Optional[Decimal] = None
     additional_charges: Optional[List[AdditionalCharge]] = None
     total_price: Optional[Decimal] = None
-    status: Optional[WigStatus] = None
+    sale_status: Optional[WigStatus] = None
     pickup_date: Optional[date] = None
     notes: Optional[str] = None
 
 
-class WigOrderResponse(BaseModel):
-    id: UUID
-    daysmart_serial: Optional[str]
-    daysmart_receipt_no: Optional[str]
-    customer_name: str
-    customer_phone: Optional[str]
-    customer_id: Optional[UUID]
-    brand: Optional[str]
-    length: Optional[str]
-    color: Optional[str]
-    size: Optional[str]
-    front: Optional[str]
-    base_price: float
-    fill_lace_price: float
-    additional_charges: List[AdditionalCharge] = []
-    total_price: float
-    amount_paid: float
-    balance_due: float
-    status: WigStatus
-    order_date: date
-    pickup_date: Optional[date]
-    notes: Optional[str]
-    payments: List[WigPaymentResponse] = []
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+# Keep old names as aliases so any existing code referencing them still compiles.
+WigOrderCreate   = WigSaleCreate
+WigOrderUpdate   = WigSaleUpdate
+# WigOrderResponse is now InventoryItemResponse (returned from /wig-orders/ endpoints)
 
 
 # ── POS Sales ────────────────────────────────────────────────
@@ -553,7 +533,6 @@ class PosSaleItemResponse(BaseModel):
     unit_price: float
     subtotal: float
     inventory_item_id: Optional[UUID]
-    wig_order_id: Optional[UUID]
     wig_serial: Optional[str]
     wig_brand: Optional[str]
     wig_length: Optional[str]
@@ -567,7 +546,7 @@ class PosSaleItemResponse(BaseModel):
 
 
 class WigBalancePaymentIn(BaseModel):
-    wig_order_id: UUID
+    inventory_item_id: UUID
     amount: Decimal
     payment_method: PaymentMethod
 
@@ -626,7 +605,7 @@ class InventoryItemCreate(BaseModel):
     category: Optional[str] = None
     quantity: int = 0
     unit_price: Decimal = Decimal("0")
-    # wig fields
+    # wig physical fields
     daysmart_serial: Optional[str] = None
     brand: Optional[str] = None
     color: Optional[str] = None
@@ -634,10 +613,12 @@ class InventoryItemCreate(BaseModel):
     size: Optional[str] = None
     front: Optional[str] = None
     cost_price: Optional[Decimal] = None
+    markup_pct: Optional[Decimal] = None
     retail_price: Optional[Decimal] = None
     wig_status: Optional[WigItemStatus] = None
     supplier: Optional[str] = None
     arrival_date: Optional[date] = None
+    provider_id: Optional[UUID] = None
 
 
 class InventoryItemUpdate(BaseModel):
@@ -647,7 +628,7 @@ class InventoryItemUpdate(BaseModel):
     category: Optional[str] = None
     quantity: Optional[int] = None
     unit_price: Optional[Decimal] = None
-    # wig fields
+    # wig physical fields
     daysmart_serial: Optional[str] = None
     brand: Optional[str] = None
     color: Optional[str] = None
@@ -655,10 +636,23 @@ class InventoryItemUpdate(BaseModel):
     size: Optional[str] = None
     front: Optional[str] = None
     cost_price: Optional[Decimal] = None
+    markup_pct: Optional[Decimal] = None
     retail_price: Optional[Decimal] = None
     wig_status: Optional[WigItemStatus] = None
     supplier: Optional[str] = None
     arrival_date: Optional[date] = None
+    provider_id: Optional[UUID] = None
+    # wig sale fields (set when wig is being sold)
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    total_price: Optional[Decimal] = None
+    amount_paid: Optional[Decimal] = None
+    sale_status: Optional[WigStatus] = None
+    order_date: Optional[date] = None
+    pickup_date: Optional[date] = None
+    daysmart_receipt_no: Optional[str] = None
+    additional_charges: Optional[List[AdditionalCharge]] = None
 
 
 class InventoryItemResponse(BaseModel):
@@ -672,7 +666,7 @@ class InventoryItemResponse(BaseModel):
     category: Optional[str]
     quantity: int
     unit_price: float
-    # wig fields
+    # wig physical fields
     daysmart_serial: Optional[str]
     brand: Optional[str]
     color: Optional[str]
@@ -680,10 +674,25 @@ class InventoryItemResponse(BaseModel):
     size: Optional[str]
     front: Optional[str]
     cost_price: Optional[float]
+    markup_pct: Optional[float]
     retail_price: Optional[float]
     wig_status: Optional[WigItemStatus]
     supplier: Optional[str]
     arrival_date: Optional[date]
+    provider_id: Optional[UUID]
+    # wig sale fields
+    customer_id: Optional[UUID]
+    customer_name: Optional[str]
+    customer_phone: Optional[str]
+    total_price: Optional[float]
+    amount_paid: float
+    balance_due: Optional[float]
+    sale_status: Optional[WigStatus]
+    order_date: Optional[date]
+    pickup_date: Optional[date]
+    daysmart_receipt_no: Optional[str]
+    additional_charges: List[AdditionalCharge] = []
+    payments: List["WigPaymentResponse"] = []
 
     class Config:
         from_attributes = True
@@ -796,10 +805,10 @@ class CustomerHistoryResponse(BaseModel):
     """
     All purchases for a single customer.
     pos_sales: visits recorded via the POS (may include wigs, services, products).
-    direct_wig_orders: wig orders entered directly (not via a POS sale — avoids double-counting).
+    wig_sales: wig inventory items sold directly to this customer.
     """
     pos_sales: List[PosSaleResponse]
-    direct_wig_orders: List[WigOrderResponse]
+    wig_sales: List[InventoryItemResponse]
 
 
 # ── Employee Time Logs ────────────────────────────────────────
@@ -882,3 +891,7 @@ class ProviderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Resolve forward reference: InventoryItemResponse.payments uses "WigPaymentResponse"
+InventoryItemResponse.model_rebuild()

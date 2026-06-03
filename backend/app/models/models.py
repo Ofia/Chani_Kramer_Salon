@@ -345,66 +345,22 @@ class FinancialSnapshot(Base):
     computed_at     = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class WigOrder(Base):
-    """
-    One row = one physical wig sold to a client.
-    A wig lives in the business for weeks/months while being prepared.
-    Revenue is recognized only when status = paid_in_full.
-    Deposits are cash tracking, not revenue.
-    """
-    __tablename__ = "wig_orders"
-
-    id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    daysmart_serial     = Column(String)           # e.g. "rina44871", "HP33738" — DaySmart's wig ID
-    daysmart_receipt_no = Column(String)
-    customer_name       = Column(String, nullable=False)
-    customer_phone      = Column(String)
-    customer_id         = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"))  # future CRM link
-
-    brand       = Column(String)   # RINA, BK, RINA ELITE, etc.
-    length      = Column(String)   # 14", 17", 35 CM
-    color       = Column(String)   # 2/8, golden, etc.
-    size        = Column(String)   # M, S, L
-    front       = Column(String)   # Top Lace, etc.
-
-    base_price          = Column(Numeric(10, 2), nullable=False, default=0)
-    fill_lace_price     = Column(Numeric(10, 2), nullable=False, default=0)
-    additional_charges  = Column(JSONB, nullable=False, default=list)  # [{"label": str, "amount": float}]
-    total_price         = Column(Numeric(10, 2), nullable=False, default=0)
-    amount_paid         = Column(Numeric(10, 2), nullable=False, default=0)
-
-    status      = Column(Enum(WigStatus, name='wig_status'), nullable=False, default=WigStatus.ordered)
-    order_date  = Column(Date, nullable=False)
-    pickup_date = Column(Date)
-    notes       = Column(Text)
-
-    entered_by  = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
-    created_at  = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    customer = relationship("Customer", foreign_keys=[customer_id])
-    payments = relationship("WigPayment", back_populates="wig_order", cascade="all, delete-orphan")
-
-    @property
-    def balance_due(self) -> Decimal:
-        return (self.total_price or Decimal(0)) - (self.amount_paid or Decimal(0))
-
 
 class WigPayment(Base):
-    """Each payment event against a WigOrder — deposit, partial, or final."""
+    """Each payment event against an inventory wig item — deposit, partial, or final."""
     __tablename__ = "wig_payments"
 
-    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    wig_order_id  = Column(UUID(as_uuid=True), ForeignKey("wig_orders.id", ondelete="CASCADE"), nullable=False)
-    pos_sale_id   = Column(UUID(as_uuid=True), ForeignKey("pos_sales.id", ondelete="SET NULL"), nullable=True)
-    payment_date  = Column(Date, nullable=False)
-    amount        = Column(Numeric(10, 2), nullable=False)
-    payment_method = Column(Enum(PaymentMethod, name='payment_method'), nullable=False)
-    payment_type  = Column(Enum(WigPaymentType, name='wig_payment_type'), nullable=False, default=WigPaymentType.deposit)
-    notes         = Column(Text)
-    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    inventory_item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
+    pos_sale_id       = Column(UUID(as_uuid=True), ForeignKey("pos_sales.id", ondelete="SET NULL"), nullable=True)
+    payment_date      = Column(Date, nullable=False)
+    amount            = Column(Numeric(10, 2), nullable=False)
+    payment_method    = Column(Enum(PaymentMethod, name='payment_method'), nullable=False)
+    payment_type      = Column(Enum(WigPaymentType, name='wig_payment_type'), nullable=False, default=WigPaymentType.deposit)
+    notes             = Column(Text)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
-    wig_order = relationship("WigOrder", back_populates="payments")
+    inventory_item = relationship("InventoryItem", back_populates="payments")
 
 
 class BoardPost(Base):
@@ -489,7 +445,6 @@ class PosSaleItem(Base):
     unit_price        = Column(Numeric(10, 2), nullable=False, default=0)
     subtotal          = Column(Numeric(10, 2), nullable=False, default=0)
     inventory_item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="SET NULL"))
-    wig_order_id      = Column(UUID(as_uuid=True), ForeignKey("wig_orders.id", ondelete="SET NULL"))
     # Wig specs — filled when item_type = 'wig'
     wig_serial        = Column(String)
     wig_brand         = Column(String)
@@ -518,7 +473,8 @@ class PosSalePayment(Base):
 class InventoryItem(Base):
     """
     Unified inventory — wigs and non-wig products.
-    item_type = 'wig'     → serial, brand, specs, cost/retail price, wig_status
+    item_type = 'wig'     → serial, brand, specs, cost/retail price, wig_status,
+                            plus sale fields (customer, total_price, sale_status …)
     item_type = 'product' → name, category, quantity, unit_price
     """
     __tablename__ = "inventory_items"
@@ -538,7 +494,7 @@ class InventoryItem(Base):
     quantity   = Column(Integer, nullable=False, default=0)
     unit_price = Column(Numeric(10, 2), nullable=False, default=0)
 
-    # ── Wig-only fields ──
+    # ── Wig physical fields ──
     daysmart_serial = Column(String, unique=True)        # e.g. "rina44871"
     brand           = Column(String)                     # RINA, BK, Jon Renau, etc.
     color           = Column(String)
@@ -546,12 +502,31 @@ class InventoryItem(Base):
     size            = Column(String)
     front           = Column(String)
     cost_price      = Column(Numeric(10, 2))             # what salon paid/will pay supplier
+    markup_pct      = Column(Numeric(5, 2))              # used to auto-calc retail_price
     retail_price    = Column(Numeric(10, 2))             # auto-calc from brand markup, can be overridden
     wig_status      = Column(Enum(WigItemStatus, name="wig_item_status"))
     supplier        = Column(String)
     arrival_date    = Column(Date)
+    provider_id     = Column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"))
 
-    events = relationship("InventoryEvent", back_populates="inventory_item", cascade="all, delete-orphan")
+    # ── Wig sale fields (filled when wig is sold to a client) ──
+    customer_id         = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"))
+    customer_name       = Column(String)
+    customer_phone      = Column(String)
+    total_price         = Column(Numeric(10, 2))         # full sale price agreed with client
+    amount_paid         = Column(Numeric(10, 2), nullable=False, default=0)
+    sale_status         = Column(Enum(WigStatus, name="wig_status"))  # ordered|ready|paid_in_full
+    order_date          = Column(Date)
+    pickup_date         = Column(Date)
+    daysmart_receipt_no = Column(String)
+    additional_charges  = Column(JSONB, nullable=False, default=list)  # [{"label": str, "amount": float}]
+
+    @property
+    def balance_due(self) -> Decimal:
+        return (self.total_price or Decimal(0)) - (self.amount_paid or Decimal(0))
+
+    events   = relationship("InventoryEvent", back_populates="inventory_item", cascade="all, delete-orphan")
+    payments = relationship("WigPayment",     back_populates="inventory_item", cascade="all, delete-orphan")
 
 
 class BrandMarkup(Base):

@@ -5,7 +5,7 @@ Each POST creates:
   - one PosSale (the visit header)
   - one or more PosSaleItems (line items)
   - one or more PosSalePayments (how they paid — supports split)
-  - for wig items: also creates a WigOrder and links it back
+  - for wig items: updates the InventoryItem with sale data + creates a WigPayment
 
 GET /pos-sales/auto-fill/{date} aggregates today's POS data
 for Daily Entry pre-population.
@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
     PosSale, PosSaleItem, PosSalePayment,
-    WigOrder, WigPayment, InventoryItem,
+    WigPayment, InventoryItem, InventoryItemType,
     PosItemType, WigStatus, WigPaymentType, PaymentMethod, User,
 )
 from app.schemas.schemas import (
@@ -79,61 +79,55 @@ def create_pos_sale(
             wig_front         = item_data.wig_front,
         )
 
-        # For inventory items: decrement stock quantity
-        if item_data.inventory_item_id:
+        # For inventory items: decrement stock quantity (non-wig products)
+        if item_data.inventory_item_id and item_data.item_type != PosItemType.wig:
             inv = db.query(InventoryItem).filter(
                 InventoryItem.id == item_data.inventory_item_id
             ).first()
             if inv and inv.quantity >= item_data.quantity:
                 inv.quantity -= item_data.quantity
 
-        # For wig items: create a WigOrder record
-        if item_data.item_type == PosItemType.wig:
+        # For wig items: attach sale data to the InventoryItem + record deposit payment
+        if item_data.item_type == PosItemType.wig and item_data.inventory_item_id:
             deposit_amt = item_data.wig_deposit_amount or Decimal(0)
-            # Determine status — paid in full if deposit >= price
-            if deposit_amt >= item_data.subtotal and item_data.subtotal > 0:
-                wig_status   = WigStatus.paid_in_full
-                pickup_date  = data.sale_date
-            else:
-                wig_status   = WigStatus.ordered
-                pickup_date  = None
 
-            wig = WigOrder(
-                customer_name  = data.customer_name,
-                customer_phone = data.customer_phone,
-                customer_id    = data.customer_id,
-                daysmart_serial = item_data.wig_serial,
-                brand          = item_data.wig_brand,
-                length         = item_data.wig_length,
-                color          = item_data.wig_color,
-                size           = item_data.wig_size,
-                front          = item_data.wig_front,
-                base_price     = item_data.subtotal,
-                fill_lace_price = Decimal(0),
-                total_price    = item_data.subtotal,
-                amount_paid    = deposit_amt,
-                status         = wig_status,
-                order_date     = data.sale_date,
-                pickup_date    = pickup_date,
-                entered_by     = current_user.id,
-            )
-            db.add(wig)
-            db.flush()
+            wig = db.query(InventoryItem).filter(
+                InventoryItem.id == item_data.inventory_item_id,
+                InventoryItem.item_type == InventoryItemType.wig,
+            ).first()
 
-            # Record the deposit as a WigPayment
-            if deposit_amt > 0:
-                pay_type = WigPaymentType.final if wig_status == WigStatus.paid_in_full else WigPaymentType.deposit
-                method   = item_data.wig_deposit_method or PaymentMethod.cash
-                wig_pmt  = WigPayment(
-                    wig_order_id   = wig.id,
-                    payment_date   = data.sale_date,
-                    amount         = deposit_amt,
-                    payment_method = method,
-                    payment_type   = pay_type,
-                )
-                db.add(wig_pmt)
+            if wig:
+                # Determine sale status — paid in full if deposit covers the price
+                if deposit_amt >= item_data.subtotal and item_data.subtotal > 0:
+                    new_sale_status = WigStatus.paid_in_full
+                    pickup_date     = data.sale_date
+                else:
+                    new_sale_status = WigStatus.ordered
+                    pickup_date     = None
 
-            item.wig_order_id = wig.id
+                wig.customer_name  = data.customer_name
+                wig.customer_phone = data.customer_phone
+                wig.customer_id    = data.customer_id
+                wig.total_price    = item_data.subtotal
+                wig.amount_paid    = deposit_amt
+                wig.sale_status    = new_sale_status
+                wig.order_date     = data.sale_date
+                wig.pickup_date    = pickup_date
+
+                if deposit_amt > 0:
+                    pay_type = (
+                        WigPaymentType.final
+                        if new_sale_status == WigStatus.paid_in_full
+                        else WigPaymentType.deposit
+                    )
+                    method = item_data.wig_deposit_method or PaymentMethod.cash
+                    db.add(WigPayment(
+                        inventory_item_id = wig.id,
+                        payment_date      = data.sale_date,
+                        amount            = deposit_amt,
+                        payment_method    = method,
+                        payment_type      = pay_type,
+                    ))
 
         db.add(item)
 
@@ -147,38 +141,38 @@ def create_pos_sale(
         db.add(pmt)
 
     # 5. Process wig balance payments (returning customer paying off existing orders).
-    #    Each one: updates the WigOrder, creates a WigPayment, and adds a PosSalePayment
-    #    so it appears in the daily panel and auto-fill naturally.
+    #    Each one: updates the InventoryItem sale fields, creates a WigPayment,
+    #    and adds a PosSalePayment so it appears in daily panel and auto-fill.
     for wbp in data.wig_balance_payments:
-        wig = db.query(WigOrder).filter(WigOrder.id == wbp.wig_order_id).first()
+        wig = db.query(InventoryItem).filter(
+            InventoryItem.id == wbp.inventory_item_id,
+            InventoryItem.item_type == InventoryItemType.wig,
+        ).first()
         if not wig:
             continue
 
-        balance  = wig.total_price - wig.amount_paid
+        balance  = (wig.total_price or Decimal(0)) - (wig.amount_paid or Decimal(0))
         pay_type = WigPaymentType.final if wbp.amount >= balance else WigPaymentType.partial
 
-        wig_pmt = WigPayment(
-            wig_order_id   = wig.id,
-            pos_sale_id    = sale.id,   # marks it as captured via POS — excluded from direct_wig_pmts loop
-            payment_date   = data.sale_date,
-            amount         = wbp.amount,
-            payment_method = wbp.payment_method,
-            payment_type   = pay_type,
-        )
-        db.add(wig_pmt)
+        db.add(WigPayment(
+            inventory_item_id = wig.id,
+            pos_sale_id       = sale.id,   # marks it as captured via POS
+            payment_date      = data.sale_date,
+            amount            = wbp.amount,
+            payment_method    = wbp.payment_method,
+            payment_type      = pay_type,
+        ))
 
-        wig.amount_paid += wbp.amount
-        if wig.amount_paid >= wig.total_price:
-            wig.status      = WigStatus.paid_in_full
+        wig.amount_paid = (wig.amount_paid or Decimal(0)) + wbp.amount
+        if wig.total_price and wig.amount_paid >= wig.total_price:
+            wig.sale_status = WigStatus.paid_in_full
             wig.pickup_date = data.sale_date
 
-        # Add to sale's payment records so the daily panel and receipt show it
-        sale_pmt = PosSalePayment(
+        db.add(PosSalePayment(
             pos_sale_id    = sale.id,
             payment_method = wbp.payment_method,
             amount         = wbp.amount,
-        )
-        db.add(sale_pmt)
+        ))
 
     db.commit()
     db.refresh(sale)
@@ -234,15 +228,13 @@ def auto_fill(
                 result.total_other += amt
             elif item.item_type == PosItemType.wig:
                 result.new_wigs_sold += 1
-                # Only count what was actually received as a deposit.
-                # Revenue ($4,000) is NOT recognized until status = paid_in_full —
-                # that's handled separately by the wig_orders query in Daily Entry.
-                if item.wig_order_id:
-                    wig = db.query(WigOrder).filter(WigOrder.id == item.wig_order_id).first()
-                    if wig and wig.status != WigStatus.paid_in_full:
-                        # Partial deposit — only the amount actually collected
-                        result.wig_deposits_total += float(wig.amount_paid)
-                    # If paid_in_full, revenue is already captured via wig_orders in the UI
+                # Only count the deposit — revenue recognized only at paid_in_full.
+                if item.inventory_item_id:
+                    wig = db.query(InventoryItem).filter(
+                        InventoryItem.id == item.inventory_item_id
+                    ).first()
+                    if wig and wig.sale_status != WigStatus.paid_in_full:
+                        result.wig_deposits_total += float(wig.amount_paid or 0)
 
         # Payment method breakdown
         for pmt in sale.payments:
@@ -258,31 +250,24 @@ def auto_fill(
             elif pmt.payment_method == PaymentMethod.zelle:
                 result.zelle_collected += amt
 
-    # Also capture wig balance payments made directly (returning customer flow).
-    # These go through POST /wig-orders/{id}/payments, not through a PosSale,
-    # so they never appear in the loop above. We need their payment method
-    # amounts so Tzipora's cash/CC totals are accurate.
-    #
-    # Guard against double-counting: collect the wig_order_ids that were
-    # already counted as part of a POS sale TODAY. A balance payment for
-    # those same wigs on a DIFFERENT day won't be in this set, so it will
-    # be included correctly.
-    pos_wig_ids = {
-        item.wig_order_id
+    # Also capture wig payments made directly (not via POS cart) on this date.
+    # Guard against double-counting: inventory_item_ids already tallied via POS items.
+    pos_wig_item_ids = {
+        item.inventory_item_id
         for sale in sales
         for item in sale.items
-        if item.wig_order_id is not None
+        if item.item_type == PosItemType.wig and item.inventory_item_id is not None
     }
 
     direct_wig_pmts = (
         db.query(WigPayment)
         .filter(WigPayment.payment_date == target_date)
-        .filter(WigPayment.pos_sale_id == None)  # exclude those already captured via POS sale payments
+        .filter(WigPayment.pos_sale_id == None)  # exclude those already captured via POS
         .all()
     )
     for wp in direct_wig_pmts:
-        if wp.wig_order_id in pos_wig_ids:
-            continue  # Deposit already captured via the POS sale on this date
+        if wp.inventory_item_id in pos_wig_item_ids:
+            continue  # Already counted above
         amt = float(wp.amount)
         if wp.payment_method == PaymentMethod.cash:
             result.cash_collected += amt
@@ -324,14 +309,25 @@ def delete_pos_sale(
     if not sale:
         raise HTTPException(status_code=404, detail="POS sale not found")
 
-    # If the sale contained wig items, also delete the WigOrder records
-    # (and their WigPayments, via cascade) so inventory and wig tracking
-    # stay consistent. This handles "client changed their mind" cancellations.
+    # For wig items: clear sale fields on the InventoryItem so the wig
+    # returns to inventory (status: in_stock). WigPayments cascade-delete
+    # via inventory_item → wig_payments when sale is cleared.
     for item in sale.items:
-        if item.wig_order_id:
-            wig = db.query(WigOrder).filter(WigOrder.id == item.wig_order_id).first()
+        if item.item_type == PosItemType.wig and item.inventory_item_id:
+            wig = db.query(InventoryItem).filter(
+                InventoryItem.id == item.inventory_item_id
+            ).first()
             if wig:
-                db.delete(wig)  # cascades to wig_payments
+                wig.customer_id         = None
+                wig.customer_name       = None
+                wig.customer_phone      = None
+                wig.total_price         = None
+                wig.amount_paid         = Decimal("0")
+                wig.sale_status         = None
+                wig.order_date          = None
+                wig.pickup_date         = None
+                wig.daysmart_receipt_no = None
+                wig.additional_charges  = []
 
     db.delete(sale)  # cascades to pos_sale_items and pos_sale_payments
     db.commit()

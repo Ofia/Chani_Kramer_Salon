@@ -21,12 +21,10 @@ type WigOrder = {
   color?: string
   size?: string
   front?: string
-  base_price: number
-  fill_lace_price: number
   total_price: number
   amount_paid: number
   balance_due: number
-  status: 'ordered' | 'ready' | 'paid_in_full'
+  sale_status: 'ordered' | 'ready' | 'paid_in_full'
   order_date: string
   pickup_date?: string
   notes?: string
@@ -70,8 +68,8 @@ export default function WigOrdersPage() {
     deleteMutation.mutate(w.id)
   }
 
-  const inProgress = allWigs.filter(w => w.status !== 'paid_in_full')
-  const completed  = allWigs.filter(w => w.status === 'paid_in_full')
+  const inProgress = allWigs.filter(w => w.sale_status !== 'paid_in_full')
+  const completed  = allWigs.filter(w => w.sale_status === 'paid_in_full')
   const wigs = tab === 'in_progress' ? inProgress : completed
 
   const totalBalance   = inProgress.reduce((s, w) => s + Number(w.balance_due), 0)
@@ -159,8 +157,8 @@ export default function WigOrdersPage() {
                 </Cell>
                 <Cell w={110}>
                   {tab === 'in_progress' ? (
-                    <span style={{ ...s.badge, background: STATUS_COLOR[w.status] + '33', color: STATUS_COLOR[w.status] }}>
-                      {STATUS_LABEL[w.status]}
+                    <span style={{ ...s.badge, background: STATUS_COLOR[w.sale_status] + '33', color: STATUS_COLOR[w.sale_status] }}>
+                      {STATUS_LABEL[w.sale_status]}
                     </span>
                   ) : (
                     <span style={s.specs}>{w.pickup_date ? fmt(w.pickup_date) : '—'}</span>

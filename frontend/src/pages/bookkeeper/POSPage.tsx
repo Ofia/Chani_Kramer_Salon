@@ -97,7 +97,7 @@ type WigOrder = {
   total_price: number
   amount_paid: number
   balance_due: number
-  status: string
+  sale_status: string
   order_date: string
   pickup_date?: string
   payments: WigPaymentRecord[]
@@ -110,7 +110,7 @@ type PosSaleItem = {
   quantity: number
   unit_price: number
   subtotal: number
-  wig_order_id?: string
+  inventory_item_id?: string
   wig_serial?: string
   wig_brand?: string
   wig_length?: string
@@ -312,7 +312,7 @@ export default function POSPage() {
       items,
       payments: pmts,
       wig_balance_payments: stagedWigPayments.map(sp => ({
-        wig_order_id: sp.wigId,
+        inventory_item_id: sp.wigId,
         amount: sp.amount,
         payment_method: sp.method,
       })),
@@ -873,7 +873,7 @@ function PendingOrdersPanel({ customerId, staged, onStage, onUnstage }: {
     queryKey: ['pending-wigs', customerId],
     queryFn: () =>
       api.get('/wig-orders/', { params: { customer_id: customerId } })
-        .then(r => (Array.isArray(r.data) ? r.data : []).filter((w: WigOrder) => w.status !== 'paid_in_full'))
+        .then(r => (Array.isArray(r.data) ? r.data : []).filter((w: WigOrder) => w.sale_status !== 'paid_in_full'))
         .catch(() => []),
     enabled: !!customerId,
   })

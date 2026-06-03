@@ -431,8 +431,8 @@ type PosSalePayment = { id: string; payment_method: string; amount: number }
 type PosSaleItem    = { id: string; item_type: string; description: string; quantity: number; unit_price: number; subtotal: number; wig_brand?: string; wig_serial?: string }
 type PosSale        = { id: string; sale_date: string; total_amount: number; amount_paid: number; balance_due: number; notes?: string; items: PosSaleItem[]; payments: PosSalePayment[] }
 type WigPayment     = { id: string; payment_date: string; amount: number; payment_method: string; payment_type: string }
-type WigOrder       = { id: string; order_date: string; daysmart_serial?: string; brand?: string; length?: string; color?: string; size?: string; total_price: number; amount_paid: number; balance_due: number; status: string; payments: WigPayment[] }
-type CustomerHistory = { pos_sales: PosSale[]; direct_wig_orders: WigOrder[] }
+type WigOrder       = { id: string; order_date: string; daysmart_serial?: string; brand?: string; length?: string; color?: string; size?: string; total_price: number; amount_paid: number; balance_due: number; sale_status: string; payments: WigPayment[] }
+type CustomerHistory = { pos_sales: PosSale[]; wig_sales: WigOrder[] }
 
 const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash', credit_card: 'CC', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
@@ -455,13 +455,13 @@ function safeFmtDate(dateStr: string) {
 function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const { data, isLoading } = useQuery<CustomerHistory>({
     queryKey: ['customer-history', customer.id],
-    queryFn: () => api.get(`/customers/${customer.id}/history`).then(r => r.data).catch(() => ({ pos_sales: [], direct_wig_orders: [] })),
+    queryFn: () => api.get(`/customers/${customer.id}/history`).then(r => r.data).catch(() => ({ pos_sales: [], wig_sales: [] })),
   })
 
   const totalSpent = (data?.pos_sales.reduce((s, p) => s + Number(p.amount_paid), 0) ?? 0)
-    + (data?.direct_wig_orders.reduce((s, w) => s + Number(w.amount_paid), 0) ?? 0)
+    + (data?.wig_sales.reduce((s, w) => s + Number(w.amount_paid), 0) ?? 0)
 
-  const totalVisits = (data?.pos_sales.length ?? 0) + (data?.direct_wig_orders.length ?? 0)
+  const totalVisits = (data?.pos_sales.length ?? 0) + (data?.wig_sales.length ?? 0)
 
   return (
     <div style={sh.overlay} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -481,7 +481,7 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
           <div style={sh.statsStrip}>
             <StatPill label="Total visits" value={String(totalVisits)} />
             <StatPill label="POS sales" value={String(data.pos_sales.length)} />
-            <StatPill label="Direct wig orders" value={String(data.direct_wig_orders.length)} />
+            <StatPill label="Wig sales" value={String(data.wig_sales.length)} />
             <StatPill label="Total paid" value={`$${totalSpent.toFixed(2)}`} accent />
           </div>
         )}
@@ -534,15 +534,15 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
             </div>
           ))}
 
-          {/* Direct Wig Orders */}
-          {data?.direct_wig_orders.map(wig => (
+          {/* Wig Sales */}
+          {data?.wig_sales.map(wig => (
             <div key={wig.id} style={sh.card}>
               <div style={sh.cardTop}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={sh.dateLabel}>{safeFmtDate(wig.order_date)}</span>
                   <span style={{ ...sh.badge, background: '#5581B1' + '22', color: '#5581B1' }}>Wig Order</span>
-                  <span style={{ ...sh.badge, background: STATUS_COLOR[wig.status] + '22', color: STATUS_COLOR[wig.status] }}>
-                    {wig.status.replace('_', ' ')}
+                  <span style={{ ...sh.badge, background: STATUS_COLOR[wig.sale_status] + '22', color: STATUS_COLOR[wig.sale_status] }}>
+                    {wig.sale_status.replace('_', ' ')}
                   </span>
                 </div>
                 <span style={sh.amount}>${Number(wig.total_price).toFixed(2)}</span>
