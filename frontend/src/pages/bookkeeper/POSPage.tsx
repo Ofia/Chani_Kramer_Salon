@@ -464,7 +464,7 @@ export default function POSPage() {
               onClick={() => setTaxEnabled(true)}
               style={{ ...s.taxToggleBtn, ...(taxEnabled ? s.taxToggleBtnActive : {}) }}
             >
-              NY Resident — 8.875%
+              NY Resident (4.5% / 8.875%)
             </button>
             {taxEnabled && cartTotal > 0 && (
               <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: '#18181b' }}>
