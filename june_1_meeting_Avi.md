@@ -111,9 +111,10 @@ The salon runs DaySmart as their POS/appointment system. Screenshots show:
 - ✅ Repair services dropdown wired: /repair-services/ route, schema, seeded 28 types
 - ✅ #5 Repair notes field: text input below repair dropdown, stored in pos_sale_items.notes
 - ✅ #7 Role-gated delete: bookkeeper + owner roles only see Delete Sale button
-- ✅ #10 Sales tax toggle: Tax Exempt / NY Resident 8.875% — stored as tax_rate + tax_amount on sale, shown on receipt
+- ✅ #10 Sales tax toggle: Tax Exempt / NY Resident — split by item type: services 4.5%, goods 8.875% — stored as tax_rate (0/1 flag) + tax_amount on sale, shown on receipt with subtotal breakdown
 - ✅ #11 Shipping: checkbox + address + cost fields, stored on pos_sales, shown on receipt
 - Migration 012: pos_sale_items.notes, pos_sales.tax_rate/tax_amount/shipping_amount/shipping_address
+- ✅ Fix: sales tax split confirmed by Avi — services 4.5%, goods/wigs 8.875% (commit 423e4de)
 - ⚠️ Run migration 012 SQL in Supabase SQL Editor
 
 ### 2026-06-03 — Session 2 (12:47–14:00)
