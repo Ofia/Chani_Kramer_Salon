@@ -893,5 +893,17 @@ class ProviderResponse(BaseModel):
         from_attributes = True
 
 
+# ── Repair Services ───────────────────────────────────────────
+
+class RepairServiceResponse(BaseModel):
+    id: UUID
+    name: str
+    sort_order: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
 # Resolve forward reference: InventoryItemResponse.payments uses "WigPaymentResponse"
 InventoryItemResponse.model_rebuild()

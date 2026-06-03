@@ -30,6 +30,13 @@ type Customer = {
   address?: string
 }
 
+type RepairService = {
+  id: string
+  name: string
+  sort_order: number
+  is_active: boolean
+}
+
 type InventoryItem = {
   id: string
   name: string
@@ -196,6 +203,11 @@ export default function POSPage() {
   const { data: todaySales = [] } = useQuery<PosSale[]>({
     queryKey: ['pos-sales-today', saleDate],
     queryFn: () => api.get(`/pos-sales/date/${saleDate}`).then(r => r.data).catch(() => []),
+  })
+
+  const { data: repairServices = [] } = useQuery<RepairService[]>({
+    queryKey: ['repair-services'],
+    queryFn: () => api.get('/repair-services/').then(r => r.data).catch(() => []),
   })
 
   const saveMutation = useMutation({
@@ -393,6 +405,7 @@ export default function POSPage() {
                   item={item}
                   onChange={patch => updateItem(item._key, patch)}
                   onRemove={() => removeItem(item._key)}
+                  repairServices={repairServices}
                 />
               ))}
               <div style={s.cartTotal}>
@@ -519,10 +532,11 @@ export default function POSPage() {
 
 // ── Cart Row ──────────────────────────────────────────────────
 
-function CartRow({ item, onChange, onRemove }: {
+function CartRow({ item, onChange, onRemove, repairServices }: {
   item: CartItem
   onChange: (patch: Partial<CartItem>) => void
   onRemove: () => void
+  repairServices: RepairService[]
 }) {
   const subtotal = (parseFloat(item.unit_price) || 0) * item.quantity
   const color = ITEM_TYPE_COLOR[item.item_type]
@@ -534,13 +548,26 @@ function CartRow({ item, onChange, onRemove }: {
         {ITEM_TYPE_LABEL[item.item_type]}
       </div>
 
-      {/* Description */}
-      <input
-        value={item.description}
-        onChange={e => onChange({ description: e.target.value })}
-        style={{ ...s.input, flex: 1 }}
-        placeholder="Description"
-      />
+      {/* Description — dropdown for repairs, free text otherwise */}
+      {item.item_type === 'repair' ? (
+        <select
+          value={item.description}
+          onChange={e => onChange({ description: e.target.value })}
+          style={{ ...s.select, flex: 1 }}
+        >
+          <option value="">— select repair type —</option>
+          {repairServices.map(rs => (
+            <option key={rs.id} value={rs.name}>{rs.name}</option>
+          ))}
+        </select>
+      ) : (
+        <input
+          value={item.description}
+          onChange={e => onChange({ description: e.target.value })}
+          style={{ ...s.input, flex: 1 }}
+          placeholder="Description"
+        />
+      )}
 
       {/* Qty (only relevant for inventory products) */}
       {item.item_type === 'inventory' && (
