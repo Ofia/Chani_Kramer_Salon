@@ -309,8 +309,20 @@ export default function POSPage() {
     return s + price * i.quantity
   }, 0)
 
-  const TAX_RATE = 0.08875
-  const taxAmount     = taxEnabled ? Math.round(cartTotal * TAX_RATE * 100) / 100 : 0
+  // NY tax rates split by item type (matches backend logic)
+  const SERVICE_TAX = 0.045    // W&S, Repairs
+  const GOODS_TAX   = 0.08875  // Wigs, Inventory products
+
+  const serviceSubtotal = cart
+    .filter(i => i.item_type === 'wash_set' || i.item_type === 'repair')
+    .reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
+  const goodsSubtotal = cart
+    .filter(i => i.item_type === 'inventory' || i.item_type === 'wig')
+    .reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
+
+  const taxAmount = taxEnabled
+    ? Math.round((serviceSubtotal * SERVICE_TAX + goodsSubtotal * GOODS_TAX) * 100) / 100
+    : 0
   const shippingAmount = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
   const grandTotal    = cartTotal + taxAmount + shippingAmount
 
@@ -352,7 +364,7 @@ export default function POSPage() {
       customer_phone: customer.phone || undefined,
       sale_date: saleDate,
       notes: notes || undefined,
-      tax_rate: taxEnabled ? TAX_RATE : 0,
+      tax_rate: taxEnabled ? 1 : 0,
       shipping_amount: shippingAmount,
       shipping_address: shipping.enabled && shipping.address ? shipping.address : undefined,
       items,
@@ -1468,7 +1480,7 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
               )}
               {sale.tax_amount > 0 && (
                 <>
-                  <SummaryLine label={`Tax (${(sale.tax_rate * 100).toFixed(3)}%):`} value={`$${sale.tax_amount.toFixed(2)}`} />
+                  <SummaryLine label="NY Tax (4.5% svcs / 8.875% goods):" value={`$${sale.tax_amount.toFixed(2)}`} />
                   <div style={{ height: 4 }} />
                 </>
               )}
