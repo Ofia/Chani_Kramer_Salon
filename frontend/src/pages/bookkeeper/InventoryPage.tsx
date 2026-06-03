@@ -633,27 +633,44 @@ function ProductForm({ item, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
-  const [form, setForm] = useState({
+  const [form, setFormState] = useState({
     name:       item?.name       ?? '',
     category:   item?.category   ?? '',
     quantity:   String(item?.quantity  ?? 0),
+    cost_price: String(item?.cost_price  ?? ''),
+    markup_pct: '',
     unit_price: String(item?.unit_price ?? ''),
     notes:      item?.notes      ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
+  function set(k: string, v: string) {
+    setFormState(f => {
+      const next = { ...f, [k]: v }
+      if (k === 'cost_price' || k === 'markup_pct') {
+        const cost = parseFloat(next.cost_price)
+        const pct  = parseFloat(next.markup_pct)
+        if (!isNaN(cost) && !isNaN(pct)) {
+          next.unit_price = (cost * (1 + pct / 100)).toFixed(2)
+        }
+      }
+      return next
+    })
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true); setErr('')
     try {
       const body = {
-        item_type: 'product',
-        name:      form.name,
-        category:  form.category  || null,
-        quantity:  parseInt(form.quantity)   || 0,
-        unit_price: parseFloat(form.unit_price) || 0,
-        notes:     form.notes     || null,
+        item_type:  'product',
+        name:       form.name,
+        category:   form.category  || null,
+        quantity:   parseInt(form.quantity)      || 0,
+        cost_price: form.cost_price ? parseFloat(form.cost_price) : null,
+        unit_price: parseFloat(form.unit_price)  || 0,
+        notes:      form.notes     || null,
       }
       if (item) {
         await api.patch(`/inventory/${item.id}`, body)
@@ -670,13 +687,21 @@ function ProductForm({ item, onClose, onSaved }: {
 
   return (
     <form onSubmit={submit} style={s.form}>
-      <Field label="Name *"><input required style={s.fi} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></Field>
-      <Field label="Category"><input style={s.fi} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></Field>
-      <div style={s.row2}>
-        <Field label="Quantity"><input type="number" style={s.fi} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></Field>
-        <Field label="Unit Price ($)"><input type="number" step="0.01" style={s.fi} value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} /></Field>
+      <Field label="Name *"><input required style={s.fi} value={form.name} onChange={e => set('name', e.target.value)} /></Field>
+      <Field label="Category"><input style={s.fi} value={form.category} onChange={e => set('category', e.target.value)} /></Field>
+      <Field label="Quantity"><input type="number" style={s.fi} value={form.quantity} onChange={e => set('quantity', e.target.value)} /></Field>
+      <div style={s.row3}>
+        <Field label="Cost Price ($)">
+          <input type="number" step="0.01" style={s.fi} value={form.cost_price} onChange={e => set('cost_price', e.target.value)} />
+        </Field>
+        <Field label="Markup %">
+          <input type="number" step="0.1" style={s.fi} value={form.markup_pct} onChange={e => set('markup_pct', e.target.value)} placeholder="e.g. 40" />
+        </Field>
+        <Field label="Retail Price ($)">
+          <input type="number" step="0.01" style={s.fi} value={form.unit_price} onChange={e => set('unit_price', e.target.value)} />
+        </Field>
       </div>
-      <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></Field>
+      <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => set('notes', e.target.value)} /></Field>
       {err && <div style={s.errMsg}>{err}</div>}
       <div style={s.modalFooter}>
         <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
