@@ -60,13 +60,13 @@ This decouples the POS from hardcoded categories permanently.
 | 2 | Inventory management tools (add, edit, view stock) | New Feature | High | ✅ 775eca3 |
 | 3 | Inventory from PDF — supplier delivery slip auto-import | New Feature | Medium | ⬜ |
 | 4 | Auto markup calculator for wigs (cost → retail price) | Inventory | Medium | ✅ 775eca3 |
-| 5 | Repair service notes field (describe repair details) | POS / Services | High | ⬜ |
-| 6 | Sub-categories for W&S and Repairs (full DaySmart service list) | POS | High | ⬜ |
-| 7 | Delete sale — role-gated (Tzipora + Owners only, not frontdesk/sales) | POS / Permissions | High | ⬜ |
+| 5 | Repair service notes field (describe repair details) | POS / Services | High | ✅ ce36201 |
+| 6 | Sub-categories for W&S and Repairs (full DaySmart service list) | POS | High | ✅ ce36201 |
+| 7 | Delete sale — role-gated (Tzipora + Owners only, not frontdesk/sales) | POS / Permissions | High | ✅ (this session) |
 | 8 | Edit sale / receipt for Tzipora (standalone, not inside daily entry) | Bookkeeper | High | ⬜ |
 | 9 | Remove QuickPay from payment options | POS | Quick Win | ✅ 65a0973 |
-| 10 | POS: sales tax toggle (NY resident = 8.875% / non-resident = 0%) | POS | High | ⬜ |
-| 11 | POS: shipping option + shipping address field for wig deliveries | POS | Medium | ⬜ |
+| 10 | POS: sales tax toggle (NY resident = 8.875% / non-resident = 0%) | POS | High | ✅ (this session) |
+| 11 | POS: shipping option + shipping address field for wig deliveries | POS | Medium | ✅ (this session) |
 | 12 | Expense categories (food, shipping, transport, etc.) | Expenses | High | ⬜ |
 | 13 | Bank / Cash source tag on each expense | Expenses | High | ⬜ |
 | 14 | Bank statement auto-import for expenses | Expenses | Medium | ⬜ |
@@ -105,6 +105,16 @@ The salon runs DaySmart as their POS/appointment system. Screenshots show:
 - ✅ Unified Add to Inventory modal — single modal with Wig/Other Product tabs, cost/markup/retail auto-calc, Provider dropdown
 - ✅ Hello Board 50/50 split
 - Commits: 63e33bd, 619caed
+
+### 2026-06-03 — Session 3 (16:21–ongoing)
+- ✅ POS UI matched to backend (inventory-first, remove New Wig button, pre-fill wig specs from inventory, filter sold wigs)
+- ✅ Repair services dropdown wired: /repair-services/ route, schema, seeded 28 types
+- ✅ #5 Repair notes field: text input below repair dropdown, stored in pos_sale_items.notes
+- ✅ #7 Role-gated delete: bookkeeper + owner roles only see Delete Sale button
+- ✅ #10 Sales tax toggle: Tax Exempt / NY Resident 8.875% — stored as tax_rate + tax_amount on sale, shown on receipt
+- ✅ #11 Shipping: checkbox + address + cost fields, stored on pos_sales, shown on receipt
+- Migration 012: pos_sale_items.notes, pos_sales.tax_rate/tax_amount/shipping_amount/shipping_address
+- ⚠️ Run migration 012 SQL in Supabase SQL Editor
 
 ### 2026-06-03 — Session 2 (12:47–14:00)
 - ✅ Migration 011: consolidated wig_orders into inventory_items (one source of truth)

@@ -13,6 +13,7 @@
 
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../../lib/auth'
 import {
   Search, Plus, X, Printer, ChevronDown, ChevronUp,
   Scissors, Wrench, Package, Trash2, CreditCard,
@@ -63,6 +64,7 @@ type CartItem = {
   description: string
   quantity: number
   unit_price: string    // string so input stays controlled
+  notes?: string        // repair notes / annotation
   // inventory
   inventory_item_id?: string
   // wig specs (when item_type = 'wig')
@@ -127,6 +129,7 @@ type PosSaleItem = {
   quantity: number
   unit_price: number
   subtotal: number
+  notes?: string
   inventory_item_id?: string
   wig_serial?: string
   wig_brand?: string
@@ -151,6 +154,10 @@ type PosSale = {
   amount_paid: number
   balance_due: number
   notes?: string
+  tax_rate: number
+  tax_amount: number
+  shipping_amount: number
+  shipping_address?: string
   items: PosSaleItem[]
   payments: PosSalePayment[]
 }
@@ -187,6 +194,9 @@ function emptyCustomer() {
 // ── Page ─────────────────────────────────────────────────────
 
 export default function POSPage() {
+  const { profile } = useAuth()
+  const canDelete = profile?.role === 'bookkeeper' || profile?.role === 'owner'
+
   const [customer, setCustomer] = useState(emptyCustomer())
   const [cart, setCart] = useState<CartItem[]>([])
   const [payments, setPayments] = useState<Payment[]>([
@@ -194,6 +204,8 @@ export default function POSPage() {
   ])
   const [notes, setNotes] = useState('')
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
+  const [taxEnabled, setTaxEnabled] = useState(false)
+  const [shipping, setShipping] = useState({ enabled: false, amount: '', address: '' })
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
   const [stagedWigPayments, setStagedWigPayments] = useState<StagedWigPayment[]>([])
@@ -223,6 +235,8 @@ export default function POSPage() {
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
       setNotes('')
+      setTaxEnabled(false)
+      setShipping({ enabled: false, amount: '', address: '' })
       setStagedWigPayments([])
     },
   })
@@ -295,8 +309,13 @@ export default function POSPage() {
     return s + price * i.quantity
   }, 0)
 
+  const TAX_RATE = 0.08875
+  const taxAmount     = taxEnabled ? Math.round(cartTotal * TAX_RATE * 100) / 100 : 0
+  const shippingAmount = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
+  const grandTotal    = cartTotal + taxAmount + shippingAmount
+
   const paymentsTotal = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
-  const balanceDue = cartTotal - paymentsTotal
+  const balanceDue    = grandTotal - paymentsTotal
 
   // ── Save ──────────────────────────────────────────────────
 
@@ -310,6 +329,7 @@ export default function POSPage() {
       quantity: i.quantity,
       unit_price: parseFloat(i.unit_price) || 0,
       subtotal: (parseFloat(i.unit_price) || 0) * i.quantity,
+      notes: i.notes || undefined,
       inventory_item_id: i.inventory_item_id || undefined,
       wig_serial: i.wig_serial || undefined,
       wig_brand: i.wig_brand || undefined,
@@ -332,6 +352,9 @@ export default function POSPage() {
       customer_phone: customer.phone || undefined,
       sale_date: saleDate,
       notes: notes || undefined,
+      tax_rate: taxEnabled ? TAX_RATE : 0,
+      shipping_amount: shippingAmount,
+      shipping_address: shipping.enabled && shipping.address ? shipping.address : undefined,
       items,
       payments: pmts,
       wig_balance_payments: stagedWigPayments.map(sp => ({
@@ -409,8 +432,65 @@ export default function POSPage() {
                 />
               ))}
               <div style={s.cartTotal}>
-                <span style={{ color: '#71717a' }}>Cart total</span>
+                <span style={{ color: '#71717a' }}>Subtotal</span>
                 <span style={{ fontWeight: 700, fontSize: 18 }}>${cartTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ── Sales Tax ── */}
+        <Section title="Sales Tax">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setTaxEnabled(false)}
+              style={{ ...s.taxToggleBtn, ...(taxEnabled ? {} : s.taxToggleBtnActive) }}
+            >
+              Tax Exempt
+            </button>
+            <button
+              onClick={() => setTaxEnabled(true)}
+              style={{ ...s.taxToggleBtn, ...(taxEnabled ? s.taxToggleBtnActive : {}) }}
+            >
+              NY Resident — 8.875%
+            </button>
+            {taxEnabled && cartTotal > 0 && (
+              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: '#18181b' }}>
+                +${taxAmount.toFixed(2)}
+              </span>
+            )}
+          </div>
+        </Section>
+
+        {/* ── Shipping ── */}
+        <Section title="Shipping">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={shipping.enabled}
+              onChange={e => setShipping(s => ({ ...s, enabled: e.target.checked }))}
+            />
+            Ship this order
+          </label>
+          {shipping.enabled && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                value={shipping.address}
+                onChange={e => setShipping(s => ({ ...s, address: e.target.value }))}
+                style={s.input}
+                placeholder="Shipping address"
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={s.fieldLabel}>Shipping cost</label>
+                <div style={{ ...s.moneyRow, width: 130 }}>
+                  <span style={s.moneySym}>$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={shipping.amount}
+                    onChange={e => setShipping(s => ({ ...s, amount: e.target.value }))}
+                    style={s.moneyInput} placeholder="0.00"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -462,7 +542,7 @@ export default function POSPage() {
           </button>
 
           {/* Balance indicator */}
-          {cartTotal > 0 && (
+          {grandTotal > 0 && (
             <div style={s.balanceRow}>
               <span style={{ color: '#71717a', fontSize: 13 }}>Paid</span>
               <span style={{ fontWeight: 600 }}>${paymentsTotal.toFixed(2)}</span>
@@ -511,6 +591,7 @@ export default function POSPage() {
                 key={sale.id}
                 sale={sale}
                 onReceipt={() => setReceiptSale(sale)}
+                canDelete={canDelete}
               />
             ))}
           </div>
@@ -589,6 +670,16 @@ function CartRow({ item, onChange, onRemove, repairServices }: {
 
       {/* Remove */}
       <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
+
+      {/* Repair notes */}
+      {item.item_type === 'repair' && (
+        <input
+          value={item.notes || ''}
+          onChange={e => onChange({ notes: e.target.value })}
+          style={{ ...s.input, width: '100%', marginTop: 6, fontSize: 12 }}
+          placeholder="Repair notes (optional)…"
+        />
+      )}
 
       {/* Wig specs — expandable */}
       {item.item_type === 'wig' && (
@@ -821,7 +912,7 @@ function InventoryPickerBtn({ onAdd }: { onAdd: (item: InventoryItem) => void })
 
 // ── Today Sale Card ───────────────────────────────────────────
 
-function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => void }) {
+function TodaySaleCard({ sale, onReceipt, canDelete }: { sale: PosSale; onReceipt: () => void; canDelete: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const hasPayment = sale.amount_paid > 0
@@ -874,12 +965,13 @@ function TodaySaleCard({ sale, onReceipt }: { sale: PosSale; onReceipt: () => vo
             ))}
           </div>
 
-          {/* Delete */}
-          {!confirmDelete ? (
+          {/* Delete — bookkeeper + owner only */}
+          {canDelete && !confirmDelete && (
             <button onClick={() => setConfirmDelete(true)} style={s.deleteBtn}>
               <Trash2 size={12} /> Delete Sale
             </button>
-          ) : (
+          )}
+          {canDelete && confirmDelete && (
             <div style={s.deleteConfirm}>
               <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>Delete this sale?</span>
               <button
@@ -1368,6 +1460,24 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
 
             {/* Totals */}
             <div style={{ minWidth: 170, textAlign: 'right' }}>
+              {(sale.tax_amount > 0 || sale.shipping_amount > 0) && (
+                <>
+                  <SummaryLine label="Subtotal:" value={`$${(total - sale.tax_amount - sale.shipping_amount).toFixed(2)}`} />
+                  <div style={{ height: 4 }} />
+                </>
+              )}
+              {sale.tax_amount > 0 && (
+                <>
+                  <SummaryLine label={`Tax (${(sale.tax_rate * 100).toFixed(3)}%):`} value={`$${sale.tax_amount.toFixed(2)}`} />
+                  <div style={{ height: 4 }} />
+                </>
+              )}
+              {sale.shipping_amount > 0 && (
+                <>
+                  <SummaryLine label="Shipping:" value={`$${sale.shipping_amount.toFixed(2)}`} />
+                  <div style={{ height: 4 }} />
+                </>
+              )}
               <SummaryLine label="Total:" value={`$${total.toFixed(2)}`} />
               <div style={{ height: 8 }} />
               <SummaryLine label="Paid:" value={`$${paid.toFixed(2)}`} />
@@ -1380,6 +1490,13 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
               </div>
             </div>
           </div>
+
+          {/* Shipping address on receipt */}
+          {sale.shipping_address && (
+            <div style={{ marginTop: 12, padding: '8px 10px', border: '1px solid #eee', fontSize: 12 }}>
+              <span style={{ fontWeight: 600 }}>Ship to: </span>{sale.shipping_address}
+            </div>
+          )}
 
           {/* Footer */}
           <div style={r.footer}>1474 60th st Brooklyn NY 11219&nbsp;&nbsp;(718) 676-6003</div>
@@ -1512,6 +1629,10 @@ const s: Record<string, React.CSSProperties> = {
   deleteConfirmBtn: { padding: '5px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
+
+  // Tax toggle segmented control
+  taxToggleBtn:      { padding: '6px 14px', border: '1.5px solid rgba(0,0,0,0.15)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#71717a', fontFamily: 'inherit' },
+  taxToggleBtnActive:{ background: '#212121', color: '#fff', borderColor: '#212121' },
 
   // Staged wig balance payments summary
   stagedSection:  { marginBottom: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12 },

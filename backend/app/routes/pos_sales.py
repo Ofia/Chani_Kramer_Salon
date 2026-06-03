@@ -43,20 +43,28 @@ def create_pos_sale(
 ):
     # 1. Compute totals
     #    Cart items + wig balance payments are separate buckets.
+    #    Tax applies to cart items only (not wig balance payments).
+    #    Shipping is added on top.
     wig_balance_total = sum(wbp.amount for wbp in data.wig_balance_payments)
-    total = sum(item.subtotal for item in data.items) + wig_balance_total
+    items_subtotal    = sum(item.subtotal for item in data.items)
+    tax_amount        = (data.tax_rate * items_subtotal).quantize(Decimal("0.01"))
+    total = items_subtotal + wig_balance_total + tax_amount + data.shipping_amount
     paid  = sum(p.amount for p in data.payments) + wig_balance_total
 
     # 2. Create the sale header
     sale = PosSale(
-        customer_id    = data.customer_id,
-        customer_name  = data.customer_name,
-        customer_phone = data.customer_phone,
-        sale_date      = data.sale_date,
-        notes          = data.notes,
-        total_amount   = total,
-        amount_paid    = paid,
-        entered_by     = current_user.id,
+        customer_id      = data.customer_id,
+        customer_name    = data.customer_name,
+        customer_phone   = data.customer_phone,
+        sale_date        = data.sale_date,
+        notes            = data.notes,
+        total_amount     = total,
+        amount_paid      = paid,
+        tax_rate         = data.tax_rate,
+        tax_amount       = tax_amount,
+        shipping_amount  = data.shipping_amount,
+        shipping_address = data.shipping_address,
+        entered_by       = current_user.id,
     )
     db.add(sale)
     db.flush()  # gives us sale.id
@@ -71,6 +79,7 @@ def create_pos_sale(
             unit_price        = item_data.unit_price,
             subtotal          = item_data.subtotal,
             inventory_item_id = item_data.inventory_item_id,
+            notes             = item_data.notes,
             wig_serial        = item_data.wig_serial,
             wig_brand         = item_data.wig_brand,
             wig_length        = item_data.wig_length,

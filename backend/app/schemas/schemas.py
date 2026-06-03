@@ -513,6 +513,7 @@ class PosSaleItemCreate(BaseModel):
     unit_price: Decimal
     subtotal: Decimal
     inventory_item_id: Optional[UUID] = None
+    notes: Optional[str] = None              # repair notes / annotation
     # Wig specs — only when item_type = 'wig'
     wig_serial: Optional[str] = None
     wig_brand: Optional[str] = None
@@ -533,6 +534,7 @@ class PosSaleItemResponse(BaseModel):
     unit_price: float
     subtotal: float
     inventory_item_id: Optional[UUID]
+    notes: Optional[str]
     wig_serial: Optional[str]
     wig_brand: Optional[str]
     wig_length: Optional[str]
@@ -557,6 +559,9 @@ class PosSaleCreate(BaseModel):
     customer_phone: Optional[str] = None
     sale_date: date
     notes: Optional[str] = None
+    tax_rate: Decimal = Decimal("0")         # 0.08875 for NY, 0 for exempt
+    shipping_amount: Decimal = Decimal("0")
+    shipping_address: Optional[str] = None
     items: List[PosSaleItemCreate] = []
     payments: List[PosSalePaymentCreate] = []
     wig_balance_payments: List[WigBalancePaymentIn] = []
@@ -572,6 +577,10 @@ class PosSaleResponse(BaseModel):
     total_amount: float
     amount_paid: float
     balance_due: float
+    tax_rate: float
+    tax_amount: float
+    shipping_amount: float
+    shipping_address: Optional[str]
     items: List[PosSaleItemResponse] = []
     payments: List[PosSalePaymentResponse] = []
     created_at: datetime

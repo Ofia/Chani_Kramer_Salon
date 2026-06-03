@@ -419,11 +419,15 @@ class PosSale(Base):
     customer_name  = Column(String, nullable=False)
     customer_phone = Column(String)
     sale_date      = Column(Date, nullable=False)
-    notes          = Column(Text)
-    total_amount   = Column(Numeric(10, 2), nullable=False, default=0)
-    amount_paid    = Column(Numeric(10, 2), nullable=False, default=0)
-    entered_by     = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    notes             = Column(Text)
+    total_amount      = Column(Numeric(10, 2), nullable=False, default=0)
+    amount_paid       = Column(Numeric(10, 2), nullable=False, default=0)
+    tax_rate          = Column(Numeric(5, 4), nullable=False, default=0)
+    tax_amount        = Column(Numeric(10, 2), nullable=False, default=0)
+    shipping_amount   = Column(Numeric(10, 2), nullable=False, default=0)
+    shipping_address  = Column(Text)
+    entered_by        = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
     items    = relationship("PosSaleItem",    back_populates="pos_sale", cascade="all, delete-orphan")
     payments = relationship("PosSalePayment", back_populates="pos_sale", cascade="all, delete-orphan")
@@ -452,6 +456,7 @@ class PosSaleItem(Base):
     wig_color         = Column(String)
     wig_size          = Column(String)
     wig_front         = Column(String)
+    notes             = Column(Text)         # repair notes / free-text annotation
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
     pos_sale = relationship("PosSale", back_populates="items")
