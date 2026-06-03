@@ -140,8 +140,7 @@ export default function InventoryPage() {
   const [drawerWig, setDrawerWig] = useState<InventoryItem | null>(null)
 
   // Modal states
-  const [showAddWig, setShowAddWig] = useState(false)
-  const [showAddProduct, setShowAddProduct] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
   const [showFileImport, setShowFileImport] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
 
@@ -204,7 +203,7 @@ export default function InventoryPage() {
             <Upload size={15} />
             <span>Add from file</span>
           </button>
-          <button style={s.primaryBtn} onClick={() => tab === 'wig' ? setShowAddWig(true) : setShowAddProduct(true)}>
+          <button style={s.primaryBtn} onClick={() => setShowAddModal(true)}>
             <Plus size={14} />
             Add Product
           </button>
@@ -351,27 +350,13 @@ export default function InventoryPage() {
       )}
 
       {/* ── Modals ── */}
-      {showAddWig && (
-        <AddWigModal
+      {(showAddModal || !!editItem) && (
+        <AddModal
+          initialTab={editItem ? 'product' : tab}
+          editProduct={editItem}
           markups={markups}
-          onClose={() => setShowAddWig(false)}
-          onSaved={() => { setShowAddWig(false); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
-        />
-      )}
-
-      {showAddProduct && (
-        <AddProductModal
-          item={editItem}
-          onClose={() => { setShowAddProduct(false); setEditItem(null) }}
-          onSaved={() => { setShowAddProduct(false); setEditItem(null); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
-        />
-      )}
-
-      {editItem && !showAddProduct && (
-        <AddProductModal
-          item={editItem}
-          onClose={() => setEditItem(null)}
-          onSaved={() => { setEditItem(null); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
+          onClose={() => { setShowAddModal(false); setEditItem(null) }}
+          onSaved={() => { setShowAddModal(false); setEditItem(null); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
         />
       )}
 
@@ -488,53 +473,83 @@ function ProductTable({ products, onEdit, onDelete }: {
   )
 }
 
-// ── Add Wig Modal ──────────────────────────────────────────────────────────
+// ── Add Modal (unified Wig + Product) ─────────────────────────────────────
 
-function AddWigModal({ markups, onClose, onSaved }: {
+function AddModal({ initialTab, editProduct, markups, onClose, onSaved }: {
+  initialTab: ItemType
+  editProduct: InventoryItem | null
   markups: BrandMarkup[]
   onClose: () => void
   onSaved: () => void
 }) {
-  const [form, setForm] = useState({
+  const [modalTab, setModalTab] = useState<ItemType>(initialTab)
+
+  return (
+    <div style={s.modalOverlay} onClick={onClose}>
+      <div style={s.modal} onClick={e => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <span style={s.modalTitle}>{editProduct ? 'Edit Product' : 'Add to Inventory'}</span>
+          <button style={s.iconBtnSm} onClick={onClose}><X size={16} /></button>
+        </div>
+
+        {/* Tab switcher — only when adding new (not editing) */}
+        {!editProduct && (
+          <div style={s.modalTabBar}>
+            {(['wig', 'product'] as ItemType[]).map(t => (
+              <button
+                key={t}
+                style={{ ...s.modalTab, ...(modalTab === t ? s.modalTabActive : {}) }}
+                onClick={() => setModalTab(t)}
+              >
+                {t === 'wig' ? 'Wig' : 'Other Product'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {modalTab === 'wig' ? (
+          <WigForm markups={markups} onClose={onClose} onSaved={onSaved} />
+        ) : (
+          <ProductForm item={editProduct} onClose={onClose} onSaved={onSaved} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Wig Form ───────────────────────────────────────────────────────────────
+
+function WigForm({ markups, onClose, onSaved }: {
+  markups: BrandMarkup[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [form, setFormState] = useState({
     daysmart_serial: '', brand: '', color: '', length: '', size: '', front: '',
-    cost_price: '', retail_price: '', supplier: '', arrival_date: '', notes: '',
+    provider: '', arrival_date: '', cost_price: '', markup_pct: '', retail_price: '', notes: '',
   })
-  const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
-  const [showMarkupSection, setShowMarkupSection] = useState(false)
-  const [markupBrand, setMarkupBrand] = useState('')
-  const [markupPct, setMarkupPct] = useState('')
-  const [savingMarkup, setSavingMarkup] = useState(false)
 
-  async function submitMarkup() {
-    if (!markupBrand || !markupPct) return
-    setSavingMarkup(true)
-    try {
-      await api.post('/inventory/brand-markups', { brand: markupBrand, markup_pct: parseFloat(markupPct) })
-      setMarkupBrand(''); setMarkupPct('')
-      qc.invalidateQueries({ queryKey: ['brand-markups'] })
-    } finally {
-      setSavingMarkup(false)
-    }
-  }
-
-  async function deleteMarkupEntry(id: string) {
-    await api.delete(`/inventory/brand-markups/${id}`)
-    qc.invalidateQueries({ queryKey: ['brand-markups'] })
-  }
+  const { data: providers = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['providers'],
+    queryFn: () => api.get('/providers/?active_only=true').then(r => Array.isArray(r.data) ? r.data : []),
+  })
 
   function set(k: string, v: string) {
-    setForm(f => {
+    setFormState(f => {
       const next = { ...f, [k]: v }
-      // Auto-calculate retail price when brand + cost change
-      if ((k === 'brand' || k === 'cost_price') && next.cost_price) {
-        const markup = markups.find(m => m.brand.toLowerCase() === next.brand.toLowerCase())
-        if (markup) {
-          const cost = parseFloat(next.cost_price)
-          if (!isNaN(cost)) {
-            next.retail_price = (cost * (1 + markup.markup_pct / 100)).toFixed(2)
-          }
+      // Auto-fill markup % when brand matches a known markup
+      if (k === 'brand') {
+        const m = markups.find(m => m.brand.toLowerCase() === v.toLowerCase())
+        if (m) next.markup_pct = String(m.markup_pct)
+      }
+      // Auto-calc retail from cost + markup
+      if (k === 'cost_price' || k === 'markup_pct' || k === 'brand') {
+        const cost = parseFloat(next.cost_price)
+        const pct  = parseFloat(next.markup_pct)
+        if (!isNaN(cost) && !isNaN(pct)) {
+          next.retail_price = (cost * (1 + pct / 100)).toFixed(2)
         }
       }
       return next
@@ -549,16 +564,16 @@ function AddWigModal({ markups, onClose, onSaved }: {
         item_type: 'wig',
         name: [form.brand, form.length, form.color].filter(Boolean).join(' ') || 'Wig',
         daysmart_serial: form.daysmart_serial || null,
-        brand: form.brand || null,
-        color: form.color || null,
-        length: form.length || null,
-        size: form.size || null,
-        front: form.front || null,
-        cost_price: form.cost_price ? parseFloat(form.cost_price) : null,
-        retail_price: form.retail_price ? parseFloat(form.retail_price) : null,
-        supplier: form.supplier || null,
-        arrival_date: form.arrival_date || null,
-        notes: form.notes || null,
+        brand:           form.brand           || null,
+        color:           form.color           || null,
+        length:          form.length          || null,
+        size:            form.size            || null,
+        front:           form.front           || null,
+        cost_price:      form.cost_price      ? parseFloat(form.cost_price)   : null,
+        retail_price:    form.retail_price    ? parseFloat(form.retail_price) : null,
+        supplier:        form.provider        || null,
+        arrival_date:    form.arrival_date    || null,
+        notes:           form.notes           || null,
         wig_status: 'in_stock',
       })
       onSaved()
@@ -570,100 +585,60 @@ function AddWigModal({ markups, onClose, onSaved }: {
   }
 
   return (
-    <div style={s.modalOverlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
-        <div style={s.modalHeader}>
-          <span style={s.modalTitle}>Add Wig to Inventory</span>
-          <button style={s.iconBtnSm} onClick={onClose}><X size={16} /></button>
-        </div>
-        <form onSubmit={submit} style={s.form}>
-          <div style={s.row2}>
-            <Field label="Serial # (DaySmart)"><input style={s.fi} value={form.daysmart_serial} onChange={e => set('daysmart_serial', e.target.value)} /></Field>
-            <Field label="Brand"><input style={s.fi} value={form.brand} onChange={e => set('brand', e.target.value)} /></Field>
-          </div>
-          <div style={s.row3}>
-            <Field label="Color"><input style={s.fi} value={form.color} onChange={e => set('color', e.target.value)} /></Field>
-            <Field label="Length"><input style={s.fi} value={form.length} onChange={e => set('length', e.target.value)} /></Field>
-            <Field label="Size"><input style={s.fi} value={form.size} onChange={e => set('size', e.target.value)} /></Field>
-          </div>
-          <Field label="Front"><input style={s.fi} value={form.front} onChange={e => set('front', e.target.value)} /></Field>
-          <div style={s.row2}>
-            <Field label="Supplier"><input style={s.fi} value={form.supplier} onChange={e => set('supplier', e.target.value)} /></Field>
-            <Field label="Arrival Date"><input type="date" style={s.fi} value={form.arrival_date} onChange={e => set('arrival_date', e.target.value)} /></Field>
-          </div>
-          <div style={s.row2}>
-            <Field label="Cost Price ($)"><input type="number" step="0.01" style={s.fi} value={form.cost_price} onChange={e => set('cost_price', e.target.value)} /></Field>
-            <Field label="Retail Price ($)">
-              <input type="number" step="0.01" style={s.fi} value={form.retail_price} onChange={e => set('retail_price', e.target.value)} />
-              {form.brand && markups.find(m => m.brand.toLowerCase() === form.brand.toLowerCase()) && (
-                <span style={s.hint}>Auto from {markups.find(m => m.brand.toLowerCase() === form.brand.toLowerCase())!.markup_pct}% markup</span>
-              )}
-            </Field>
-          </div>
-          <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => set('notes', e.target.value)} /></Field>
-
-          {/* Brand Markups collapsible section */}
-          <div style={{ borderTop: BORDER, paddingTop: 12 }}>
-            <button
-              type="button"
-              style={{ ...s.iconBtn, width: '100%', justifyContent: 'space-between', fontSize: 12 }}
-              onClick={() => setShowMarkupSection(v => !v)}
-            >
-              <span>Brand Markups</span>
-              <ChevronRight size={13} style={{ transform: showMarkupSection ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
-            </button>
-            {showMarkupSection && (
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={s.hint}>Set markup % per brand. Retail price auto-fills when you enter brand + cost.</p>
-                <div style={s.markupList}>
-                  {markups.length === 0 && <div style={s.emptySmall}>No markups yet.</div>}
-                  {markups.map(m => (
-                    <div key={m.id} style={s.markupRow}>
-                      <span style={s.markupBrand}>{m.brand}</span>
-                      <span style={s.markupPct}>{m.markup_pct}%</span>
-                      <button type="button" style={{ ...s.rowBtn, color: '#ef4444' }} onClick={() => deleteMarkupEntry(m.id)}><X size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                  <Field label="Brand">
-                    <input style={{ ...s.fi, width: 130 }} value={markupBrand} onChange={e => setMarkupBrand(e.target.value)} placeholder="e.g. Jon Renau" />
-                  </Field>
-                  <Field label="Markup %">
-                    <input type="number" step="0.1" style={{ ...s.fi, width: 80 }} value={markupPct} onChange={e => setMarkupPct(e.target.value)} placeholder="40" />
-                  </Field>
-                  <button type="button" style={{ ...s.primaryBtn, alignSelf: 'flex-end', padding: '8px 12px' }} onClick={submitMarkup} disabled={savingMarkup}>
-                    {savingMarkup ? '…' : 'Add'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {err && <div style={s.errMsg}>{err}</div>}
-          <div style={s.modalFooter}>
-            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : 'Add Wig'}</button>
-          </div>
-        </form>
+    <form onSubmit={submit} style={s.form}>
+      <div style={s.row2}>
+        <Field label="Serial # (DaySmart)"><input style={s.fi} value={form.daysmart_serial} onChange={e => set('daysmart_serial', e.target.value)} /></Field>
+        <Field label="Brand"><input style={s.fi} value={form.brand} onChange={e => set('brand', e.target.value)} /></Field>
       </div>
-    </div>
+      <div style={s.row3}>
+        <Field label="Color"><input style={s.fi} value={form.color} onChange={e => set('color', e.target.value)} /></Field>
+        <Field label="Length"><input style={s.fi} value={form.length} onChange={e => set('length', e.target.value)} /></Field>
+        <Field label="Size"><input style={s.fi} value={form.size} onChange={e => set('size', e.target.value)} /></Field>
+      </div>
+      <Field label="Front"><input style={s.fi} value={form.front} onChange={e => set('front', e.target.value)} /></Field>
+      <div style={s.row2}>
+        <Field label="Provider">
+          <select style={s.fi} value={form.provider} onChange={e => set('provider', e.target.value)}>
+            <option value="">— Select provider —</option>
+            {providers.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Arrival Date"><input type="date" style={s.fi} value={form.arrival_date} onChange={e => set('arrival_date', e.target.value)} /></Field>
+      </div>
+      <div style={s.row3}>
+        <Field label="Cost Price ($)">
+          <input type="number" step="0.01" style={s.fi} value={form.cost_price} onChange={e => set('cost_price', e.target.value)} />
+        </Field>
+        <Field label="Markup %">
+          <input type="number" step="0.1" style={s.fi} value={form.markup_pct} onChange={e => set('markup_pct', e.target.value)} placeholder="e.g. 40" />
+        </Field>
+        <Field label="Retail Price ($)">
+          <input type="number" step="0.01" style={s.fi} value={form.retail_price} onChange={e => set('retail_price', e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => set('notes', e.target.value)} /></Field>
+      {err && <div style={s.errMsg}>{err}</div>}
+      <div style={s.modalFooter}>
+        <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+        <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : 'Add Wig'}</button>
+      </div>
+    </form>
   )
 }
 
-// ── Add / Edit Product Modal ───────────────────────────────────────────────
+// ── Product Form ───────────────────────────────────────────────────────────
 
-function AddProductModal({ item, onClose, onSaved }: {
+function ProductForm({ item, onClose, onSaved }: {
   item: InventoryItem | null
   onClose: () => void
   onSaved: () => void
 }) {
   const [form, setForm] = useState({
-    name: item?.name ?? '',
-    category: item?.category ?? '',
-    quantity: String(item?.quantity ?? 0),
+    name:       item?.name       ?? '',
+    category:   item?.category   ?? '',
+    quantity:   String(item?.quantity  ?? 0),
     unit_price: String(item?.unit_price ?? ''),
-    notes: item?.notes ?? '',
+    notes:      item?.notes      ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -674,11 +649,11 @@ function AddProductModal({ item, onClose, onSaved }: {
     try {
       const body = {
         item_type: 'product',
-        name: form.name,
-        category: form.category || null,
-        quantity: parseInt(form.quantity) || 0,
+        name:      form.name,
+        category:  form.category  || null,
+        quantity:  parseInt(form.quantity)   || 0,
         unit_price: parseFloat(form.unit_price) || 0,
-        notes: form.notes || null,
+        notes:     form.notes     || null,
       }
       if (item) {
         await api.patch(`/inventory/${item.id}`, body)
@@ -694,28 +669,20 @@ function AddProductModal({ item, onClose, onSaved }: {
   }
 
   return (
-    <div style={s.modalOverlay} onClick={onClose}>
-      <div style={{ ...s.modal, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
-        <div style={s.modalHeader}>
-          <span style={s.modalTitle}>{item ? 'Edit Product' : 'Add Product'}</span>
-          <button style={s.iconBtnSm} onClick={onClose}><X size={16} /></button>
-        </div>
-        <form onSubmit={submit} style={s.form}>
-          <Field label="Name *"><input required style={s.fi} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></Field>
-          <Field label="Category"><input style={s.fi} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></Field>
-          <div style={s.row2}>
-            <Field label="Quantity"><input type="number" style={s.fi} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></Field>
-            <Field label="Unit Price ($)"><input type="number" step="0.01" style={s.fi} value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} /></Field>
-          </div>
-          <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></Field>
-          {err && <div style={s.errMsg}>{err}</div>}
-          <div style={s.modalFooter}>
-            <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
-            <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : item ? 'Save' : 'Add Product'}</button>
-          </div>
-        </form>
+    <form onSubmit={submit} style={s.form}>
+      <Field label="Name *"><input required style={s.fi} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></Field>
+      <Field label="Category"><input style={s.fi} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></Field>
+      <div style={s.row2}>
+        <Field label="Quantity"><input type="number" style={s.fi} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} /></Field>
+        <Field label="Unit Price ($)"><input type="number" step="0.01" style={s.fi} value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} /></Field>
       </div>
-    </div>
+      <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></Field>
+      {err && <div style={s.errMsg}>{err}</div>}
+      <div style={s.modalFooter}>
+        <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+        <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : item ? 'Save' : 'Add Product'}</button>
+      </div>
+    </form>
   )
 }
 
@@ -996,11 +963,14 @@ const s: Record<string, React.CSSProperties> = {
   notesBox:   { fontSize: 13, color: 'rgba(13,13,13,0.6)', lineHeight: 1.5, background: '#f9f9f8', borderRadius: 8, padding: '10px 12px' },
 
   // Modal
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  modal:        { background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', overflow: 'hidden' },
-  modalHeader:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px 14px', borderBottom: BORDER },
-  modalTitle:   { fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' },
-  modalFooter:  { display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8 },
+  modalOverlay:  { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  modal:         { background: '#fff', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', overflow: 'hidden' },
+  modalHeader:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px 14px', borderBottom: BORDER },
+  modalTitle:    { fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' },
+  modalFooter:   { display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8 },
+  modalTabBar:   { display: 'flex', borderBottom: BORDER, padding: '0 24px' },
+  modalTab:      { background: 'none', border: 'none', borderBottom: '2px solid transparent', padding: '10px 16px', fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.45)', cursor: 'pointer', transition: 'all 0.15s' },
+  modalTabActive:{ borderBottomColor: '#212121', color: '#212121' },
 
   // Form
   form:   { display: 'flex', flexDirection: 'column', gap: 14, padding: '20px 24px 24px' },
