@@ -22,7 +22,7 @@ from pydantic import BaseModel, EmailStr
 from app.models.models import (
     UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
     WigStatus, WigPaymentType, PosItemType, PayrollStatus,
-    InventoryItemType, WigItemStatus, InventoryEventType
+    InventoryItemType, WigItemStatus, InventoryEventType, ProviderType
 )
 
 
@@ -853,3 +853,32 @@ class WeekHoursSummaryItem(BaseModel):
     hourly_rate: Optional[float]
     total_hours: float
     suggested_pay: Optional[float]  # hours × rate for hourly employees; None otherwise
+
+
+# ── Providers ─────────────────────────────────────────────────
+
+class ProviderCreate(BaseModel):
+    name: str
+    provider_type: ProviderType
+    notes: Optional[str] = None
+    is_active: bool = True
+
+
+class ProviderUpdate(BaseModel):
+    name: Optional[str] = None
+    provider_type: Optional[ProviderType] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ProviderResponse(BaseModel):
+    id: UUID
+    name: str
+    provider_type: ProviderType
+    notes: Optional[str]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

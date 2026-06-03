@@ -122,6 +122,12 @@ class InventoryEventType(str, enum.Enum):
     transferred     = "transferred"
     note            = "note"
 
+class ProviderType(str, enum.Enum):
+    wig_company      = "wig_company"
+    in_house_repairs = "in_house_repairs"
+    outside_color    = "outside_color"
+    in_house_color   = "in_house_color"
+
 
 # ── Tables ──────────────────────────────────────────────────
 
@@ -591,6 +597,29 @@ class EmployeeTimeLog(Base):
 
     employee = relationship("Employee", foreign_keys=[employee_id])
     logger   = relationship("User",     foreign_keys=[logged_by])
+
+
+class Provider(Base):
+    """Wig companies, in-house repair staff, and colorists."""
+    __tablename__ = "providers"
+
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name          = Column(String, nullable=False)
+    provider_type = Column(Enum(ProviderType, name='provider_type'), nullable=False)
+    notes         = Column(Text)
+    is_active     = Column(Boolean, nullable=False, default=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at    = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class RepairService(Base):
+    """Lookup table of repair service types — powers dropdowns in POS/service flows."""
+    __tablename__ = "repair_services"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name       = Column(String, nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active  = Column(Boolean, nullable=False, default=True)
 
 
 class AiConversation(Base):

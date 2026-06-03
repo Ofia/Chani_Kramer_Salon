@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Package, Plus, X, ChevronRight, Tag } from 'lucide-react'
+import { Package, Plus, X, ChevronRight, Upload } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ export default function InventoryPage() {
   // Modal states
   const [showAddWig, setShowAddWig] = useState(false)
   const [showAddProduct, setShowAddProduct] = useState(false)
-  const [showMarkups, setShowMarkups] = useState(false)
+  const [showFileImport, setShowFileImport] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -200,13 +200,13 @@ export default function InventoryPage() {
           <h1 style={s.title}>Inventory</h1>
         </div>
         <div style={s.headerRight}>
-          <button style={s.iconBtn} onClick={() => setShowMarkups(true)} title="Brand Markups">
-            <Tag size={15} />
-            <span>Brand Markups</span>
+          <button style={s.iconBtn} onClick={() => setShowFileImport(true)} title="Add from file">
+            <Upload size={15} />
+            <span>Add from file</span>
           </button>
           <button style={s.primaryBtn} onClick={() => tab === 'wig' ? setShowAddWig(true) : setShowAddProduct(true)}>
             <Plus size={14} />
-            {tab === 'wig' ? 'Add Wig' : 'Add Product'}
+            Add Product
           </button>
         </div>
       </div>
@@ -375,11 +375,10 @@ export default function InventoryPage() {
         />
       )}
 
-      {showMarkups && (
-        <BrandMarkupsModal
-          markups={markups}
-          onClose={() => setShowMarkups(false)}
-          onSaved={() => qc.invalidateQueries({ queryKey: ['brand-markups'] })}
+      {showFileImport && (
+        <FileImportModal
+          onClose={() => setShowFileImport(false)}
+          onSaved={() => { setShowFileImport(false); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
         />
       )}
     </div>
@@ -500,8 +499,30 @@ function AddWigModal({ markups, onClose, onSaved }: {
     daysmart_serial: '', brand: '', color: '', length: '', size: '', front: '',
     cost_price: '', retail_price: '', supplier: '', arrival_date: '', notes: '',
   })
+  const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [showMarkupSection, setShowMarkupSection] = useState(false)
+  const [markupBrand, setMarkupBrand] = useState('')
+  const [markupPct, setMarkupPct] = useState('')
+  const [savingMarkup, setSavingMarkup] = useState(false)
+
+  async function submitMarkup() {
+    if (!markupBrand || !markupPct) return
+    setSavingMarkup(true)
+    try {
+      await api.post('/inventory/brand-markups', { brand: markupBrand, markup_pct: parseFloat(markupPct) })
+      setMarkupBrand(''); setMarkupPct('')
+      qc.invalidateQueries({ queryKey: ['brand-markups'] })
+    } finally {
+      setSavingMarkup(false)
+    }
+  }
+
+  async function deleteMarkupEntry(id: string) {
+    await api.delete(`/inventory/brand-markups/${id}`)
+    qc.invalidateQueries({ queryKey: ['brand-markups'] })
+  }
 
   function set(k: string, v: string) {
     setForm(f => {
@@ -580,6 +601,45 @@ function AddWigModal({ markups, onClose, onSaved }: {
             </Field>
           </div>
           <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => set('notes', e.target.value)} /></Field>
+
+          {/* Brand Markups collapsible section */}
+          <div style={{ borderTop: BORDER, paddingTop: 12 }}>
+            <button
+              type="button"
+              style={{ ...s.iconBtn, width: '100%', justifyContent: 'space-between', fontSize: 12 }}
+              onClick={() => setShowMarkupSection(v => !v)}
+            >
+              <span>Brand Markups</span>
+              <ChevronRight size={13} style={{ transform: showMarkupSection ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+            </button>
+            {showMarkupSection && (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <p style={s.hint}>Set markup % per brand. Retail price auto-fills when you enter brand + cost.</p>
+                <div style={s.markupList}>
+                  {markups.length === 0 && <div style={s.emptySmall}>No markups yet.</div>}
+                  {markups.map(m => (
+                    <div key={m.id} style={s.markupRow}>
+                      <span style={s.markupBrand}>{m.brand}</span>
+                      <span style={s.markupPct}>{m.markup_pct}%</span>
+                      <button type="button" style={{ ...s.rowBtn, color: '#ef4444' }} onClick={() => deleteMarkupEntry(m.id)}><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                  <Field label="Brand">
+                    <input style={{ ...s.fi, width: 130 }} value={markupBrand} onChange={e => setMarkupBrand(e.target.value)} placeholder="e.g. Jon Renau" />
+                  </Field>
+                  <Field label="Markup %">
+                    <input type="number" step="0.1" style={{ ...s.fi, width: 80 }} value={markupPct} onChange={e => setMarkupPct(e.target.value)} placeholder="40" />
+                  </Field>
+                  <button type="button" style={{ ...s.primaryBtn, alignSelf: 'flex-end', padding: '8px 12px' }} onClick={submitMarkup} disabled={savingMarkup}>
+                    {savingMarkup ? '…' : 'Add'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {err && <div style={s.errMsg}>{err}</div>}
           <div style={s.modalFooter}>
             <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
@@ -654,6 +714,201 @@ function AddProductModal({ item, onClose, onSaved }: {
             <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : item ? 'Save' : 'Add Product'}</button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ── File Import Modal ──────────────────────────────────────────────────────
+
+type ImportRow = {
+  serial: string
+  brand: string
+  color: string
+  length: string
+  size: string
+  cost_price: string
+}
+
+const IMPORT_COLS: (keyof ImportRow)[] = ['serial', 'brand', 'color', 'length', 'size', 'cost_price']
+const IMPORT_HEADERS = ['Serial', 'Brand', 'Color', 'Length', 'Size', 'Cost $']
+
+function FileImportModal({ onClose, onSaved }: {
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [rows, setRows] = useState<ImportRow[]>([])
+  const [parseError, setParseError] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [results, setResults] = useState<{ ok: number; failed: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  function handleFile(f: File) {
+    setFile(f)
+    setParseError('')
+    setRows([])
+    setResults(null)
+
+    const ext = f.name.toLowerCase().split('.').pop()
+    if (ext !== 'csv') {
+      setParseError(`${ext?.toUpperCase()} parsing is not supported in-browser yet. Please export your data as a CSV file.`)
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      const lines = text.trim().split('\n').filter(l => l.trim())
+      if (lines.length < 2) {
+        setParseError('CSV must have a header row and at least one data row.')
+        return
+      }
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, ''))
+      const parsed: ImportRow[] = lines.slice(1).map(line => {
+        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+        const row: ImportRow = { serial: '', brand: '', color: '', length: '', size: '', cost_price: '' }
+        IMPORT_COLS.forEach(k => {
+          const idx = headers.indexOf(k)
+          row[k] = idx >= 0 ? (cols[idx] ?? '') : ''
+        })
+        return row
+      })
+      setRows(parsed)
+    }
+    reader.readAsText(f)
+  }
+
+  function updateRow(i: number, key: keyof ImportRow, val: string) {
+    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [key]: val } : r))
+  }
+
+  async function confirm() {
+    setImporting(true)
+    let ok = 0, failed = 0
+    for (const row of rows) {
+      try {
+        await api.post('/inventory/', {
+          item_type: 'wig',
+          name: [row.brand, row.length, row.color].filter(Boolean).join(' ') || 'Wig',
+          daysmart_serial: row.serial || null,
+          brand: row.brand || null,
+          color: row.color || null,
+          length: row.length || null,
+          size: row.size || null,
+          cost_price: row.cost_price ? parseFloat(row.cost_price) : null,
+          wig_status: 'in_stock',
+        })
+        ok++
+      } catch {
+        failed++
+      }
+    }
+    setImporting(false)
+    setResults({ ok, failed })
+  }
+
+  return (
+    <div style={s.modalOverlay} onClick={onClose}>
+      <div style={{ ...s.modal, maxWidth: rows.length > 0 ? 720 : 480 }} onClick={e => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <span style={s.modalTitle}>Add from File</span>
+          <button style={s.iconBtnSm} onClick={onClose}><X size={16} /></button>
+        </div>
+        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {results ? (
+            /* Done state */
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>Import complete</p>
+              <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', marginTop: 6 }}>
+                {results.ok} wig{results.ok !== 1 ? 's' : ''} added
+                {results.failed > 0 ? `, ${results.failed} failed` : ''}.
+              </p>
+              <div style={{ ...s.modalFooter, paddingTop: 16 }}>
+                {results.failed > 0 && <button style={s.cancelBtn} onClick={() => setResults(null)}>Try Again</button>}
+                <button style={s.primaryBtn} onClick={onSaved}>Done</button>
+              </div>
+            </div>
+
+          ) : rows.length === 0 ? (
+            /* Upload state */
+            <>
+              <div
+                style={{
+                  border: `2px dashed ${dragging ? '#212121' : 'rgba(13,13,13,0.15)'}`,
+                  borderRadius: 12,
+                  padding: '36px 24px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                  background: dragging ? '#f9f9f8' : '#fff',
+                }}
+                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]) }}
+                onClick={() => document.getElementById('file-import-input')?.click()}
+              >
+                <Upload size={24} color="rgba(13,13,13,0.35)" style={{ marginBottom: 8 }} />
+                <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>Drop a file here or click to browse</p>
+                <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)', marginTop: 4, marginBottom: 0 }}>CSV, DOC, PDF accepted</p>
+                <input
+                  id="file-import-input"
+                  type="file"
+                  accept=".csv,.doc,.docx,.pdf"
+                  style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
+                />
+              </div>
+              {file && <p style={{ fontSize: 12, color: 'rgba(13,13,13,0.5)', margin: 0 }}>{file.name}</p>}
+              {parseError && <div style={s.errMsg}>{parseError}</div>}
+              <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)', margin: 0 }}>
+                CSV columns: <code>serial, brand, color, length, size, cost_price</code>
+              </p>
+              <div style={s.modalFooter}>
+                <button style={s.cancelBtn} onClick={onClose}>Cancel</button>
+              </div>
+            </>
+
+          ) : (
+            /* Review state */
+            <>
+              <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
+                Review {rows.length} row{rows.length !== 1 ? 's' : ''} before importing. Edit any cell inline.
+              </p>
+              <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}>
+                <table style={{ ...s.table, fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      {IMPORT_HEADERS.map(h => <th key={h} style={s.th}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i} style={s.tr}>
+                        {IMPORT_COLS.map(k => (
+                          <td key={k} style={s.td}>
+                            <input
+                              style={{ ...s.fi, padding: '4px 6px', fontSize: 12 }}
+                              value={row[k]}
+                              onChange={e => updateRow(i, k, e.target.value)}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={s.modalFooter}>
+                <button style={s.cancelBtn} onClick={() => { setRows([]); setFile(null) }}>Back</button>
+                <button style={s.primaryBtn} onClick={confirm} disabled={importing}>
+                  {importing ? 'Importing…' : `Import ${rows.length} Wig${rows.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

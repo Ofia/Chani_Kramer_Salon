@@ -23,6 +23,7 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] },
   { divider: true, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/providers', label: 'Providers',     icon: Building2,       end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/inventory', label: 'Inventory',     icon: Package,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] },
