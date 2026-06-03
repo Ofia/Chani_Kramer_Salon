@@ -626,7 +626,7 @@ const p: Record<string, React.CSSProperties> = {
   title:     { fontSize: 26, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.03em', margin: 0 },
   titleName: { color: '#DF5198' },
   sub:       { fontSize: 13, color: 'rgba(13,13,13,0.45)', marginTop: 4 },
-  grid:      { display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' },
+  grid:      { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' },
   leftCol:   { display: 'flex', flexDirection: 'column' },
   rightCol:  { display: 'flex', flexDirection: 'column', gap: 16 },
 }
