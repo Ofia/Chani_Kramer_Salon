@@ -559,7 +559,8 @@ class PosSaleCreate(BaseModel):
     customer_phone: Optional[str] = None
     sale_date: date
     notes: Optional[str] = None
-    tax_rate: Decimal = Decimal("0")         # 0.08875 for NY, 0 for exempt
+    tax_rate: Decimal = Decimal("0")         # 0 = exempt, 0.045 = 4.5% flat, 0.08875 = 8.875% flat
+    tax_amount_override: Optional[Decimal] = None  # custom dollar amount, bypasses rate calculation
     shipping_amount: Decimal = Decimal("0")
     shipping_address: Optional[str] = None
     items: List[PosSaleItemCreate] = []

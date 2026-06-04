@@ -42,26 +42,21 @@ def create_pos_sale(
     current_user: User = Depends(get_current_user),
 ):
     # 1. Compute totals
-    #    Tax applies to cart items only (not wig balance payments or shipping).
-    #    NY tax rates are split by item type:
-    #      Services (wash_set, repair)    → 4.5%
-    #      Products/Wigs (inventory, wig) → 8.875%
-    #    tax_rate column stores 0 (exempt) or 1 (NY resident — rates applied server-side).
-    SERVICE_TAX = Decimal("0.045")
-    GOODS_TAX   = Decimal("0.08875")
-    SERVICE_TYPES = {PosItemType.wash_set, PosItemType.repair}
-
+    #    tax_amount_override: custom dollar amount (used when frontend sets "custom" tax)
+    #    tax_rate = 0          → tax exempt
+    #    tax_rate = 0.045      → flat 4.5% on entire cart subtotal
+    #    tax_rate = 0.08875    → flat 8.875% on entire cart subtotal
     wig_balance_total = sum(wbp.amount for wbp in data.wig_balance_payments)
+    items_subtotal_for_tax = sum(item.subtotal for item in data.items)
 
-    if data.tax_rate > 0:
-        service_subtotal = sum(i.subtotal for i in data.items if i.item_type in SERVICE_TYPES)
-        goods_subtotal   = sum(i.subtotal for i in data.items if i.item_type not in SERVICE_TYPES)
-        tax_amount = (service_subtotal * SERVICE_TAX + goods_subtotal * GOODS_TAX).quantize(Decimal("0.01"))
+    if data.tax_amount_override is not None:
+        tax_amount = data.tax_amount_override.quantize(Decimal("0.01"))
+    elif data.tax_rate > 0:
+        tax_amount = (items_subtotal_for_tax * data.tax_rate).quantize(Decimal("0.01"))
     else:
         tax_amount = Decimal("0")
 
-    items_subtotal = sum(item.subtotal for item in data.items)
-    total = items_subtotal + wig_balance_total + tax_amount + data.shipping_amount
+    total = items_subtotal_for_tax + wig_balance_total + tax_amount + data.shipping_amount
     paid  = sum(p.amount for p in data.payments) + wig_balance_total
 
     # 2. Create the sale header

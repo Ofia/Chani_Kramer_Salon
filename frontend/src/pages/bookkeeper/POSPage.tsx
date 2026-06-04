@@ -202,9 +202,9 @@ export default function POSPage() {
   const [payments, setPayments] = useState<Payment[]>([
     { _key: nextKey(), payment_method: 'cash', amount: '' },
   ])
-  const [notes, setNotes] = useState('')
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
-  const [taxEnabled, setTaxEnabled] = useState(false)
+  const [taxMode, setTaxMode] = useState<'none' | 'flat_4.5' | 'flat_8.875' | 'custom'>('none')
+  const [customTaxAmount, setCustomTaxAmount] = useState('')
   const [shipping, setShipping] = useState({ enabled: false, amount: '', address: '' })
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
@@ -234,8 +234,8 @@ export default function POSPage() {
       setCustomer(emptyCustomer())
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
-      setNotes('')
-      setTaxEnabled(false)
+      setTaxMode('none')
+      setCustomTaxAmount('')
       setShipping({ enabled: false, amount: '', address: '' })
       setStagedWigPayments([])
     },
@@ -309,20 +309,12 @@ export default function POSPage() {
     return s + price * i.quantity
   }, 0)
 
-  // NY tax rates split by item type (matches backend logic)
-  const SERVICE_TAX = 0.045    // W&S, Repairs
-  const GOODS_TAX   = 0.08875  // Wigs, Inventory products
-
-  const serviceSubtotal = cart
-    .filter(i => i.item_type === 'wash_set' || i.item_type === 'repair')
-    .reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
-  const goodsSubtotal = cart
-    .filter(i => i.item_type === 'inventory' || i.item_type === 'wig')
-    .reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
-
-  const taxAmount = taxEnabled
-    ? Math.round((serviceSubtotal * SERVICE_TAX + goodsSubtotal * GOODS_TAX) * 100) / 100
-    : 0
+  const taxAmount = (() => {
+    if (taxMode === 'none') return 0
+    if (taxMode === 'flat_4.5') return Math.round(cartTotal * 0.045 * 100) / 100
+    if (taxMode === 'flat_8.875') return Math.round(cartTotal * 0.08875 * 100) / 100
+    return parseFloat(customTaxAmount) || 0
+  })()
   const shippingAmount = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
   const grandTotal    = cartTotal + taxAmount + shippingAmount
 
@@ -363,8 +355,8 @@ export default function POSPage() {
       customer_name: customer.name.trim(),
       customer_phone: customer.phone || undefined,
       sale_date: saleDate,
-      notes: notes || undefined,
-      tax_rate: taxEnabled ? 1 : 0,
+      tax_rate: taxMode === 'none' ? 0 : taxMode === 'flat_4.5' ? 0.045 : taxMode === 'flat_8.875' ? 0.08875 : 0,
+      tax_amount_override: taxMode === 'custom' ? (parseFloat(customTaxAmount) || 0) : undefined,
       shipping_amount: shippingAmount,
       shipping_address: shipping.enabled && shipping.address ? shipping.address : undefined,
       items,
@@ -451,29 +443,6 @@ export default function POSPage() {
           )}
         </Section>
 
-        {/* ── Sales Tax ── */}
-        <Section title="Sales Tax">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => setTaxEnabled(false)}
-              style={{ ...s.taxToggleBtn, ...(taxEnabled ? {} : s.taxToggleBtnActive) }}
-            >
-              Tax Exempt
-            </button>
-            <button
-              onClick={() => setTaxEnabled(true)}
-              style={{ ...s.taxToggleBtn, ...(taxEnabled ? s.taxToggleBtnActive : {}) }}
-            >
-              NY Resident (4.5% / 8.875%)
-            </button>
-            {taxEnabled && cartTotal > 0 && (
-              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: '#18181b' }}>
-                +${taxAmount.toFixed(2)}
-              </span>
-            )}
-          </div>
-        </Section>
-
         {/* ── Shipping ── */}
         <Section title="Shipping">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
@@ -553,6 +522,35 @@ export default function POSPage() {
             <Plus size={12} /> Split payment
           </button>
 
+          {/* Sales Tax */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+            <label style={{ ...s.fieldLabel, margin: 0, whiteSpace: 'nowrap' }}>Sales Tax</label>
+            <select
+              value={taxMode}
+              onChange={e => { setTaxMode(e.target.value as typeof taxMode); setCustomTaxAmount('') }}
+              style={{ ...s.select, flex: '0 0 auto', width: 'auto', minWidth: 140 }}
+            >
+              <option value="none">None</option>
+              <option value="flat_4.5">4.5%</option>
+              <option value="flat_8.875">8.875%</option>
+              <option value="custom">Custom</option>
+            </select>
+            {taxMode === 'custom' && (
+              <div style={{ ...s.moneyRow, width: 120 }}>
+                <span style={s.moneySym}>$</span>
+                <input type="number" min="0" step="0.01"
+                  value={customTaxAmount}
+                  onChange={e => setCustomTaxAmount(e.target.value)}
+                  style={s.moneyInput} placeholder="0.00" />
+              </div>
+            )}
+            {taxAmount > 0 && (
+              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: '#18181b' }}>
+                +${taxAmount.toFixed(2)}
+              </span>
+            )}
+          </div>
+
           {/* Balance indicator */}
           {grandTotal > 0 && (
             <div style={s.balanceRow}>
@@ -570,11 +568,33 @@ export default function POSPage() {
           )}
         </Section>
 
-        {/* Notes */}
-        <Section title="Notes">
-          <textarea value={notes} onChange={e => setNotes(e.target.value)}
-            style={{ ...s.input, resize: 'vertical', minHeight: 56 }} placeholder="Any notes…" />
-        </Section>
+        {/* Total */}
+        {grandTotal > 0 && (
+          <Section title="Total (incl. tax)">
+            <div style={s.totalBox}>
+              <div style={s.totalRow}>
+                <span>Subtotal</span>
+                <span>${cartTotal.toFixed(2)}</span>
+              </div>
+              {taxAmount > 0 && (
+                <div style={s.totalRow}>
+                  <span>Tax</span>
+                  <span>${taxAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {shippingAmount > 0 && (
+                <div style={s.totalRow}>
+                  <span>Shipping</span>
+                  <span>${shippingAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div style={{ ...s.totalRow, ...s.totalGrand }}>
+                <span>Grand Total</span>
+                <span>${grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </Section>
+        )}
 
         <button onClick={handleSave} disabled={!canSave} style={s.saveBtn}>
           {saveMutation.isPending ? 'Saving…' : 'Save Sale'}
@@ -683,13 +703,13 @@ function CartRow({ item, onChange, onRemove, repairServices }: {
       {/* Remove */}
       <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
 
-      {/* Repair notes */}
-      {item.item_type === 'repair' && (
+      {/* Item notes — repair and wash & set */}
+      {(item.item_type === 'repair' || item.item_type === 'wash_set') && (
         <input
           value={item.notes || ''}
           onChange={e => onChange({ notes: e.target.value })}
           style={{ ...s.input, width: '100%', marginTop: 6, fontSize: 12 }}
-          placeholder="Repair notes (optional)…"
+          placeholder={item.item_type === 'repair' ? 'Repair notes (optional)…' : 'Wash & Set notes (optional)…'}
         />
       )}
 
@@ -1642,9 +1662,10 @@ const s: Record<string, React.CSSProperties> = {
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
 
-  // Tax toggle segmented control
-  taxToggleBtn:      { padding: '6px 14px', border: '1.5px solid rgba(0,0,0,0.15)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#fff', color: '#71717a', fontFamily: 'inherit' },
-  taxToggleBtnActive:{ background: '#212121', color: '#fff', borderColor: '#212121' },
+  // Total box
+  totalBox:          { border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' },
+  totalRow:          { display: 'flex', justifyContent: 'space-between', padding: '8px 14px', fontSize: 13, color: '#52525b', borderBottom: '1px solid rgba(0,0,0,0.05)' },
+  totalGrand:        { fontWeight: 700, fontSize: 15, color: '#18181b', background: '#f7f7f5', borderBottom: 'none' },
 
   // Staged wig balance payments summary
   stagedSection:  { marginBottom: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 12 },
