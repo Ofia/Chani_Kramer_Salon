@@ -497,8 +497,17 @@ export default function POSPage() {
               <div key={sp.wigId} style={s.stagedRow}>
                 <div style={{ flex: 1 }}>
                   <span style={s.stagedName}>{sp.wigName}</span>
-                  <span style={s.stagedMeta}>{METHOD_LABEL[sp.method]} · Was due ${sp.balance.toFixed(2)}</span>
+                  <span style={s.stagedMeta}>Was due ${sp.balance.toFixed(2)}</span>
                 </div>
+                <select
+                  value={sp.method}
+                  onChange={e => setStagedWigPayments(prev =>
+                    prev.map(x => x.wigId === sp.wigId ? { ...x, method: e.target.value } : x)
+                  )}
+                  style={{ ...s.select, flex: '0 0 130px', fontSize: 12, padding: '3px 6px' }}
+                >
+                  {METHODS.map(m => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
+                </select>
                 <span style={s.stagedAmt}>${sp.amount.toFixed(2)}</span>
                 <button onClick={() => setStagedWigPayments(p => p.filter(x => x.wigId !== sp.wigId))} style={s.iconBtn}>
                   <X size={12} />
@@ -957,7 +966,7 @@ function InventoryPickerBtn({ onAdd }: { onAdd: (item: InventoryItem) => void })
                   {item.item_type === 'wig'
                     ? [item.brand, item.daysmart_serial, item.length, item.color].filter(Boolean).join(' · ')
                     : `${item.category || ''} · ${item.quantity} in stock`
-                  }{' '}· ${item.unit_price.toFixed(2)}
+                  }{' '}· ${(item.retail_price ?? item.unit_price ?? 0).toFixed(2)}
                 </span>
               </button>
             ))}

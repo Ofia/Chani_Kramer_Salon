@@ -237,11 +237,6 @@ export default function DailyEntryPage() {
     },
   })
 
-  const lockMutation = useMutation({
-    mutationFn: () => api.post(`/daily-summary/${summaryDate}/lock`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['daily-summary'] }),
-  })
-
   // Create wig order
   const wigMutation = useMutation({
     mutationFn: (data: object) => api.post('/wig-orders/', data),
@@ -346,7 +341,6 @@ export default function DailyEntryPage() {
 
   if (isLoading) return <p style={{ color: '#71717a', fontSize: 14 }}>Loading…</p>
 
-  const isLocked = existing?.is_locked
   const totalWigSales = wigsPaidFullToday.reduce((s, w) => s + parseFloat(w.total_price as unknown as string), 0)
   const washSetAmt     = parseFloat(activity.wash_set)      || 0
   const repairsAmt     = parseFloat(activity.repairs)       || 0
@@ -364,9 +358,8 @@ export default function DailyEntryPage() {
             <h1 style={s.title}>Daily Entry</h1>
             <input type="date" value={summaryDate}
               onChange={e => { setSummaryDate(e.target.value) }}
-              style={s.dateInput} disabled={isLocked} />
+              style={s.dateInput} />
           </div>
-          {isLocked && <span style={s.lockedBadge}>Locked</span>}
         </header>
 
         {/* Auto-fill banner — shown when POS data pre-populated the form */}
@@ -381,12 +374,7 @@ export default function DailyEntryPage() {
           </div>
         )}
 
-        {isLocked ? (
-          <div style={s.card}>
-            <p style={{ color: '#71717a', fontSize: 14 }}>This day is locked.</p>
-          </div>
-        ) : (
-          <>
+        <>
             <div style={s.segmented}>
               {TABS.map((label, i) => (
                 <button key={label} onClick={() => setStep(i)}
@@ -480,9 +468,7 @@ export default function DailyEntryPage() {
                   wigDeposits={parseFloat(payments.wig_deposits_total) || 0}
                   todayExpenses={todayExpenses}
                   onSave={handleSaveSummary}
-                  onLock={() => lockMutation.mutate()}
                   isSaving={summaryMutation.isPending}
-                  isLocking={lockMutation.isPending}
                   saved={saved}
                   isError={summaryMutation.isError}
                 />
@@ -497,8 +483,7 @@ export default function DailyEntryPage() {
                 </button>
               )}
             </div>
-          </>
-        )}
+        </>
       </div>
 
       {/* ── Right: live dashboard ── */}
@@ -1216,7 +1201,7 @@ function RevenueTab({ wigsPaidFullToday, totalWigSales, washSet, repairs, produc
 
 // ── Review Tab ───────────────────────────────────────────────
 
-function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, newWigsCount, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, onLock, isSaving, isLocking, saved, isError, existing }: any) {
+function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, wigsPaidFullToday, newWigsCount, totalWigSales, totalRevenue, totalCollected, wigDeposits, todayExpenses, onSave, isSaving, saved, isError, existing }: any) {
   const totalExpenses = todayExpenses.reduce((s: number, e: any) => s + parseFloat(e.amount), 0)
   const wigsPaidFull = wigsPaidFullToday.length
 
@@ -1309,11 +1294,6 @@ function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, wigs
         <button onClick={onSave} disabled={isSaving} style={s.primaryBtn}>
           {isSaving ? 'Saving…' : existing ? 'Update Day' : 'Save Day'}
         </button>
-        {existing && !existing.is_locked && (
-          <button onClick={onLock} disabled={isLocking} style={s.ghostBtn}>
-            {isLocking ? 'Locking…' : 'Lock Day'}
-          </button>
-        )}
       </div>
       {saved && <p style={s.success}>Saved successfully.</p>}
       {isError && <p style={s.errorMsg}>Error saving. Try again.</p>}
@@ -1447,7 +1427,7 @@ const s: Record<string, React.CSSProperties> = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid rgba(0,0,0,0.07)' },
   title: { fontSize: 26, fontWeight: 700, color: '#18181b', margin: '0 0 10px', letterSpacing: '-0.03em' },
   dateInput: { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#18181b', background: '#fff', fontFamily: 'inherit', outline: 'none' },
-  lockedBadge: { background: '#18181b', color: '#fff', padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' },
+
 
   autoFillBanner: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, marginBottom: 18, fontSize: 13, color: '#166534' },
   autoFillDot: { width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0 },
