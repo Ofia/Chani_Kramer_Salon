@@ -587,7 +587,7 @@ function WigForm({ markups, onClose, onSaved }: {
   return (
     <form onSubmit={submit} style={s.form}>
       <div style={s.row2}>
-        <Field label="Serial # (DaySmart)"><input style={s.fi} value={form.daysmart_serial} onChange={e => set('daysmart_serial', e.target.value)} /></Field>
+        <Field label="Serial #"><input style={s.fi} value={form.daysmart_serial} onChange={e => set('daysmart_serial', e.target.value)} /></Field>
         <Field label="Brand">
           <input style={s.fi} value={form.brand} onChange={e => set('brand', e.target.value)} placeholder="e.g. RINA" list="brand-suggestions" />
           <datalist id="brand-suggestions">{markups.map(m => <option key={m.id} value={m.brand} />)}</datalist>
