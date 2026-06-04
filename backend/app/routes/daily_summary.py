@@ -67,8 +67,6 @@ def update_summary(
     s = db.query(DailySummary).filter(DailySummary.summary_date == summary_date).first()
     if not s:
         raise HTTPException(status_code=404, detail="Summary not found")
-    if s.is_locked:
-        raise HTTPException(status_code=423, detail="This day is locked and cannot be edited")
 
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(s, field, value)

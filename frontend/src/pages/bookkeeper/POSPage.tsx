@@ -231,6 +231,7 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['pos-sales-today'] })
       qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
       qc.invalidateQueries({ queryKey: ['inventory'] })
+      qc.invalidateQueries({ queryKey: ['pending-wigs'] })
       // Capture wig payments before reset so receipt can display them
       setReceiptWigPayments([...stagedWigPayments])
       // Auto-open receipt

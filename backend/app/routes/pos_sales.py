@@ -57,7 +57,7 @@ def create_pos_sale(
         tax_amount = Decimal("0")
 
     total = items_subtotal_for_tax + wig_balance_total + tax_amount + data.shipping_amount
-    paid  = sum(p.amount for p in data.payments)  # wig balance tracked via wig_payments, not double-counted here
+    paid  = sum(p.amount for p in data.payments) + wig_balance_total  # wig balance is both in total and paid so balance_due = cart − cart_payments
 
     # 2. Create the sale header
     sale = PosSale(

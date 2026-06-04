@@ -1284,12 +1284,6 @@ function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, wigs
         </>
       )}
 
-      <div style={{ height: 12 }} />
-      <div style={{ ...s.subtotal, background: '#f0fdf4' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#166534' }}>40% Bank Deposit</span>
-        <span style={{ fontWeight: 700, fontSize: 17, color: '#166534' }}>${bankDeposit.toFixed(2)}</span>
-      </div>
-
       <div style={s.actions}>
         <button onClick={onSave} disabled={isSaving} style={s.primaryBtn}>
           {isSaving ? 'Saving…' : existing ? 'Update Day' : 'Save Day'}
