@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
-  LayoutDashboard, ClipboardList, Users, Receipt, Building2,
+  Activity, Users, Receipt, Building2,
   LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact, ShoppingCart, Package,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
@@ -16,10 +16,9 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/hello',     label: 'Hello Board',       icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper/pos',       label: 'Point of Sale',     icon: ShoppingCart,    end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper/sales',     label: 'Sales Management',  icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/daily',     label: 'Daily Entry',       icon: ClipboardList,   end: false, roles: ['front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/deposits',  label: 'Deposits',      icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper',           label: 'Daily Summary', icon: LayoutDashboard, end: true,  roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/payroll',   label: 'Payroll',       icon: Users,           end: false, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/overview',   label: 'Overview',          icon: Activity,        end: false, roles: ['front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/deposits',  label: 'Deposits',          icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] },
+  { to: '/bookkeeper/payroll',   label: 'Payroll',           icon: Users,           end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] },
   { divider: true, roles: ['bookkeeper','owner'] },

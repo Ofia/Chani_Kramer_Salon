@@ -53,7 +53,7 @@ const EMPTY_WIG: NewWigForm = {
 }
 
 const EMPTY_EXPENSE: NewExpenseForm = {
-  category: 'misc', amount: '', vendor: '', notes: '',
+  category: 'other', amount: '', vendor: '', notes: '',
 }
 
 const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'check', 'zelle']
@@ -62,20 +62,19 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
 }
 
 const EXPENSE_CATEGORIES = [
-  { value: 'misc', label: 'Misc' },
-  { value: 'hair_supplies', label: 'Hair Supplies' },
-  { value: 'grossman', label: 'Grossman' },
-  { value: 'itzik', label: 'Itzik' },
-  { value: 'monsey_driver', label: 'Monsey Driver' },
-  { value: 'rent', label: 'Rent' },
-  { value: 'phone_internet', label: 'Phone & Internet' },
-  { value: 'shipping', label: 'Shipping' },
-  { value: 'dalia_instagram', label: 'Dalia Instagram' },
-  { value: 'work_purchases', label: 'Work Purchases' },
-  { value: 'food', label: 'Food' },
-  { value: 'sales_tax', label: 'Sales Tax' },
-  { value: 'reconciliation', label: 'Reconciliation' },
-  { value: 'other', label: 'Other' },
+  { value: 'rent_facilities',         label: 'Rent & Facilities' },
+  { value: 'utilities',               label: 'Utilities' },
+  { value: 'supplies_materials',      label: 'Supplies & Materials' },
+  { value: 'cost_of_goods',           label: 'Cost of Goods' },
+  { value: 'marketing_advertising',   label: 'Marketing & Advertising' },
+  { value: 'transportation_shipping', label: 'Transportation & Shipping' },
+  { value: 'maintenance_repairs',     label: 'Maintenance & Repairs' },
+  { value: 'food_beverages',          label: 'Food & Beverages' },
+  { value: 'professional_services',   label: 'Professional Services' },
+  { value: 'taxes_fees',              label: 'Taxes & Fees' },
+  { value: 'charitable_giving',       label: 'Charitable Giving (מעשרות)' },
+  { value: 'reconciliation',          label: 'Reconciliation' },
+  { value: 'other',                   label: 'Other' },
 ]
 
 const BRANDS = ['RINA', 'RINA ELITE', 'BK', 'ROCHI LIPSKER', 'SARY', 'ZEHAVA', 'ELITE']

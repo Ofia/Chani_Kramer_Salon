@@ -36,9 +36,10 @@ import POSPage              from './pages/bookkeeper/POSPage'
 import EmployeesPage        from './pages/bookkeeper/EmployeesPage'
 import CustomersPage        from './pages/bookkeeper/CustomersPage'
 import HelloBoardPage       from './pages/bookkeeper/HelloBoardPage'
-import OwnerDashboard       from './pages/owner/OwnerDashboard'
-import InventoryPage        from './pages/bookkeeper/InventoryPage'
-import ProvidersPage        from './pages/bookkeeper/ProvidersPage'
+import OwnerDashboard            from './pages/owner/OwnerDashboard'
+import InventoryPage             from './pages/bookkeeper/InventoryPage'
+import ProvidersPage             from './pages/bookkeeper/ProvidersPage'
+import OperationOverviewPage     from './pages/bookkeeper/OperationOverviewPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
@@ -61,7 +62,8 @@ function AppRoutes() {
         <Route index            element={<BookkeeperDashboard />} />
         <Route path="hello"     element={<HelloBoardPage />} />
         <Route path="pos"       element={<POSPage />} />
-        <Route path="daily"     element={<DailyEntryPage />} />
+        <Route path="daily"     element={<Navigate to="/bookkeeper/overview" replace />} />
+        <Route path="overview"  element={<OperationOverviewPage />} />
         <Route path="payroll"   element={<PayrollEntryPage />} />
         <Route path="expenses"  element={<ExpensesPage />} />
         <Route path="deposits"  element={<DepositsPage />} />

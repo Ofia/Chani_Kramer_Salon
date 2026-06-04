@@ -6,20 +6,19 @@ import { Trash2, Plus, X } from 'lucide-react'
 // ── Category labels ──────────────────────────────────────────
 
 const CATEGORIES = [
-  { value: 'itzik',           label: 'Itzik (Maintenance)' },
-  { value: 'grossman',        label: 'Grossman (Supplier)' },
-  { value: 'monsey_driver',   label: 'Monsey Driver (נהג מונסי)' },
-  { value: 'rent',            label: 'Rent (שכירות)' },
-  { value: 'phone_internet',  label: 'Phone & Internet' },
-  { value: 'hair_supplies',   label: 'Hair Supplies' },
-  { value: 'shipping',        label: 'Shipping' },
-  { value: 'dalia_instagram', label: 'Dalia Instagram' },
-  { value: 'work_purchases',  label: 'Work Purchases (קניות לעבודה)' },
-  { value: 'food',            label: 'Food / Meals (אוכל)' },
-  { value: 'sales_tax',       label: 'Sales Tax' },
-  { value: 'reconciliation',  label: 'Reconciliation / Extra' },
-  { value: 'misc',            label: 'Misc (הוצאות שונות)' },
-  { value: 'other',           label: 'Other' },
+  { value: 'rent_facilities',         label: 'Rent & Facilities' },
+  { value: 'utilities',               label: 'Utilities' },
+  { value: 'supplies_materials',      label: 'Supplies & Materials' },
+  { value: 'cost_of_goods',           label: 'Cost of Goods' },
+  { value: 'marketing_advertising',   label: 'Marketing & Advertising' },
+  { value: 'transportation_shipping', label: 'Transportation & Shipping' },
+  { value: 'maintenance_repairs',     label: 'Maintenance & Repairs' },
+  { value: 'food_beverages',          label: 'Food & Beverages' },
+  { value: 'professional_services',   label: 'Professional Services' },
+  { value: 'taxes_fees',              label: 'Taxes & Fees' },
+  { value: 'charitable_giving',       label: 'Charitable Giving (מעשרות)' },
+  { value: 'reconciliation',          label: 'Reconciliation' },
+  { value: 'other',                   label: 'Other' },
 ]
 
 function catLabel(v: string) {
@@ -49,7 +48,7 @@ function fmt(n: number | string) {
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const YEARS  = [2023, 2024, 2025, 2026]
-const EMPTY  = { category: 'misc', amount: '', vendor: '', notes: '' }
+const EMPTY  = { category: 'other', amount: '', vendor: '', notes: '' }
 
 // ── Component ────────────────────────────────────────────────
 
