@@ -26,7 +26,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 import LoginPage            from './pages/LoginPage'
 import BookkeeperLayout     from './pages/bookkeeper/BookkeeperLayout'
 import BookkeeperDashboard  from './pages/bookkeeper/BookkeeperDashboard'
-import DailyEntryPage       from './pages/bookkeeper/DailyEntryPage'
+
 import PayrollEntryPage     from './pages/bookkeeper/PayrollEntryPage'
 import ExpensesPage         from './pages/bookkeeper/ExpensesPage'
 import DepositsPage         from './pages/bookkeeper/DepositsPage'
