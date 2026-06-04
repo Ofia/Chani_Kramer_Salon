@@ -1219,7 +1219,7 @@ function ReviewTab({ summaryDate, payments, washSet, repairs, productSales, wigs
   })
 
   const totalPayroll = (weekPayroll as any[]).reduce((sum: number, p: any) => sum + Number(p.amount), 0)
-  const bankDeposit  = totalRevenue * 0.40
+
 
   return (
     <div>
