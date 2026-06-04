@@ -210,6 +210,7 @@ export default function POSPage() {
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
   const [stagedWigPayments, setStagedWigPayments] = useState<StagedWigPayment[]>([])
+  const [receiptWigPayments, setReceiptWigPayments] = useState<StagedWigPayment[]>([])
 
   const qc = useQueryClient()
 
@@ -230,6 +231,8 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['pos-sales-today'] })
       qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
       qc.invalidateQueries({ queryKey: ['inventory'] })
+      // Capture wig payments before reset so receipt can display them
+      setReceiptWigPayments([...stagedWigPayments])
       // Auto-open receipt
       setReceiptSale(res.data)
       // Reset form — keep saleDate so the right panel stays on the same date
@@ -317,11 +320,14 @@ export default function POSPage() {
     if (taxMode === 'flat_8.875') return Math.round(cartTotal * 0.08875 * 100) / 100
     return parseFloat(customTaxAmount) || 0
   })()
-  const shippingAmount = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
-  const grandTotal    = cartTotal + taxAmount + shippingAmount
+  const shippingAmount   = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
+  const wigBalanceTotal  = stagedWigPayments.reduce((s, sp) => s + sp.amount, 0)
+  const grandTotal       = cartTotal + taxAmount + shippingAmount + wigBalanceTotal
 
-  const paymentsTotal = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
-  const balanceDue    = grandTotal - paymentsTotal
+  const paymentsTotal    = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+  // Wig balance payments are pre-paid via the staging panel — count them as already paid
+  const effectivePaid    = paymentsTotal + wigBalanceTotal
+  const balanceDue       = grandTotal - effectivePaid
 
   // ── Save ──────────────────────────────────────────────────
 
@@ -558,7 +564,7 @@ export default function POSPage() {
           {grandTotal > 0 && (
             <div style={s.balanceRow}>
               <span style={{ color: '#71717a', fontSize: 13 }}>Paid</span>
-              <span style={{ fontWeight: 600 }}>${paymentsTotal.toFixed(2)}</span>
+              <span style={{ fontWeight: 600 }}>${effectivePaid.toFixed(2)}</span>
               <span style={{ color: '#71717a', fontSize: 13, marginLeft: 16 }}>
                 {balanceDue > 0 ? 'Balance due' : balanceDue < 0 ? 'Overpaid' : 'Paid in full ✓'}
               </span>
@@ -589,6 +595,12 @@ export default function POSPage() {
                 <div style={s.totalRow}>
                   <span>Shipping</span>
                   <span>${shippingAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {wigBalanceTotal > 0 && (
+                <div style={s.totalRow}>
+                  <span>Wig balance payment(s)</span>
+                  <span>${wigBalanceTotal.toFixed(2)}</span>
                 </div>
               )}
               <div style={{ ...s.totalRow, ...s.totalGrand }}>
@@ -635,7 +647,7 @@ export default function POSPage() {
 
       {/* ── Receipt Modal (new POS sale) ── */}
       {receiptSale && (
-        <ReceiptModal sale={receiptSale} wigPayments={stagedWigPayments} onClose={() => setReceiptSale(null)} />
+        <ReceiptModal sale={receiptSale} wigPayments={receiptWigPayments} onClose={() => setReceiptSale(null)} />
       )}
 
       {/* ── Receipt Modal (wig balance payment) ── */}

@@ -57,7 +57,7 @@ def create_pos_sale(
         tax_amount = Decimal("0")
 
     total = items_subtotal_for_tax + wig_balance_total + tax_amount + data.shipping_amount
-    paid  = sum(p.amount for p in data.payments) + wig_balance_total
+    paid  = sum(p.amount for p in data.payments)  # wig balance tracked via wig_payments, not double-counted here
 
     # 2. Create the sale header
     sale = PosSale(
@@ -146,6 +146,22 @@ def create_pos_sale(
                         payment_type      = pay_type,
                     ))
 
+                # Log sale event in wig history
+                if new_sale_status == WigStatus.paid_in_full:
+                    sold_desc = f"Sold — paid in full ${item_data.subtotal:.2f} to {data.customer_name}"
+                elif deposit_amt > 0:
+                    sold_desc = f"Sold — deposit ${deposit_amt:.2f} of ${item_data.subtotal:.2f} to {data.customer_name}"
+                else:
+                    sold_desc = f"Sold — no deposit, total ${item_data.subtotal:.2f} to {data.customer_name}"
+                db.add(InventoryEvent(
+                    inventory_item_id = wig.id,
+                    event_type        = InventoryEventType.sold,
+                    customer_id       = data.customer_id,
+                    description       = sold_desc,
+                    event_date        = data.sale_date,
+                    created_by        = current_user.id,
+                ))
+
         db.add(item)
 
         # For service items linked to a salon wig: log a 'service' event in the wig's history
@@ -199,10 +215,19 @@ def create_pos_sale(
             wig.sale_status = WigStatus.paid_in_full
             wig.pickup_date = data.sale_date
 
-        db.add(PosSalePayment(
-            pos_sale_id    = sale.id,
-            payment_method = wbp.payment_method,
-            amount         = wbp.amount,
+        # Log payment event in wig history
+        if pay_type == WigPaymentType.final:
+            pmt_desc = f"Paid in full — ${wbp.amount:.2f} received"
+        else:
+            remaining = max(Decimal(0), (wig.total_price or Decimal(0)) - wig.amount_paid)
+            pmt_desc = f"Partial payment — ${wbp.amount:.2f} received, ${remaining:.2f} remaining"
+        db.add(InventoryEvent(
+            inventory_item_id = wig.id,
+            event_type        = InventoryEventType.payment_received,
+            customer_id       = data.customer_id,
+            description       = pmt_desc,
+            event_date        = data.sale_date,
+            created_by        = current_user.id,
         ))
 
     db.commit()
