@@ -223,11 +223,6 @@ export default function POSPage() {
     queryFn: () => api.get('/repair-services/').then(r => r.data).catch(() => []),
   })
 
-  const { data: brandMarkups = [] } = useQuery<{ id: string; brand: string }[]>({
-    queryKey: ['brand-markups'],
-    queryFn: () => api.get('/inventory/brand-markups').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
-  })
-  const brands = brandMarkups.map(m => m.brand)
 
   const saveMutation = useMutation({
     mutationFn: (payload: object) => api.post('/pos-sales/', payload),
@@ -440,7 +435,6 @@ export default function POSPage() {
                   onChange={patch => updateItem(item._key, patch)}
                   onRemove={() => removeItem(item._key)}
                   repairServices={repairServices}
-                  brands={brands}
                   customerId={customer.id}
                 />
               ))}
@@ -654,12 +648,11 @@ export default function POSPage() {
 
 // ── Cart Row ──────────────────────────────────────────────────
 
-function CartRow({ item, onChange, onRemove, repairServices, brands, customerId }: {
+function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
   item: CartItem
   onChange: (patch: Partial<CartItem>) => void
   onRemove: () => void
   repairServices: RepairService[]
-  brands: string[]
   customerId: string
 }) {
   const subtotal = (parseFloat(item.unit_price) || 0) * item.quantity
@@ -748,7 +741,7 @@ function CartRow({ item, onChange, onRemove, repairServices, brands, customerId 
           {item.showWigSpecs && (
             <div style={s.wigSpecsGrid}>
               <WigSpecInput label="Serial" value={item.wig_serial} onChange={v => onChange({ wig_serial: v })} placeholder="rina44871" />
-              <WigSpecSelect label="Brand" value={item.wig_brand || ''} onChange={v => onChange({ wig_brand: v })} options={brands} />
+              <WigSpecInput label="Brand" value={item.wig_brand} onChange={v => onChange({ wig_brand: v })} placeholder="e.g. RINA" />
               <WigSpecInput label="Length" value={item.wig_length} onChange={v => onChange({ wig_length: v })} placeholder='14"' />
               <WigSpecInput label="Color" value={item.wig_color} onChange={v => onChange({ wig_color: v })} placeholder="2/8" />
               <WigSpecInput label="Size" value={item.wig_size} onChange={v => onChange({ wig_size: v })} placeholder="M" />
@@ -1708,17 +1701,6 @@ function WigSpecInput({ label, value, onChange, placeholder }: { label: string; 
   )
 }
 
-function WigSpecSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
-  return (
-    <div>
-      <label style={s.fieldLabel}>{label}</label>
-      <select value={value} onChange={e => onChange(e.target.value)} style={s.select}>
-        <option value="">— select —</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  )
-}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
