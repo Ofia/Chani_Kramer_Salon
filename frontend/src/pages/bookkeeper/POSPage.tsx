@@ -576,7 +576,14 @@ export default function POSPage() {
               <span style={{ color: '#71717a', fontSize: 13 }}>Paid</span>
               <span style={{ fontWeight: 600 }}>${effectivePaid.toFixed(2)}</span>
               <span style={{ color: '#71717a', fontSize: 13, marginLeft: 16 }}>
-                {balanceDue > 0 ? 'Balance due' : balanceDue < 0 ? 'Overpaid' : 'Paid in full ✓'}
+                {balanceDue > 0
+                  ? 'Balance due'
+                  : balanceDue < 0
+                  ? 'Overpaid'
+                  : stagedWigPayments.some(sp => sp.amount < sp.balance)
+                  ? 'Transaction balanced · Wig balance remaining'
+                  : 'Paid in full ✓'
+                }
               </span>
               {balanceDue !== 0 && (
                 <span style={{ fontWeight: 700, color: balanceDue > 0 ? '#DF5198' : '#10b981' }}>
