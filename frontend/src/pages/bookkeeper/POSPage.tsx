@@ -232,6 +232,7 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
       qc.invalidateQueries({ queryKey: ['inventory'] })
       qc.invalidateQueries({ queryKey: ['pending-wigs'] })
+      qc.invalidateQueries({ queryKey: ['operation-overview'] })
       // Capture wig payments before reset so receipt can display them
       setReceiptWigPayments([...stagedWigPayments])
       // Auto-open receipt
@@ -999,6 +1000,7 @@ function TodaySaleCard({ sale, onReceipt, canDelete }: { sale: PosSale; onReceip
       qc.invalidateQueries({ queryKey: ['pos-sales-today'] })
       qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
       qc.invalidateQueries({ queryKey: ['inventory'] })
+      qc.invalidateQueries({ queryKey: ['operation-overview'] })
     },
   })
 
@@ -1377,9 +1379,10 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
     setTimeout(() => { win.print(); win.close() }, 400)
   }
 
-  const total   = Number(sale.total_amount)
-  const paid    = Number(sale.amount_paid)
-  const balance = Number(sale.balance_due)
+  const total          = Number(sale.total_amount)
+  const paid           = Number(sale.amount_paid)
+  const balance        = Number(sale.balance_due)
+  const wigStillOwed   = wigPayments.reduce((sum, wp) => sum + Math.max(0, wp.balance - wp.amount), 0)
 
   return (
     <div style={s.modalOverlay} onClick={onClose}>
@@ -1481,19 +1484,25 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
             <table style={{ marginBottom: 16 }}>
               <thead>
                 <tr>
-                  {['Wig Balance Payment', 'Method', 'Amount'].map(h => (
+                  {['Wig Balance Payment', 'Method', 'Paid', 'Still Owed'].map(h => (
                     <th key={h} style={r.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {wigPayments.map(wp => (
-                  <tr key={wp.wigId}>
-                    <td style={r.td}>{wp.wigName}</td>
-                    <td style={r.td}>{METHOD_LABEL[wp.method] || wp.method}</td>
-                    <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${wp.amount.toFixed(2)}</td>
-                  </tr>
-                ))}
+                {wigPayments.map(wp => {
+                  const stillOwed = wp.balance - wp.amount
+                  return (
+                    <tr key={wp.wigId}>
+                      <td style={r.td}>{wp.wigName}</td>
+                      <td style={r.td}>{METHOD_LABEL[wp.method] || wp.method}</td>
+                      <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${wp.amount.toFixed(2)}</td>
+                      <td style={{ ...r.td, fontWeight: 700, textAlign: 'right', color: stillOwed > 0 ? '#c0392b' : '#10b981' }}>
+                        {stillOwed > 0 ? `$${stillOwed.toFixed(2)}` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
@@ -1563,6 +1572,17 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
                   ${balance > 0 ? balance.toFixed(2) : '0.00'}
                 </span>
               </div>
+              {wigStillOwed > 0 && (
+                <>
+                  <div style={{ height: 8 }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: '#c0392b' }}>Wig Balance Remaining:</span>
+                    <span style={{ ...r.balanceBox, background: '#c0392b' }}>
+                      ${wigStillOwed.toFixed(2)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

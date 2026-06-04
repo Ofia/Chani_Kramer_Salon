@@ -103,6 +103,7 @@ export default function ExpensesPage() {
     mutationFn: (data: object) => api.post('/expenses/', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expenses-daily'] })
+      qc.invalidateQueries({ queryKey: ['operation-overview'] })
       setForm(EMPTY)
       setShowForm(false)
       setCreateError(null)
@@ -115,7 +116,10 @@ export default function ExpensesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/expenses/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['expenses-daily'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expenses-daily'] })
+      qc.invalidateQueries({ queryKey: ['operation-overview'] })
+    },
   })
 
   function handleSubmit(e: React.FormEvent) {

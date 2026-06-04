@@ -90,7 +90,10 @@ function WigOrdersTab({ tab }: { tab: 'in_progress' | 'completed' }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/wig-orders/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wig-orders-all'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
+      qc.invalidateQueries({ queryKey: ['operation-overview'] })
+    },
   })
 
   function handleDelete(w: WigOrder) {

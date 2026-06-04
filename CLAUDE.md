@@ -8,7 +8,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 ## Deployment
 - **Database + Auth:** Supabase (PostgreSQL + Supabase Auth)
 - **Backend:** Runs locally via `uvicorn app.main:app --reload` (no cloud deploy yet)
-- **Frontend:** Runs locally via `npm run dev` (no cloud deploy yet)
+- **Frontend:** Runs locally via `npm run dev` (deployed on Vercel)
 - **Migrations:** Run SQL files manually in Supabase SQL Editor
 
 
@@ -111,10 +111,6 @@ Replacing a painful Google Sheets workflow with an intelligent, interactive syst
 - Chani cuts tracked separately (owner's personal service)
 - `wig_deposits_total` separated from revenue
 
-### The 40% Bank Rule
-- 40% of net income is deposited to the bank daily
-- Remaining 60% may be kept as cash in the safe
-- The bookkeeper reconciles daily: Cash vs. Credit/Wire to ensure 40% lands in bank
 
 ### Tithes (מעשרות) — Religious Financial Practice
 This is a real, non-negotiable business rule:

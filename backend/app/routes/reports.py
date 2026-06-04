@@ -157,47 +157,53 @@ def get_report(
     )
     wig_deposits = sum(float(w.amount_paid or 0) for w in wig_deposit_items)
 
-    # ── 5. Payment method totals from POS ────────────────
+    # ── 5. Payment method totals ──────────────────────────
+    #
+    # Strategy to avoid double-counting:
+    #   A) ALL WigPayments in the date range (deposits, partials, finals —
+    #      regardless of whether they came through POS or direct entry).
+    #   B) PosSalePayments ONLY for sales that contain NO wig line items
+    #      (i.e. pure service / product sales). Wig-containing POS sales
+    #      are already covered by WigPayment records.
+    #
     cash = cc = quickpay = check = zelle = 0.0
     tax_collected = 0.0
 
-    for sale in pos_sales:
-        tax_collected += float(sale.tax_amount)
-        for pmt in sale.payments:
-            amt = float(pmt.amount)
-            if pmt.payment_method == PaymentMethod.cash:
-                cash += amt
-            elif pmt.payment_method == PaymentMethod.credit_card:
-                cc += amt
-            elif pmt.payment_method == PaymentMethod.quickpay:
-                quickpay += amt
-            elif pmt.payment_method == PaymentMethod.check:
-                check += amt
-            elif pmt.payment_method == PaymentMethod.zelle:
-                zelle += amt
+    def _add_by_method(method, amt: float) -> None:
+        nonlocal cash, cc, quickpay, check, zelle
+        if method == PaymentMethod.cash:
+            cash += amt
+        elif method == PaymentMethod.credit_card:
+            cc += amt
+        elif method == PaymentMethod.quickpay:
+            quickpay += amt
+        elif method == PaymentMethod.check:
+            check += amt
+        elif method == PaymentMethod.zelle:
+            zelle += amt
 
-    # Also include standalone wig payments (not captured via POS cart)
-    direct_wig_pmts = (
+    # A) All wig payments in the period
+    all_wig_pmts = (
         db.query(WigPayment)
         .filter(
             WigPayment.payment_date >= start,
             WigPayment.payment_date <= end,
-            WigPayment.pos_sale_id  == None,
         )
         .all()
     )
-    for wp in direct_wig_pmts:
-        amt = float(wp.amount)
-        if wp.payment_method == PaymentMethod.cash:
-            cash += amt
-        elif wp.payment_method == PaymentMethod.credit_card:
-            cc += amt
-        elif wp.payment_method == PaymentMethod.quickpay:
-            quickpay += amt
-        elif wp.payment_method == PaymentMethod.check:
-            check += amt
-        elif wp.payment_method == PaymentMethod.zelle:
-            zelle += amt
+    for wp in all_wig_pmts:
+        _add_by_method(wp.payment_method, float(wp.amount))
+
+    # B) Non-wig POS sales only
+    for sale in pos_sales:
+        has_wig = any(item.item_type == PosItemType.wig for item in sale.items)
+        if has_wig:
+            # tax still collected at the POS level
+            tax_collected += float(sale.tax_amount)
+            continue
+        tax_collected += float(sale.tax_amount)
+        for pmt in sale.payments:
+            _add_by_method(pmt.payment_method, float(pmt.amount))
 
     payments_total = cash + cc + quickpay + check + zelle
 

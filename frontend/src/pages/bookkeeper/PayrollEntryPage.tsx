@@ -126,7 +126,7 @@ function EmployeeRow({
         pay_type_snapshot: emp.pay_type,
       })
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); setError(''); onSaved() },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); qc.invalidateQueries({ queryKey: ['operation-overview'] }); setError(''); onSaved() },
     onError: (e: any) => setError(e?.response?.data?.detail ?? 'Save failed'),
   })
 
@@ -145,19 +145,19 @@ function EmployeeRow({
         amount: totalNum, cash_amount: cashNum, bank_amount: bankNum, notes: notes || null,
       }).then(() => api.post(`/payroll/${entry.id}/mark-paid`, {}))
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); setError(''); setOpen(false) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); qc.invalidateQueries({ queryKey: ['operation-overview'] }); setError(''); setOpen(false) },
     onError: (e: any) => setError(e?.response?.data?.detail ?? 'Failed to mark paid'),
   })
 
   const markPendingMutation = useMutation({
     mutationFn: () => api.post(`/payroll/${entry!.id}/mark-pending`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); qc.invalidateQueries({ queryKey: ['operation-overview'] }) },
     onError: (e: any) => setError(e?.response?.data?.detail ?? 'Failed'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/payroll/${entry!.id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); setOpen(false) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); qc.invalidateQueries({ queryKey: ['operation-overview'] }); setOpen(false) },
   })
 
   return (
