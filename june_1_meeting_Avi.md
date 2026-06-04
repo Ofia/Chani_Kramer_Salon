@@ -67,7 +67,7 @@ This decouples the POS from hardcoded categories permanently.
 | 9 | Remove QuickPay from payment options | POS | Quick Win | ✅ 65a0973 |
 | 10 | POS: sales tax toggle (NY resident = 8.875% / non-resident = 0%) | POS | High | ✅ (this session) |
 | 11 | POS: shipping option + shipping address field for wig deliveries | POS | Medium | ✅ (this session) |
-| 12 | Expense categories (food, shipping, transport, etc.) | Expenses | High | ⬜ |
+| 12 | Expense categories (13 industry-standard categories) | Expenses | High | ✅ c98ad3e |
 | 13 | Bank / Cash source tag on each expense | Expenses | High | ⬜ |
 | 14 | Bank statement auto-import for expenses | Expenses | Medium | ⬜ |
 | 15 | Persist unsaved form data on navigation — if user starts filling a form and leaves the page, fields are restored when they return (no data lost mid-entry) | UX / All Forms | High | ⬜ |
@@ -128,9 +128,38 @@ The salon runs DaySmart as their POS/appointment system. Screenshots show:
   - Commit: 5a5a7e7
   - ⚠️ Run migration 011 SQL in Supabase SQL Editor
 
-## ⚠️ POS Page — Must Test + Overhaul Next
-- DB/backend foundation complete (Migration 011 + inventory-first architecture)
-- **POS page UI still shows old hardcoded buttons** (New Wig, W&S, Repair, From Inventory)
-- Need to: (1) run Migration 011, (2) test existing POS still works, (3) build new POS UI
-- New POS UI needs: services dropdown (28 repair types + W&S), wig picker from inventory, product picker, sales tax 3-mode toggle (4.5% services / 8.875% goods / 0% exempt), shipping option, role-gated delete
-- Tasks remaining: #5, #6, #7, #8, #10, #11, #12, #13, #14, #15
+### 2026-06-04 — Session 4
+- ✅ #12 Expense categories: 13 industry-standard categories replace 14 old ones (Migration 013)
+  - `rent_facilities`, `utilities`, `supplies_materials`, `cost_of_goods`, `marketing_advertising`,
+    `transportation_shipping`, `maintenance_repairs`, `food_beverages`, `professional_services`,
+    `taxes_fees`, `charitable_giving` (מעשרות), `reconciliation`, `other`
+  - Migration 013: TEXT cast → UPDATE values → CREATE new enum → CAST back
+  - `ExpensesPage.tsx` + `DailyEntryPage.tsx` updated
+  - Backend `models.py` `ExpenseCategory` enum updated
+- ✅ Architecture: Daily Entry + Daily Summary merged → **Operation Overview** page
+  - Route: `/bookkeeper/overview` (daily redirects here)
+  - Read-only aggregation: Day / Month / Date Range selector
+  - 5 tabs: Revenue | Payments | Expenses | Payroll | Summary
+  - Recharts donuts (revenue/payments/expenses) + horizontal bar (payroll)
+  - Payments tab: Tax Collected box
+  - Summary tab: Net profit, tithes, wig deposits held
+  - Backend: `GET /reports/` endpoint (`backend/app/routes/reports.py`)
+- ✅ Fix: reports.py payment double-counting
+  - Old: PosSalePayments for all sales + WigPayments where pos_sale_id=None → double-counted deposits, missed POS balance payments
+  - New: ALL WigPayments + PosSalePayments only for sales with no wig items
+- ✅ Fix: Receipt now shows "Wig Balance Remaining" (red) for partial wig balance payments
+  - New "Still Owed" column in wig balance table
+  - "Wig Balance Remaining: $X.XX" red box below Balance Due
+- ✅ Fix: Cache invalidation — `['operation-overview']` now invalidated from ALL mutating pages
+  - POSPage (save + delete), ExpensesPage (create + delete), PayrollEntryPage (all 4 mutations),
+    WigOrdersPage (delete), SalesManagementPage (delete)
+- ✅ POS fixes: payment method selector on staged wig payments, inventory retail_price display fix
+- ✅ Removed: Lock Day from Daily Entry (frontend + backend 423 guard)
+- ✅ Removed: 40% Bank Deposit row from all UI + logic (permanently)
+- ⚠️ Run Migration 013 in Supabase SQL Editor
+
+## Remaining Open Tasks (as of 2026-06-04)
+- #8: Edit sale/receipt for Tzipora
+- #13: Bank/Cash source tag per expense
+- #14: Bank statement auto-import
+- #15: Persist unsaved form data on navigation
