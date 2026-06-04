@@ -51,6 +51,8 @@ def list_inventory(
     item_type: Optional[InventoryItemType] = Query(None),
     wig_status: Optional[WigItemStatus] = Query(None),
     brand: Optional[str] = Query(None),
+    customer_id: Optional[UUID] = Query(None),
+    serial: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -61,6 +63,10 @@ def list_inventory(
         q = q.filter(InventoryItem.wig_status == wig_status)
     if brand:
         q = q.filter(InventoryItem.brand.ilike(f"%{brand}%"))
+    if customer_id:
+        q = q.filter(InventoryItem.customer_id == customer_id)
+    if serial:
+        q = q.filter(InventoryItem.daysmart_serial.ilike(f"%{serial}%"))
     return q.order_by(InventoryItem.created_at.desc()).all()
 
 

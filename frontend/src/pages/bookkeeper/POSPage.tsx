@@ -54,6 +54,7 @@ type InventoryItem = {
   front?: string
   wig_status?: string        // 'in_stock' | 'on_order' | ...
   sale_status?: string | null // null = unsold, set = already on a sale
+  customer_id?: string | null
 }
 
 type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig'
@@ -433,6 +434,7 @@ export default function POSPage() {
                   onChange={patch => updateItem(item._key, patch)}
                   onRemove={() => removeItem(item._key)}
                   repairServices={repairServices}
+                  customerId={customer.id}
                 />
               ))}
               <div style={s.cartTotal}>
@@ -645,11 +647,12 @@ export default function POSPage() {
 
 // ── Cart Row ──────────────────────────────────────────────────
 
-function CartRow({ item, onChange, onRemove, repairServices }: {
+function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
   item: CartItem
   onChange: (patch: Partial<CartItem>) => void
   onRemove: () => void
   repairServices: RepairService[]
+  customerId: string
 }) {
   const subtotal = (parseFloat(item.unit_price) || 0) * item.quantity
   const color = ITEM_TYPE_COLOR[item.item_type]
@@ -710,6 +713,16 @@ function CartRow({ item, onChange, onRemove, repairServices }: {
           onChange={e => onChange({ notes: e.target.value })}
           style={{ ...s.input, width: '100%', marginTop: 6, fontSize: 12 }}
           placeholder={item.item_type === 'repair' ? 'Repair notes (optional)…' : 'Wash & Set notes (optional)…'}
+        />
+      )}
+
+      {/* Wig serial linker — W&S and Repair */}
+      {(item.item_type === 'repair' || item.item_type === 'wash_set') && (
+        <WigLinkerField
+          customerId={customerId}
+          wigId={item.inventory_item_id}
+          wigSerial={item.wig_serial}
+          onChange={(wigId, serial) => onChange({ inventory_item_id: wigId, wig_serial: serial })}
         />
       )}
 
@@ -1557,6 +1570,126 @@ function AddBtn({ icon, label, color, onClick }: { icon: React.ReactNode; label:
   )
 }
 
+// ── Wig Linker Field ──────────────────────────────────────────
+// Appears on W&S and Repair cart rows.
+// 1. Suggests wigs the customer bought from the salon (linked via customer_id).
+// 2. Falls back to serial-number search for any wig in inventory.
+// 3. If no inventory match, accepts a free-text serial (external/client-owned wig).
+
+function WigLinkerField({ customerId, wigId, wigSerial, onChange }: {
+  customerId: string
+  wigId?: string
+  wigSerial?: string
+  onChange: (wigId: string | undefined, serial: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+
+  // Wigs this customer bought from the salon
+  const { data: customerWigs = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['customer-wigs', customerId],
+    queryFn: () => customerId
+      ? api.get('/inventory/', { params: { item_type: 'wig', customer_id: customerId } })
+          .then(r => r.data).catch(() => [])
+      : Promise.resolve([]),
+    enabled: !!customerId,
+  })
+
+  // Serial search across all inventory wigs
+  const { data: searchResults = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['wig-serial-search', query],
+    queryFn: () => api.get('/inventory/', { params: { item_type: 'wig', serial: query } })
+      .then(r => r.data).catch(() => []),
+    enabled: query.length >= 2,
+  })
+
+  // Already linked — show chip
+  if (wigId || wigSerial) {
+    const label = wigSerial || wigId?.slice(0, 8) || '—'
+    return (
+      <div style={s.wigLinkedChip}>
+        <span style={{ fontSize: 11, color: '#5581B1', fontWeight: 700 }}>Wig</span>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
+        <button
+          onClick={() => onChange(undefined, '')}
+          style={{ ...s.iconBtn, marginLeft: 'auto', padding: '2px 5px' }}
+        >
+          <X size={11} />
+        </button>
+      </div>
+    )
+  }
+
+  function selectWig(inv: InventoryItem) {
+    onChange(inv.id, inv.daysmart_serial || '')
+    setOpen(false)
+    setQuery('')
+  }
+
+  function useExternalSerial() {
+    onChange(undefined, query.trim())
+    setOpen(false)
+    setQuery('')
+  }
+
+  return (
+    <div style={{ width: '100%', marginTop: 6, position: 'relative' }}>
+      {/* Customer's wigs — quick picks (shown when no query typed yet) */}
+      {customerId && customerWigs.length > 0 && !query && (
+        <div style={{ marginBottom: 6 }}>
+          <span style={s.wigLinkerLabel}>Client's wigs:</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            {customerWigs.map(w => (
+              <button
+                key={w.id}
+                onMouseDown={() => selectWig(w)}
+                style={s.wigSuggestionChip}
+              >
+                {w.daysmart_serial || '—'} {w.brand ? `· ${w.brand}` : ''} {w.color ? `· ${w.color}` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Serial search input */}
+      <div style={s.wigSearchRow}>
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 180)}
+          style={{ ...s.input, fontSize: 12, flex: 1 }}
+          placeholder={customerId && customerWigs.length > 0 ? 'Or search any serial…' : 'Search wig serial…'}
+        />
+      </div>
+
+      {/* Search dropdown */}
+      {open && query.length >= 2 && (
+        <div style={{ ...s.dropdown, top: '100%', zIndex: 150 }}>
+          {searchResults.map(w => (
+            <button
+              key={w.id}
+              onMouseDown={() => selectWig(w)}
+              style={s.dropdownItem}
+            >
+              <span style={{ fontWeight: 600 }}>{w.daysmart_serial || '—'}</span>
+              <span style={{ fontSize: 11, color: '#71717a' }}>
+                {[w.brand, w.length, w.color].filter(Boolean).join(' · ')}
+              </span>
+            </button>
+          ))}
+          {searchResults.length === 0 && (
+            <button onMouseDown={useExternalSerial} style={{ ...s.dropdownItem, color: '#5581B1', fontWeight: 600 }}>
+              Use "{query}" — external wig (not in salon inventory)
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function WigSpecInput({ label, value, onChange, placeholder }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
@@ -1661,6 +1794,12 @@ const s: Record<string, React.CSSProperties> = {
   deleteConfirmBtn: { padding: '5px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
+
+  // Wig linker
+  wigLinkedChip:     { display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginTop: 6, padding: '6px 10px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7 },
+  wigLinkerLabel:    { fontSize: 10, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  wigSuggestionChip: { padding: '4px 10px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#0369a1', cursor: 'pointer', fontFamily: 'inherit' },
+  wigSearchRow:      { display: 'flex', gap: 6, alignItems: 'center' },
 
   // Total box
   totalBox:          { border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' },

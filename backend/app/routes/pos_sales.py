@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
     PosSale, PosSaleItem, PosSalePayment,
-    WigPayment, InventoryItem, InventoryItemType,
+    WigPayment, InventoryItem, InventoryItemType, InventoryEvent, InventoryEventType,
     PosItemType, WigStatus, WigPaymentType, PaymentMethod, User,
 )
 from app.schemas.schemas import (
@@ -147,6 +147,20 @@ def create_pos_sale(
                     ))
 
         db.add(item)
+
+        # For service items linked to a salon wig: log a 'service' event in the wig's history
+        if (
+            item_data.item_type in (PosItemType.wash_set, PosItemType.repair)
+            and item_data.inventory_item_id
+        ):
+            db.add(InventoryEvent(
+                inventory_item_id = item_data.inventory_item_id,
+                event_type        = InventoryEventType.service,
+                customer_id       = data.customer_id,
+                description       = item_data.description,
+                event_date        = data.sale_date,
+                created_by        = current_user.id,
+            ))
 
     # 4. Record cart payments
     for pmt_data in data.payments:
