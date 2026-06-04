@@ -122,6 +122,7 @@ export default function OperationOverviewPage() {
     queryKey: ['operation-overview', start, end],
     queryFn: () => api.get(`/reports/?start=${start}&end=${end}`).then(r => r.data),
     enabled: !!start && !!end && start <= end,
+    staleTime: 0,   // always refetch — data changes whenever POS/expenses/payroll change
   })
 
   const periodLabel = fmtPeriod(mode, day, year, month, rangeStart, rangeEnd)
