@@ -52,8 +52,9 @@ type InventoryItem = {
   color?: string
   size?: string
   front?: string
-  wig_status?: string        // 'in_stock' | 'on_order' | ...
-  sale_status?: string | null // null = unsold, set = already on a sale
+  retail_price?: number | null  // wigs use this; products use unit_price
+  wig_status?: string           // 'in_stock' | 'on_order' | ...
+  sale_status?: string | null   // null = unsold, set = already on a sale
   customer_id?: string | null
 }
 
@@ -165,7 +166,6 @@ type PosSale = {
 
 // ── Constants ────────────────────────────────────────────────
 
-const BRANDS = ['RINA', 'RINA ELITE', 'BK', 'ROCHI LIPSKER', 'SARY', 'ZEHAVA', 'ELITE']
 const METHODS = ['cash', 'credit_card', 'check', 'zelle']
 const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash', credit_card: 'Credit Card', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
@@ -223,6 +223,12 @@ export default function POSPage() {
     queryFn: () => api.get('/repair-services/').then(r => r.data).catch(() => []),
   })
 
+  const { data: brandMarkups = [] } = useQuery<{ id: string; brand: string }[]>({
+    queryKey: ['brand-markups'],
+    queryFn: () => api.get('/inventory/brand-markups').then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+  })
+  const brands = brandMarkups.map(m => m.brand)
+
   const saveMutation = useMutation({
     mutationFn: (payload: object) => api.post('/pos-sales/', payload),
     onSuccess: (res) => {
@@ -265,7 +271,7 @@ export default function POSPage() {
       item_type: isWig ? 'wig' : 'inventory',
       description: inv.name,
       quantity: 1,
-      unit_price: String(inv.unit_price),
+      unit_price: String(isWig ? (inv.retail_price ?? inv.unit_price ?? 0) : inv.unit_price),
       inventory_item_id: inv.id,
       showWigSpecs: isWig,
       wig_deposit_method: 'cash',
@@ -434,6 +440,7 @@ export default function POSPage() {
                   onChange={patch => updateItem(item._key, patch)}
                   onRemove={() => removeItem(item._key)}
                   repairServices={repairServices}
+                  brands={brands}
                   customerId={customer.id}
                 />
               ))}
@@ -647,11 +654,12 @@ export default function POSPage() {
 
 // ── Cart Row ──────────────────────────────────────────────────
 
-function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
+function CartRow({ item, onChange, onRemove, repairServices, brands, customerId }: {
   item: CartItem
   onChange: (patch: Partial<CartItem>) => void
   onRemove: () => void
   repairServices: RepairService[]
+  brands: string[]
   customerId: string
 }) {
   const subtotal = (parseFloat(item.unit_price) || 0) * item.quantity
@@ -740,7 +748,7 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
           {item.showWigSpecs && (
             <div style={s.wigSpecsGrid}>
               <WigSpecInput label="Serial" value={item.wig_serial} onChange={v => onChange({ wig_serial: v })} placeholder="rina44871" />
-              <WigSpecSelect label="Brand" value={item.wig_brand || ''} onChange={v => onChange({ wig_brand: v })} options={BRANDS} />
+              <WigSpecSelect label="Brand" value={item.wig_brand || ''} onChange={v => onChange({ wig_brand: v })} options={brands} />
               <WigSpecInput label="Length" value={item.wig_length} onChange={v => onChange({ wig_length: v })} placeholder='14"' />
               <WigSpecInput label="Color" value={item.wig_color} onChange={v => onChange({ wig_color: v })} placeholder="2/8" />
               <WigSpecInput label="Size" value={item.wig_size} onChange={v => onChange({ wig_size: v })} placeholder="M" />
