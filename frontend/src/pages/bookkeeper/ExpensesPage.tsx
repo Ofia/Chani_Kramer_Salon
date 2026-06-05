@@ -48,7 +48,7 @@ function fmt(n: number | string) {
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const YEARS  = [2023, 2024, 2025, 2026]
-const EMPTY  = { category: 'other', amount: '', vendor: '', notes: '' }
+const EMPTY  = { category: 'other', amount: '', vendor: '', notes: '', payment_source: 'bank' as 'bank' | 'cash' }
 
 // ── Component ────────────────────────────────────────────────
 
@@ -126,11 +126,12 @@ export default function ExpensesPage() {
     e.preventDefault()
     if (!form.amount) return
     createMutation.mutate({
-      expense_date: selectedDate,
-      category:     form.category,
-      amount:       parseFloat(form.amount),
-      vendor:       form.vendor || null,
-      notes:        form.notes  || null,
+      expense_date:   selectedDate,
+      category:       form.category,
+      amount:         parseFloat(form.amount),
+      payment_source: form.payment_source,
+      vendor:         form.vendor || null,
+      notes:          form.notes  || null,
     })
   }
 
@@ -223,6 +224,21 @@ export default function ExpensesPage() {
                 </div>
               </div>
               <div style={s.field}>
+                <label style={s.fieldLabel}>Paid From</label>
+                <div style={s.toggle}>
+                  {(['bank', 'cash'] as const).map(src => (
+                    <button
+                      key={src}
+                      type="button"
+                      onClick={() => setForm(p => ({ ...p, payment_source: src }))}
+                      style={{ ...s.toggleBtn, ...(form.payment_source === src ? s.toggleActive : {}) }}
+                    >
+                      {src === 'bank' ? 'Bank' : 'Cash'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={s.field}>
                 <label style={s.fieldLabel}>Vendor</label>
                 <input value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} style={s.input} placeholder="Optional" />
               </div>
@@ -269,6 +285,9 @@ export default function ExpensesPage() {
                       <p style={s.rowDate}>{fmtDateShort(e.expense_date)}</p>
                     )}
                   </div>
+                  <span style={{ ...s.sourceBadge, ...(e.payment_source === 'cash' ? s.sourceCash : s.sourceBank) }}>
+                    {e.payment_source === 'cash' ? 'Cash' : 'Bank'}
+                  </span>
                   <span style={s.rowAmount}>{fmt(e.amount)}</span>
                   {view === 'daily' && (
                     <button onClick={() => deleteMutation.mutate(e.id)} style={s.deleteBtn} title="Delete">
@@ -345,4 +364,14 @@ const s: Record<string, React.CSSProperties> = {
   totalRow:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 20px', background: '#f7f7f5', borderTop: '1px solid rgba(13,13,13,0.07)' },
   totalLabel: { fontSize: 12, fontWeight: 600, color: 'rgba(13,13,13,0.5)', letterSpacing: '0.04em', textTransform: 'uppercase' },
   totalValue: { fontSize: 17, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.03em' },
+
+  // Payment source toggle (form)
+  toggle:      { display: 'flex', border: '1px solid rgba(13,13,13,0.12)', borderRadius: 8, overflow: 'hidden' },
+  toggleBtn:   { flex: 1, padding: '7px 0', border: 'none', background: '#fafaf9', fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.45)', cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.12s' },
+  toggleActive:{ background: '#212121', color: '#fff' },
+
+  // Payment source badge (list)
+  sourceBadge: { fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' as const, padding: '2px 7px', borderRadius: 5, flexShrink: 0 },
+  sourceBank:  { background: '#dbeafe', color: '#1e40af' },
+  sourceCash:  { background: '#dcfce7', color: '#166534' },
 }

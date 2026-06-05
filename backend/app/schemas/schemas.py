@@ -269,6 +269,7 @@ class ExpenseCreate(BaseModel):
     expense_date: date
     category: ExpenseCategory
     amount: Decimal
+    payment_source: str = 'bank'  # 'bank' | 'cash'
     vendor: Optional[str] = None
     notes: Optional[str] = None
 
@@ -276,6 +277,7 @@ class ExpenseCreate(BaseModel):
 class ExpenseUpdate(BaseModel):
     category: Optional[ExpenseCategory] = None
     amount: Optional[Decimal] = None
+    payment_source: Optional[str] = None
     vendor: Optional[str] = None
     notes: Optional[str] = None
 
@@ -285,6 +287,7 @@ class ExpenseResponse(BaseModel):
     expense_date: date
     category: ExpenseCategory
     amount: float
+    payment_source: str
     vendor: Optional[str]
     notes: Optional[str]
     created_at: datetime

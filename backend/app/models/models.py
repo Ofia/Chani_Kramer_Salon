@@ -266,14 +266,15 @@ class DailySummary(Base):
 class ExpenseEntry(Base):
     __tablename__ = "expense_entries"
 
-    id           = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    expense_date = Column(Date, nullable=False)
-    category     = Column(Enum(ExpenseCategory), nullable=False)
-    amount       = Column(Numeric(10, 2), nullable=False)
-    vendor       = Column(String)
-    notes        = Column(Text)
-    entered_by   = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
-    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expense_date   = Column(Date, nullable=False)
+    category       = Column(Enum(ExpenseCategory), nullable=False)
+    amount         = Column(Numeric(10, 2), nullable=False)
+    payment_source = Column(String, nullable=False, default='bank')  # 'bank' | 'cash'
+    vendor         = Column(String)
+    notes          = Column(Text)
+    entered_by     = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at     = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class WeeklyPayroll(Base):
