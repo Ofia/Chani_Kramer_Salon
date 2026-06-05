@@ -60,12 +60,21 @@ type InventoryItem = {
 
 type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig'
 
+// Default tax rate per item type
+const DEFAULT_TAX_RATE: Record<CartItemType, number> = {
+  wash_set:  0.045,    // services: 4.5%
+  repair:    0.045,    // services: 4.5%
+  inventory: 0.08875,  // products: 8.875%
+  wig:       0.08875,  // products: 8.875%
+}
+
 type CartItem = {
   _key: string          // local-only key for React list
   item_type: CartItemType
   description: string
   quantity: number
   unit_price: string    // string so input stays controlled
+  tax_rate: number      // per-item tax rate (0 | 0.045 | 0.08875)
   notes?: string        // repair notes / annotation
   // inventory
   inventory_item_id?: string
@@ -204,8 +213,6 @@ export default function POSPage() {
     { _key: nextKey(), payment_method: 'cash', amount: '' },
   ])
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
-  const [taxMode, setTaxMode] = useState<'none' | 'flat_4.5' | 'flat_8.875' | 'custom'>('none')
-  const [customTaxAmount, setCustomTaxAmount] = useState('')
   const [shipping, setShipping] = useState({ enabled: false, amount: '', address: '' })
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
@@ -241,8 +248,6 @@ export default function POSPage() {
       setCustomer(emptyCustomer())
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
-      setTaxMode('none')
-      setCustomTaxAmount('')
       setShipping({ enabled: false, amount: '', address: '' })
       setStagedWigPayments([])
     },
@@ -254,6 +259,7 @@ export default function POSPage() {
     setCart(c => [...c, {
       _key: nextKey(), item_type: 'wash_set',
       description: 'Wash & Set', quantity: 1, unit_price: '',
+      tax_rate: DEFAULT_TAX_RATE.wash_set,
     }])
   }
 
@@ -261,17 +267,20 @@ export default function POSPage() {
     setCart(c => [...c, {
       _key: nextKey(), item_type: 'repair',
       description: 'Repair', quantity: 1, unit_price: '',
+      tax_rate: DEFAULT_TAX_RATE.repair,
     }])
   }
 
   function addInventoryItem(inv: InventoryItem) {
     const isWig = inv.item_type === 'wig'
+    const itemType: CartItemType = isWig ? 'wig' : 'inventory'
     setCart(c => [...c, {
       _key: nextKey(),
-      item_type: isWig ? 'wig' : 'inventory',
+      item_type: itemType,
       description: inv.name,
       quantity: 1,
       unit_price: String(isWig ? (inv.retail_price ?? inv.unit_price ?? 0) : inv.unit_price),
+      tax_rate: DEFAULT_TAX_RATE[itemType],
       inventory_item_id: inv.id,
       showWigSpecs: isWig,
       wig_deposit_method: 'cash',
@@ -316,12 +325,11 @@ export default function POSPage() {
     return s + price * i.quantity
   }, 0)
 
-  const taxAmount = (() => {
-    if (taxMode === 'none') return 0
-    if (taxMode === 'flat_4.5') return Math.round(cartTotal * 0.045 * 100) / 100
-    if (taxMode === 'flat_8.875') return Math.round(cartTotal * 0.08875 * 100) / 100
-    return parseFloat(customTaxAmount) || 0
-  })()
+  // Tax is per-item — each CartRow has its own tax_rate toggle
+  const taxAmount = cart.reduce((s, i) => {
+    const price = parseFloat(i.unit_price) || 0
+    return s + Math.round(price * i.quantity * (i.tax_rate || 0) * 100) / 100
+  }, 0)
   const shippingAmount   = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
   const wigBalanceTotal  = stagedWigPayments.reduce((s, sp) => s + sp.amount, 0)
   const grandTotal       = cartTotal + taxAmount + shippingAmount + wigBalanceTotal
@@ -343,6 +351,7 @@ export default function POSPage() {
       quantity: i.quantity,
       unit_price: parseFloat(i.unit_price) || 0,
       subtotal: (parseFloat(i.unit_price) || 0) * i.quantity,
+      tax_rate: i.tax_rate || 0,
       notes: i.notes || undefined,
       inventory_item_id: i.inventory_item_id || undefined,
       wig_serial: i.wig_serial || undefined,
@@ -365,8 +374,8 @@ export default function POSPage() {
       customer_name: customer.name.trim(),
       customer_phone: customer.phone || undefined,
       sale_date: saleDate,
-      tax_rate: taxMode === 'none' ? 0 : taxMode === 'flat_4.5' ? 0.045 : taxMode === 'flat_8.875' ? 0.08875 : 0,
-      tax_amount_override: taxMode === 'custom' ? (parseFloat(customTaxAmount) || 0) : undefined,
+      tax_rate: 0,                             // always 0 — tax is per-item
+      tax_amount_override: taxAmount || undefined, // sum of all item taxes
       shipping_amount: shippingAmount,
       shipping_address: shipping.enabled && shipping.address ? shipping.address : undefined,
       items,
@@ -542,34 +551,13 @@ export default function POSPage() {
             <Plus size={12} /> Split payment
           </button>
 
-          {/* Sales Tax */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-            <label style={{ ...s.fieldLabel, margin: 0, whiteSpace: 'nowrap' }}>Sales Tax</label>
-            <select
-              value={taxMode}
-              onChange={e => { setTaxMode(e.target.value as typeof taxMode); setCustomTaxAmount('') }}
-              style={{ ...s.select, flex: '0 0 auto', width: 'auto', minWidth: 140 }}
-            >
-              <option value="none">None</option>
-              <option value="flat_4.5">4.5%</option>
-              <option value="flat_8.875">8.875%</option>
-              <option value="custom">Custom</option>
-            </select>
-            {taxMode === 'custom' && (
-              <div style={{ ...s.moneyRow, width: 120 }}>
-                <span style={s.moneySym}>$</span>
-                <input type="number" min="0" step="0.01"
-                  value={customTaxAmount}
-                  onChange={e => setCustomTaxAmount(e.target.value)}
-                  style={s.moneyInput} placeholder="0.00" />
-              </div>
-            )}
-            {taxAmount > 0 && (
-              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 600, color: '#18181b' }}>
-                +${taxAmount.toFixed(2)}
-              </span>
-            )}
-          </div>
+          {/* Tax is set per-item in the cart */}
+          {taxAmount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, fontSize: 13, color: '#71717a' }}>
+              <span>Sales Tax (per item)</span>
+              <span style={{ fontWeight: 600, color: '#18181b' }}>+${taxAmount.toFixed(2)}</span>
+            </div>
+          )}
 
           {/* Balance indicator */}
           {grandTotal > 0 && (
@@ -736,6 +724,37 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
 
       {/* Remove */}
       <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
+
+      {/* Per-item tax toggle — full width second row */}
+      <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+        <span style={{ fontSize: 11, color: '#71717a', whiteSpace: 'nowrap' }}>Tax:</span>
+        {[
+          { label: 'Exempt', value: 0 },
+          ...(item.item_type === 'wash_set' || item.item_type === 'repair'
+            ? [{ label: '4.5%', value: 0.045 }]
+            : [{ label: '8.875%', value: 0.08875 }]
+          ),
+        ].map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => onChange({ tax_rate: opt.value })}
+            style={{
+              padding: '2px 8px', borderRadius: 4, border: '1px solid',
+              fontSize: 11, cursor: 'pointer',
+              background: item.tax_rate === opt.value ? '#212121' : 'transparent',
+              color: item.tax_rate === opt.value ? '#fff' : '#71717a',
+              borderColor: item.tax_rate === opt.value ? '#212121' : '#d4d4d8',
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+        {item.tax_rate > 0 && subtotal > 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#71717a' }}>
+            +${(subtotal * item.tax_rate).toFixed(2)}
+          </span>
+        )}
+      </div>
 
       {/* Item notes — repair and wash & set */}
       {(item.item_type === 'repair' || item.item_type === 'wash_set') && (

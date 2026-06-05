@@ -457,6 +457,7 @@ class PosSaleItem(Base):
     wig_size          = Column(String)
     wig_front         = Column(String)
     notes             = Column(Text)         # repair notes / free-text annotation
+    tax_amount        = Column(Numeric(10, 2), nullable=False, default=0)  # per-item tax computed at sale
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
     pos_sale = relationship("PosSale", back_populates="items")
@@ -525,6 +526,7 @@ class InventoryItem(Base):
     pickup_date         = Column(Date)
     daysmart_receipt_no = Column(String)
     additional_charges  = Column(JSONB, nullable=False, default=list)  # [{"label": str, "amount": float}]
+    sale_tax_amount     = Column(Numeric(10, 2), nullable=False, default=0)  # tax locked at sale, recognized on pickup_date
 
     @property
     def balance_due(self) -> Decimal:

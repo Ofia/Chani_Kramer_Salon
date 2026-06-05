@@ -79,6 +79,9 @@ def create_pos_sale(
 
     # 3. Process each line item
     for item_data in data.items:
+        # Compute per-item tax amount
+        item_tax = (item_data.subtotal * Decimal(str(item_data.tax_rate))).quantize(Decimal("0.01"))
+
         item = PosSaleItem(
             pos_sale_id       = sale.id,
             item_type         = item_data.item_type,
@@ -86,6 +89,7 @@ def create_pos_sale(
             quantity          = item_data.quantity,
             unit_price        = item_data.unit_price,
             subtotal          = item_data.subtotal,
+            tax_amount        = item_tax,
             inventory_item_id = item_data.inventory_item_id,
             notes             = item_data.notes,
             wig_serial        = item_data.wig_serial,
@@ -122,14 +126,16 @@ def create_pos_sale(
                     new_sale_status = WigStatus.ordered
                     pickup_date     = None
 
-                wig.customer_name  = data.customer_name
-                wig.customer_phone = data.customer_phone
-                wig.customer_id    = data.customer_id
-                wig.total_price    = item_data.subtotal
-                wig.amount_paid    = deposit_amt
-                wig.sale_status    = new_sale_status
-                wig.order_date     = data.sale_date
-                wig.pickup_date    = pickup_date
+                wig.customer_name    = data.customer_name
+                wig.customer_phone   = data.customer_phone
+                wig.customer_id      = data.customer_id
+                wig.total_price      = item_data.subtotal
+                wig.amount_paid      = deposit_amt
+                wig.sale_status      = new_sale_status
+                wig.order_date       = data.sale_date
+                wig.pickup_date      = pickup_date
+                # Lock the wig's tax obligation at sale time — recognized on pickup_date
+                wig.sale_tax_amount  = item_tax
 
                 if deposit_amt > 0:
                     pay_type = (
@@ -140,6 +146,7 @@ def create_pos_sale(
                     method = item_data.wig_deposit_method or PaymentMethod.cash
                     db.add(WigPayment(
                         inventory_item_id = wig.id,
+                        pos_sale_id       = sale.id,   # link deposit to its sale for clean deletion
                         payment_date      = data.sale_date,
                         amount            = deposit_amt,
                         payment_method    = method,
@@ -365,25 +372,55 @@ def delete_pos_sale(
     if not sale:
         raise HTTPException(status_code=404, detail="POS sale not found")
 
-    # For wig items: clear sale fields on the InventoryItem so the wig
-    # returns to inventory (status: in_stock). WigPayments cascade-delete
-    # via inventory_item → wig_payments when sale is cleared.
+    # Step 1 — collect all wig IDs touched by this sale (balance payments + cart items)
+    wig_pmts_for_sale = db.query(WigPayment).filter(
+        WigPayment.pos_sale_id == sale.id
+    ).all()
+    affected_wig_ids = {wp.inventory_item_id for wp in wig_pmts_for_sale if wp.inventory_item_id}
     for item in sale.items:
         if item.item_type == PosItemType.wig and item.inventory_item_id:
-            wig = db.query(InventoryItem).filter(
-                InventoryItem.id == item.inventory_item_id
-            ).first()
-            if wig:
-                wig.customer_id         = None
-                wig.customer_name       = None
-                wig.customer_phone      = None
-                wig.total_price         = None
-                wig.amount_paid         = Decimal("0")
-                wig.sale_status         = None
-                wig.order_date          = None
-                wig.pickup_date         = None
-                wig.daysmart_receipt_no = None
-                wig.additional_charges  = []
+            affected_wig_ids.add(item.inventory_item_id)
 
-    db.delete(sale)  # cascades to pos_sale_items and pos_sale_payments
+    # Step 2 — delete WigPayments tied to this sale (deposits + balance payments)
+    for wp in wig_pmts_for_sale:
+        db.delete(wp)
+
+    # Step 3 — delete the sale (cascades pos_sale_items + pos_sale_payments)
+    db.delete(sale)
+    db.flush()  # execute SQL so subsequent queries see the updated state
+
+    # Step 4 — recompute each affected wig's state from remaining payments
+    for wig_id in affected_wig_ids:
+        wig = db.query(InventoryItem).filter(InventoryItem.id == wig_id).first()
+        if not wig:
+            continue
+
+        remaining = db.query(WigPayment).filter(
+            WigPayment.inventory_item_id == wig_id
+        ).all()
+
+        if not remaining:
+            # No payments left — wig returns to inventory
+            wig.customer_id         = None
+            wig.customer_name       = None
+            wig.customer_phone      = None
+            wig.total_price         = None
+            wig.amount_paid         = Decimal("0")
+            wig.sale_status         = None
+            wig.order_date          = None
+            wig.pickup_date         = None
+            wig.daysmart_receipt_no = None
+            wig.additional_charges  = []
+            wig.sale_tax_amount     = Decimal("0")
+        else:
+            # Payments from other sales remain — recompute amount_paid from source of truth
+            wig.amount_paid = sum(p.amount for p in remaining)
+            if wig.total_price:
+                if wig.amount_paid >= wig.total_price:
+                    wig.sale_status = WigStatus.paid_in_full
+                    # pickup_date stays as-is (set by the final payment sale)
+                else:
+                    wig.sale_status = WigStatus.ordered
+                    wig.pickup_date = None
+
     db.commit()

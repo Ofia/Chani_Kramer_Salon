@@ -194,16 +194,27 @@ def get_report(
     for wp in all_wig_pmts:
         _add_by_method(wp.payment_method, float(wp.amount))
 
-    # B) Non-wig POS sales only
+    # B) Non-wig POS sales — count cash flow + immediate tax (services/products)
+    #    Wig tax is deferred: recognized on pickup_date (paid_in_full), not sale date.
     for sale in pos_sales:
         has_wig = any(item.item_type == PosItemType.wig for item in sale.items)
         if has_wig:
-            # tax still collected at the POS level
-            tax_collected += float(sale.tax_amount)
+            # Count only the non-wig portion of this sale's tax immediately.
+            # Wig item taxes are counted below via sale_tax_amount on pickup_date.
+            non_wig_tax = sum(
+                float(item.tax_amount)
+                for item in sale.items
+                if item.item_type != PosItemType.wig
+            )
+            tax_collected += non_wig_tax
             continue
         tax_collected += float(sale.tax_amount)
         for pmt in sale.payments:
             _add_by_method(pmt.payment_method, float(pmt.amount))
+
+    # C) Wig tax recognized on pickup_date (same wigs already counted for revenue)
+    wig_tax = sum(float(w.sale_tax_amount or 0) for w in wig_sales_items)
+    tax_collected += wig_tax
 
     payments_total = cash + cc + quickpay + check + zelle
 

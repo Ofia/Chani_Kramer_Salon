@@ -527,6 +527,8 @@ class PosSaleItemCreate(BaseModel):
     # Deposit paid for this wig at time of sale
     wig_deposit_amount: Optional[Decimal] = None
     wig_deposit_method: Optional[PaymentMethod] = None
+    # Per-item tax rate (0 = exempt, 0.045 = 4.5%, 0.08875 = 8.875%)
+    tax_rate: float = 0.0
 
 
 class PosSaleItemResponse(BaseModel):
@@ -536,6 +538,7 @@ class PosSaleItemResponse(BaseModel):
     quantity: int
     unit_price: float
     subtotal: float
+    tax_amount: float
     inventory_item_id: Optional[UUID]
     notes: Optional[str]
     wig_serial: Optional[str]
