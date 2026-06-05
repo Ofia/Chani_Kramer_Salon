@@ -8,7 +8,7 @@ All routes are registered here. The app is started with:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import employees, customers, transactions, daily_summary, expenses, payroll, deposits, financials, users, ella, wig_orders, board_posts, notifications, checkins, inventory, pos_sales, time_logs, providers, repair_services, reports
+from app.routes import employees, customers, daily_summary, expenses, payroll, financials, users, ella, wig_orders, board_posts, notifications, checkins, inventory, pos_sales, time_logs, providers, repair_services, reports
 from app.core.config import settings
 
 app = FastAPI(
@@ -37,11 +37,9 @@ app.add_middleware(
 app.include_router(users.router,         prefix="/api/v1")
 app.include_router(employees.router,     prefix="/api/v1")
 app.include_router(customers.router,     prefix="/api/v1")
-app.include_router(transactions.router,  prefix="/api/v1")
 app.include_router(daily_summary.router, prefix="/api/v1")
 app.include_router(expenses.router,      prefix="/api/v1")
 app.include_router(payroll.router,       prefix="/api/v1")
-app.include_router(deposits.router,      prefix="/api/v1")
 app.include_router(financials.router,    prefix="/api/v1")
 app.include_router(ella.router,          prefix="/api/v1")
 app.include_router(wig_orders.router,    prefix="/api/v1")

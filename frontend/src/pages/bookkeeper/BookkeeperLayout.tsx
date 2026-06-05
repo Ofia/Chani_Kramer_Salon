@@ -17,7 +17,6 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/pos',       label: 'Point of Sale',     icon: ShoppingCart,    end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper/sales',     label: 'Sales Management',  icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper/overview',   label: 'Overview',          icon: Activity,        end: false, roles: ['front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/deposits',  label: 'Deposits',          icon: Building2,       end: false, roles: ['front_desk','bookkeeper','owner'] },
   { to: '/bookkeeper/payroll',   label: 'Payroll',           icon: Users,           end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] },
   { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] },
