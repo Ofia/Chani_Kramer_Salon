@@ -143,6 +143,7 @@ export default function InventoryPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showFileImport, setShowFileImport] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null)
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -248,13 +249,13 @@ export default function InventoryPage() {
         <WigTable
           wigs={wigs}
           onRowClick={setDrawerWig}
-          onDelete={id => deleteItem.mutate(id)}
+          onDelete={(id, label) => setConfirmDelete({ id, label })}
         />
       ) : (
         <ProductTable
           products={products}
           onEdit={setEditItem}
-          onDelete={id => deleteItem.mutate(id)}
+          onDelete={(id, label) => setConfirmDelete({ id, label })}
         />
       )}
 
@@ -366,6 +367,14 @@ export default function InventoryPage() {
           onSaved={() => { setShowFileImport(false); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
         />
       )}
+
+      {confirmDelete && (
+        <DeleteConfirmModal
+          label={confirmDelete.label}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => { deleteItem.mutate(confirmDelete.id); setConfirmDelete(null) }}
+        />
+      )}
     </div>
   )
 }
@@ -375,7 +384,7 @@ export default function InventoryPage() {
 function WigTable({ wigs, onRowClick, onDelete }: {
   wigs: InventoryItem[]
   onRowClick: (w: InventoryItem) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string, label: string) => void
 }) {
   if (wigs.length === 0) return <div style={s.empty}>No wigs found.</div>
 
@@ -414,9 +423,7 @@ function WigTable({ wigs, onRowClick, onDelete }: {
                   <button style={s.rowBtn} onClick={() => onRowClick(w)}>
                     <ChevronRight size={14} />
                   </button>
-                  <button style={{ ...s.rowBtn, color: '#ef4444' }} onClick={() => {
-                    if (confirm('Delete this wig from inventory?')) onDelete(w.id)
-                  }}>
+                  <button style={{ ...s.rowBtn, color: '#ef4444' }} onClick={() => onDelete(w.id, w.daysmart_serial ?? wigLabel(w))}>
                     <X size={14} />
                   </button>
                 </div>
@@ -434,7 +441,7 @@ function WigTable({ wigs, onRowClick, onDelete }: {
 function ProductTable({ products, onEdit, onDelete }: {
   products: InventoryItem[]
   onEdit: (p: InventoryItem) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string, label: string) => void
 }) {
   if (products.length === 0) return <div style={s.empty}>No products found.</div>
 
@@ -458,9 +465,7 @@ function ProductTable({ products, onEdit, onDelete }: {
               <td style={s.td}>
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                   <button style={s.rowBtn} onClick={() => onEdit(p)}>Edit</button>
-                  <button style={{ ...s.rowBtn, color: '#ef4444' }} onClick={() => {
-                    if (confirm('Delete this product?')) onDelete(p.id)
-                  }}>
+                  <button style={{ ...s.rowBtn, color: '#ef4444' }} onClick={() => onDelete(p.id, p.name)}>
                     <X size={14} />
                   </button>
                 </div>
@@ -903,6 +908,35 @@ function FileImportModal({ onClose, onSaved }: {
               </div>
             </>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Delete Confirm Modal ───────────────────────────────────────────────────
+
+function DeleteConfirmModal({ label, onCancel, onConfirm }: {
+  label: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div style={s.modalOverlay} onClick={onCancel}>
+      <div style={{ ...s.modal, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <span style={s.modalTitle}>Delete item?</span>
+          <button style={s.iconBtnSm} onClick={onCancel}><X size={16} /></button>
+        </div>
+        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.65)', margin: 0, lineHeight: 1.5 }}>
+            Are you sure you want to delete <strong style={{ color: '#0d0d0d' }}>{label}</strong> from inventory?
+            This cannot be undone.
+          </p>
+          <div style={{ ...s.modalFooter, paddingTop: 0 }}>
+            <button style={s.cancelBtn} onClick={onCancel}>Cancel</button>
+            <button style={{ ...s.primaryBtn, background: '#ef4444' }} onClick={onConfirm}>Delete</button>
+          </div>
         </div>
       </div>
     </div>
