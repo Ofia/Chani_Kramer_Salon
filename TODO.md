@@ -7,7 +7,7 @@
 | # | Task | Area | Notes |
 |---|------|------|-------|
 | 8 | **Edit sale / receipt** | POS | Tzipora needs to fix mistakes without deleting and re-entering |
-| 13 | **Bank / Cash tag per expense** | Expenses | Each expense entry needs a "paid from Bank or Cash" toggle |
+| ~~13~~ | ~~Bank / Cash tag per expense~~ | ~~Expenses~~ | ✅ Done — `3e5dea3` · `79dda34` · ⚠️ run migration 014 |
 | 14 | **Bank statement auto-import** | Expenses | Upload bank statement → auto-create expense entries |
 | 15 | **Persist unsaved form data** | UX | If user starts a form and navigates away, restore it on return |
 
