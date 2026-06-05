@@ -61,6 +61,10 @@ export default function ExpensesPage() {
   const [showForm, setShowForm]         = useState(false)
   const [form, setForm]                 = useState(EMPTY)
 
+  // Expanded row + edit
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editForm,   setEditForm]   = useState(EMPTY)
+
   // Monthly
   const [selYear,  setSelYear]  = useState(now.getFullYear())
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
@@ -121,6 +125,42 @@ export default function ExpensesPage() {
       qc.invalidateQueries({ queryKey: ['operation-overview'] })
     },
   })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: object }) => api.patch(`/expenses/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expenses-daily'] })
+      qc.invalidateQueries({ queryKey: ['expenses-monthly'] })
+      qc.invalidateQueries({ queryKey: ['expenses-range'] })
+      qc.invalidateQueries({ queryKey: ['operation-overview'] })
+      setExpandedId(null)
+    },
+  })
+
+  function openEdit(e: any) {
+    setExpandedId(e.id)
+    setEditForm({
+      category:       e.category,
+      amount:         String(e.amount),
+      vendor:         e.vendor  ?? '',
+      notes:          e.notes   ?? '',
+      payment_source: e.payment_source ?? 'bank',
+    })
+  }
+
+  function handleUpdate(e: React.FormEvent, id: string) {
+    e.preventDefault()
+    updateMutation.mutate({
+      id,
+      data: {
+        category:       editForm.category,
+        amount:         parseFloat(editForm.amount),
+        payment_source: editForm.payment_source,
+        vendor:         editForm.vendor || null,
+        notes:          editForm.notes  || null,
+      },
+    })
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -277,22 +317,82 @@ export default function ExpensesPage() {
           ) : (
             <>
               {activeExpenses.map((e: any, i: number) => (
-                <div key={e.id} style={{ ...s.row, borderBottom: i < activeExpenses.length - 1 ? '1px solid rgba(13,13,13,0.05)' : 'none' }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={s.rowCat}>{catLabel(e.category)}</p>
-                    {e.vendor && <p style={s.rowVendor}>{e.vendor}</p>}
-                    {view !== 'daily' && e.expense_date && (
-                      <p style={s.rowDate}>{fmtDateShort(e.expense_date)}</p>
-                    )}
-                  </div>
-                  <span style={{ ...s.sourceBadge, ...(e.payment_source === 'cash' ? s.sourceCash : s.sourceBank) }}>
-                    {e.payment_source === 'cash' ? 'Cash' : 'Bank'}
-                  </span>
-                  <span style={s.rowAmount}>{fmt(e.amount)}</span>
-                  {view === 'daily' && (
-                    <button onClick={() => deleteMutation.mutate(e.id)} style={s.deleteBtn} title="Delete">
+                <div key={e.id}>
+                  {/* ── Collapsed row ── */}
+                  <div
+                    style={{ ...s.row, cursor: 'pointer', background: expandedId === e.id ? '#f7f7f5' : '#fff', borderBottom: (expandedId === e.id || i < activeExpenses.length - 1) ? '1px solid rgba(13,13,13,0.05)' : 'none' }}
+                    onClick={() => expandedId === e.id ? setExpandedId(null) : openEdit(e)}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <p style={s.rowCat}>{catLabel(e.category)}</p>
+                      {e.vendor && <p style={s.rowVendor}>{e.vendor}</p>}
+                      {e.notes  && <p style={s.rowNotes}>{e.notes}</p>}
+                      {view !== 'daily' && e.expense_date && (
+                        <p style={s.rowDate}>{fmtDateShort(e.expense_date)}</p>
+                      )}
+                    </div>
+                    <span style={{ ...s.sourceBadge, ...(e.payment_source === 'cash' ? s.sourceCash : s.sourceBank) }}>
+                      {e.payment_source === 'cash' ? 'Cash' : 'Bank'}
+                    </span>
+                    <span style={s.rowAmount}>{fmt(e.amount)}</span>
+                    <button
+                      onClick={ev => { ev.stopPropagation(); deleteMutation.mutate(e.id) }}
+                      style={s.deleteBtn} title="Delete"
+                    >
                       <Trash2 size={13} />
                     </button>
+                  </div>
+
+                  {/* ── Expanded edit form ── */}
+                  {expandedId === e.id && (
+                    <div style={s.expandedEdit}>
+                      <form onSubmit={ev => handleUpdate(ev, e.id)}>
+                        <div style={s.formGrid}>
+                          <div style={s.field}>
+                            <label style={s.fieldLabel}>Category</label>
+                            <select value={editForm.category} onChange={ev => setEditForm(p => ({ ...p, category: ev.target.value }))} style={s.input}>
+                              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                            </select>
+                          </div>
+                          <div style={s.field}>
+                            <label style={s.fieldLabel}>Amount</label>
+                            <div style={s.moneyRow}>
+                              <span style={s.moneySym}>$</span>
+                              <input type="number" min="0" step="0.01" required value={editForm.amount}
+                                onChange={ev => setEditForm(p => ({ ...p, amount: ev.target.value }))}
+                                style={s.moneyInput} />
+                            </div>
+                          </div>
+                          <div style={s.field}>
+                            <label style={s.fieldLabel}>Paid From</label>
+                            <div style={s.toggle}>
+                              {(['bank', 'cash'] as const).map(src => (
+                                <button key={src} type="button"
+                                  onClick={() => setEditForm(p => ({ ...p, payment_source: src }))}
+                                  style={{ ...s.toggleBtn, ...(editForm.payment_source === src ? s.toggleActive : {}) }}
+                                >
+                                  {src === 'bank' ? 'Bank' : 'Cash'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={s.field}>
+                            <label style={s.fieldLabel}>Vendor</label>
+                            <input value={editForm.vendor} onChange={ev => setEditForm(p => ({ ...p, vendor: ev.target.value }))} style={s.input} placeholder="Optional" />
+                          </div>
+                          <div style={{ ...s.field, gridColumn: '1 / -1' }}>
+                            <label style={s.fieldLabel}>Notes</label>
+                            <input value={editForm.notes} onChange={ev => setEditForm(p => ({ ...p, notes: ev.target.value }))} style={s.input} placeholder="Optional" />
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                          <button type="submit" disabled={updateMutation.isPending} style={s.submitBtn}>
+                            {updateMutation.isPending ? 'Saving…' : 'Save'}
+                          </button>
+                          <button type="button" onClick={() => setExpandedId(null)} style={s.cancelFormBtn}>Cancel</button>
+                        </div>
+                      </form>
+                    </div>
                   )}
                 </div>
               ))}
@@ -357,7 +457,9 @@ const s: Record<string, React.CSSProperties> = {
   row:       { display: 'flex', alignItems: 'center', padding: '13px 20px', gap: 12 },
   rowCat:    { fontSize: 13, fontWeight: 500, color: '#0d0d0d', margin: 0, letterSpacing: '-0.01em' },
   rowVendor: { fontSize: 11, color: 'rgba(13,13,13,0.42)', margin: '2px 0 0' },
+  rowNotes:  { fontSize: 11, color: 'rgba(13,13,13,0.42)', margin: '2px 0 0', fontStyle: 'italic' },
   rowDate:   { fontSize: 11, color: 'rgba(13,13,13,0.3)', margin: '2px 0 0' },
+  expandedEdit: { padding: '16px 20px 18px', background: '#f7f7f5', borderBottom: '1px solid rgba(13,13,13,0.05)' },
   rowAmount: { fontSize: 14, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.02em', flexShrink: 0 },
   deleteBtn: { background: 'none', border: 'none', color: 'rgba(13,13,13,0.25)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6, flexShrink: 0 },
 
