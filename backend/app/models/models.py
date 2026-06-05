@@ -555,6 +555,7 @@ class InventoryEvent(Base):
     inventory_item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
     event_type        = Column(Enum(InventoryEventType, name="inventory_event_type"), nullable=False)
     customer_id       = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"))
+    pos_sale_id       = Column(UUID(as_uuid=True), ForeignKey("pos_sales.id", ondelete="SET NULL"), nullable=True)
     amount            = Column(Numeric(10, 2))
     description       = Column(Text)
     event_date        = Column(Date, nullable=False, server_default=func.current_date())

@@ -164,6 +164,7 @@ def create_pos_sale(
                     inventory_item_id = wig.id,
                     event_type        = InventoryEventType.sold,
                     customer_id       = data.customer_id,
+                    pos_sale_id       = sale.id,
                     description       = sold_desc,
                     event_date        = data.sale_date,
                     created_by        = current_user.id,
@@ -180,6 +181,7 @@ def create_pos_sale(
                 inventory_item_id = item_data.inventory_item_id,
                 event_type        = InventoryEventType.service,
                 customer_id       = data.customer_id,
+                pos_sale_id       = sale.id,
                 description       = item_data.description,
                 event_date        = data.sale_date,
                 created_by        = current_user.id,
@@ -232,6 +234,7 @@ def create_pos_sale(
             inventory_item_id = wig.id,
             event_type        = InventoryEventType.payment_received,
             customer_id       = data.customer_id,
+            pos_sale_id       = sale.id,
             description       = pmt_desc,
             event_date        = data.sale_date,
             created_by        = current_user.id,
@@ -381,7 +384,13 @@ def delete_pos_sale(
         if item.item_type == PosItemType.wig and item.inventory_item_id:
             affected_wig_ids.add(item.inventory_item_id)
 
-    # Step 2 — delete WigPayments tied to this sale (deposits + balance payments)
+    # Step 2 — delete InventoryEvents and WigPayments tied to this sale
+    events_for_sale = db.query(InventoryEvent).filter(
+        InventoryEvent.pos_sale_id == sale.id
+    ).all()
+    for ev in events_for_sale:
+        db.delete(ev)
+
     for wp in wig_pmts_for_sale:
         db.delete(wp)
 
