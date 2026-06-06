@@ -1133,7 +1133,53 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
 
   function handlePrint() {
     if (!printRef.current) return
+    const origin = window.location.origin
+    // Fix relative image URLs so they resolve in the detached print window
     const content = printRef.current.innerHTML
+      .replace(/src="\/([^"]+)"/g, `src="${origin}/$1"`)
+
+    const hasWigDeposit = sale.items.some(i => i.item_type === 'wig')
+    const page2 = hasWigDeposit ? `
+      <div style="page-break-before:always;font-family:Arial,sans-serif;padding:32px;color:#000;font-size:13px;">
+        <div style="text-align:center;font-weight:bold;margin-bottom:14px;">
+          Chani Kramer Wigs Salon &nbsp;&#42;&nbsp; 1474 60<sup>th</sup> Street Brooklyn, NY 11219 &nbsp;&#42;&nbsp; 718.676.6003
+        </div>
+        <p style="font-style:italic;font-size:12px;margin-bottom:20px;">
+          'By giving a deposit and signing this agreement, you are acknowledging and agreeing to Chani Kramer's Salon Policies.
+        </p>
+        <h1 style="text-decoration:underline;font-size:26px;font-weight:900;margin-bottom:18px;">
+          ALL DEPOSITS ARE NON-REFUNDABLE!
+        </h1>
+        <p style="font-size:12px;margin-bottom:14px;">
+          Each wig purchase includes 1 cut and 1 fix-cut within 6 months of the first cut. The fix cut does not include a wash and set. COLOR IS NEVER INCLUDED!
+        </p>
+        <ul style="margin:0 0 14px 0;padding:0;list-style:none;font-size:12px;">
+          <li style="margin-bottom:8px;">&#10022; <strong>Rochi Lipsker</strong> is covered under warranty for one year, but color is only covered for 6 months.</li>
+          <li style="margin-bottom:8px;">&#10022; <strong>Bk Wigs</strong> are under warranty for one year, but only 3 months on the lace.</li>
+          <li style="margin-bottom:8px;">&#10022; <strong>Rina, Rina Elite, and Sary Wigs</strong> are covered for 6 months for manufacturing defects only. YOU HAVE 3 MONTHS TO BRING THE WIG IN SO WE CAN SEND IT TO THE FACTORY!</li>
+          <li style="margin-bottom:8px;">&#10022; <strong>Rina Feather wigs are not covered by any warranty! All rips and tears are normal wear and tear!</strong></li>
+          <li style="margin-bottom:8px;">&#10022; <strong>Rina, Rina Elite, and Sary Wigs</strong> are covered for 2 months under the salon warranty for any lace repairs. <em>(Brides have 2 months from their wedding date.)</em></li>
+          <li style="margin-bottom:8px;">&#10022; <strong>Zchava Wigs</strong> are covered for 6 months.</li>
+        </ul>
+        <p style="font-size:12px;margin-bottom:10px;">All warranties go into effect from the date of full payment.</p>
+        <p style="font-size:12px;margin-bottom:36px;">If you purchase a wig at Chani Kramer, and have it cut elsewhere, we are no longer responsible for anything that happens to the wig, regardless of when it was purchased.</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:32px;">
+          <tr><td style="padding:10px 0;border-bottom:1px solid #000;font-weight:bold;width:120px;">Last Name:</td><td style="border-bottom:1px solid #000;"></td></tr>
+          <tr><td style="height:12px;"></td></tr>
+          <tr><td style="padding:10px 0;border-bottom:1px solid #000;font-weight:bold;">First Name:</td><td style="border-bottom:1px solid #000;"></td></tr>
+          <tr><td style="height:12px;"></td></tr>
+          <tr><td style="padding:10px 0;border-bottom:1px solid #000;font-weight:bold;">Signature:</td><td style="border-bottom:1px solid #000;min-height:36px;"></td></tr>
+          <tr><td style="height:12px;"></td></tr>
+          <tr><td style="padding:10px 0;border-bottom:1px solid #000;font-weight:bold;">Date:</td><td style="border-bottom:1px solid #000;"></td></tr>
+        </table>
+        <p style="font-size:11px;font-style:italic;margin-bottom:24px;">
+          This is a legally binding contract. Chani Kramer Wigs Salon reserves the right to make adjustments to this contract at any time. PRICES ARE SUBJECT TO CHANGE AT ANY POINT, REGARDLESS OF THE PRICE THAT WAS QUOTED. All rights reserved.
+        </p>
+        <div style="text-align:center;font-weight:bold;border-top:1px solid #000;padding-top:12px;">
+          Chani Kramer Wigs Salon &nbsp;&#42;&nbsp; 1474 60<sup>th</sup> Street Brooklyn, NY 11219 &nbsp;&#42;&nbsp; 718.676.6003
+        </div>
+      </div>` : ''
+
     const win = window.open('', '_blank', 'width=700,height=960')
     if (!win) return
     win.document.write(`
@@ -1148,9 +1194,10 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
             td { padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
             .balance-box { background: #222; color: #fff; padding: 4px 10px; font-weight: 700; font-size: 14px; display:inline-block; }
             .paid-box { background: #10b981; color: #fff; padding: 4px 10px; font-weight: 700; font-size: 14px; display:inline-block; }
+            img { max-height: 60px; width: auto; }
           </style>
         </head>
-        <body>${content}</body>
+        <body>${content}${page2}</body>
       </html>
     `)
     win.document.close()
@@ -1184,12 +1231,7 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
           {/* Salon header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={r.logoBox}><div style={r.logoCircle} /></div>
-              <div>
-                <div style={r.salonName}>CHANI</div>
-                <div style={r.salonName}>KRAMER</div>
-                <div style={r.salonSub}>WIGS SALON</div>
-              </div>
+              <img src="/logo-mark.jpeg" alt="Chani Kramer Wigs Salon" style={{ height: 64, width: 'auto' }} />
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={r.receiptNum}>Receipt #: {sale.id.slice(0, 8).toUpperCase()}</div>
