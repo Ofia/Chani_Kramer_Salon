@@ -692,8 +692,10 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
           style={s.moneyInput} placeholder="0.00" />
       </div>
 
-      {/* Subtotal */}
-      <span style={s.subtotalCell}>${subtotal.toFixed(2)}</span>
+      {/* Subtotal — hidden for wig_balance (the editable input IS the amount) */}
+      {item.item_type !== 'wig_balance' && (
+        <span style={s.subtotalCell}>${subtotal.toFixed(2)}</span>
+      )}
 
       {/* Remove */}
       <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
