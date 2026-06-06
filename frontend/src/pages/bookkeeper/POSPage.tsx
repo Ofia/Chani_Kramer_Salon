@@ -58,7 +58,7 @@ type InventoryItem = {
   customer_id?: string | null
 }
 
-type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig'
+type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig' | 'wig_balance'
 
 // Default tax rate per item type
 const DEFAULT_TAX_RATE: Record<CartItemType, number> = {
@@ -85,23 +85,15 @@ type CartItem = {
   wig_color?: string
   wig_size?: string
   wig_front?: string
-  wig_deposit_amount?: string
-  wig_deposit_method?: string
   showWigSpecs?: boolean
+  // wig_balance: original balance before this payment (for receipt display)
+  wig_balance_due?: number
 }
 
 type Payment = {
   _key: string
   payment_method: string
   amount: string
-}
-
-type StagedWigPayment = {
-  wigId: string
-  wigName: string   // display label (brand · serial)
-  balance: number   // current balance due before this payment
-  amount: number    // amount being paid now
-  method: string
 }
 
 type WigPaymentRecord = {
@@ -180,10 +172,10 @@ const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash', credit_card: 'Credit Card', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
 }
 const ITEM_TYPE_LABEL: Record<CartItemType, string> = {
-  wash_set: 'Wash & Set', repair: 'Repair', inventory: 'Product', wig: 'Wig',
+  wash_set: 'Wash & Set', repair: 'Repair', inventory: 'Product', wig: 'Wig', wig_balance: 'Wig Balance',
 }
 const ITEM_TYPE_COLOR: Record<CartItemType, string> = {
-  wash_set: '#DF5198', repair: '#E3CD94', inventory: '#97BBE9', wig: '#5581B1',
+  wash_set: '#DF5198', repair: '#E3CD94', inventory: '#97BBE9', wig: '#5581B1', wig_balance: '#5581B1',
 }
 
 let keyCounter = 0
@@ -215,9 +207,7 @@ export default function POSPage() {
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
   const [shipping, setShipping] = useState({ enabled: false, amount: '', address: '' })
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
-  const [receiptWig, setReceiptWig] = useState<WigOrder | null>(null)
-  const [stagedWigPayments, setStagedWigPayments] = useState<StagedWigPayment[]>([])
-  const [receiptWigPayments, setReceiptWigPayments] = useState<StagedWigPayment[]>([])
+  const [receiptBalanceItems, setReceiptBalanceItems] = useState<CartItem[]>([])
 
   const qc = useQueryClient()
 
@@ -240,8 +230,8 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['inventory'] })
       qc.invalidateQueries({ queryKey: ['pending-wigs'] })
       qc.invalidateQueries({ queryKey: ['operation-overview'] })
-      // Capture wig payments before reset so receipt can display them
-      setReceiptWigPayments([...stagedWigPayments])
+      // Capture balance items before reset so receipt can display them
+      setReceiptBalanceItems(cart.filter(i => i.item_type === 'wig_balance'))
       // Auto-open receipt
       setReceiptSale(res.data)
       // Reset form — keep saleDate so the right panel stays on the same date
@@ -249,7 +239,6 @@ export default function POSPage() {
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
       setShipping({ enabled: false, amount: '', address: '' })
-      setStagedWigPayments([])
     },
   })
 
@@ -283,7 +272,6 @@ export default function POSPage() {
       tax_rate: DEFAULT_TAX_RATE[itemType],
       inventory_item_id: inv.id,
       showWigSpecs: isWig,
-      wig_deposit_method: 'cash',
       // Pre-fill wig specs from inventory — no need to re-enter
       ...(isWig ? {
         wig_serial:  inv.daysmart_serial,
@@ -293,6 +281,21 @@ export default function POSPage() {
         wig_size:    inv.size,
         wig_front:   inv.front,
       } : {}),
+    }])
+  }
+
+  function addWigBalanceToCart(wig: WigOrder) {
+    const balanceDue = Number(wig.balance_due)
+    const label = [wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig'
+    setCart(c => [...c, {
+      _key: nextKey(),
+      item_type: 'wig_balance',
+      description: `Balance — ${label}`,
+      quantity: 1,
+      unit_price: balanceDue.toFixed(2),
+      tax_rate: 0,
+      inventory_item_id: wig.id,
+      wig_balance_due: balanceDue,
     }])
   }
 
@@ -331,64 +334,85 @@ export default function POSPage() {
     return s + Math.round(price * i.quantity * (i.tax_rate || 0) * 100) / 100
   }, 0)
   const shippingAmount   = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
-  const wigBalanceTotal  = stagedWigPayments.reduce((s, sp) => s + sp.amount, 0)
-  const grandTotal       = cartTotal + taxAmount + shippingAmount + wigBalanceTotal
+  const grandTotal       = cartTotal + taxAmount + shippingAmount
 
   const paymentsTotal    = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
-  // Wig balance payments are pre-paid via the staging panel — count them as already paid
-  const effectivePaid    = paymentsTotal + wigBalanceTotal
+  const effectivePaid    = paymentsTotal
   const balanceDue       = grandTotal - effectivePaid
 
   // ── Save ──────────────────────────────────────────────────
 
   function handleSave() {
     if (!customer.name.trim()) return
-    if (cart.length === 0 && stagedWigPayments.length === 0) return
+    if (cart.length === 0) return
 
-    const items = cart.map(i => ({
-      item_type: i.item_type,
-      description: i.description,
-      quantity: i.quantity,
-      unit_price: parseFloat(i.unit_price) || 0,
-      subtotal: (parseFloat(i.unit_price) || 0) * i.quantity,
-      tax_rate: i.tax_rate || 0,
-      notes: i.notes || undefined,
-      inventory_item_id: i.inventory_item_id || undefined,
-      wig_serial: i.wig_serial || undefined,
-      wig_brand: i.wig_brand || undefined,
-      wig_length: i.wig_length || undefined,
-      wig_color: i.wig_color || undefined,
-      wig_size: i.wig_size || undefined,
-      wig_front: i.wig_front || undefined,
-      wig_deposit_amount: i.item_type === 'wig' && i.wig_deposit_amount
-        ? parseFloat(i.wig_deposit_amount) : undefined,
-      wig_deposit_method: i.item_type === 'wig' ? (i.wig_deposit_method || 'cash') : undefined,
-    }))
+    const regularItems = cart.filter(i => i.item_type !== 'wig_balance')
+    const balanceItems = cart.filter(i => i.item_type === 'wig_balance')
 
     const pmts = payments
       .filter(p => parseFloat(p.amount) > 0)
       .map(p => ({ payment_method: p.payment_method, amount: parseFloat(p.amount) }))
+
+    const primaryMethod = pmts[0]?.payment_method || 'cash'
+
+    // Derive wig deposit from the Payment section:
+    // total collected - non-wig subtotal = amount going toward wig(s)
+    const nonWigSubtotal = regularItems
+      .filter(i => i.item_type !== 'wig')
+      .reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
+    const totalCollected = pmts.reduce((s, p) => s + p.amount, 0)
+    const wigDepositPool = Math.max(0, totalCollected - nonWigSubtotal)
+
+    const wigItems = regularItems.filter(i => i.item_type === 'wig')
+    const totalWigSubtotal = wigItems.reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
+
+    const items = regularItems.map(i => {
+      const subtotal = (parseFloat(i.unit_price) || 0) * i.quantity
+      // Allocate deposit proportionally across wigs
+      const wigDeposit = i.item_type === 'wig' && totalWigSubtotal > 0
+        ? wigDepositPool * (subtotal / totalWigSubtotal)
+        : undefined
+
+      return {
+        item_type: i.item_type,
+        description: i.description,
+        quantity: i.quantity,
+        unit_price: parseFloat(i.unit_price) || 0,
+        subtotal,
+        tax_rate: i.tax_rate || 0,
+        notes: i.notes || undefined,
+        inventory_item_id: i.inventory_item_id || undefined,
+        wig_serial: i.wig_serial || undefined,
+        wig_brand: i.wig_brand || undefined,
+        wig_length: i.wig_length || undefined,
+        wig_color: i.wig_color || undefined,
+        wig_size: i.wig_size || undefined,
+        wig_front: i.wig_front || undefined,
+        wig_deposit_amount: wigDeposit,
+        wig_deposit_method: i.item_type === 'wig' ? primaryMethod : undefined,
+      }
+    })
 
     saveMutation.mutate({
       customer_id: customer.id || undefined,
       customer_name: customer.name.trim(),
       customer_phone: customer.phone || undefined,
       sale_date: saleDate,
-      tax_rate: 0,                             // always 0 — tax is per-item
-      tax_amount_override: taxAmount || undefined, // sum of all item taxes
+      tax_rate: 0,
+      tax_amount_override: taxAmount || undefined,
       shipping_amount: shippingAmount,
       shipping_address: shipping.enabled && shipping.address ? shipping.address : undefined,
       items,
       payments: pmts,
-      wig_balance_payments: stagedWigPayments.map(sp => ({
-        inventory_item_id: sp.wigId,
-        amount: sp.amount,
-        payment_method: sp.method,
+      wig_balance_payments: balanceItems.map(i => ({
+        inventory_item_id: i.inventory_item_id,
+        amount: parseFloat(i.unit_price) || 0,
+        payment_method: primaryMethod,
       })),
     })
   }
 
-  const canSave = customer.name.trim() && (cart.length > 0 || stagedWigPayments.length > 0) && !saveMutation.isPending
+  const canSave = customer.name.trim() && cart.length > 0 && !saveMutation.isPending
 
   return (
     <div style={s.pageLayout}>
@@ -419,17 +443,12 @@ export default function POSPage() {
           )}
         </Section>
 
-        {/* ── Pending wig orders for this customer ── */}
+        {/* ── Open wig balances for this customer ── */}
         {customer.id && (
-          <PendingOrdersPanel
+          <OpenBalancePanel
             customerId={customer.id}
-            staged={stagedWigPayments}
-            onStage={sp => setStagedWigPayments(prev =>
-              prev.some(x => x.wigId === sp.wigId)
-                ? prev.map(x => x.wigId === sp.wigId ? sp : x)
-                : [...prev, sp]
-            )}
-            onUnstage={wigId => setStagedWigPayments(prev => prev.filter(x => x.wigId !== wigId))}
+            cart={cart}
+            onAdd={addWigBalanceToCart}
           />
         )}
 
@@ -497,37 +516,6 @@ export default function POSPage() {
           )}
         </Section>
 
-        {/* ── Staged wig balance payments ── */}
-        {stagedWigPayments.length > 0 && (
-          <div style={s.stagedSection}>
-            <p style={s.stagedTitle}>
-              <CreditCard size={12} style={{ marginRight: 5 }} />
-              Wig Balance Payments
-            </p>
-            {stagedWigPayments.map(sp => (
-              <div key={sp.wigId} style={s.stagedRow}>
-                <div style={{ flex: 1 }}>
-                  <span style={s.stagedName}>{sp.wigName}</span>
-                  <span style={s.stagedMeta}>Was due ${sp.balance.toFixed(2)}</span>
-                </div>
-                <select
-                  value={sp.method}
-                  onChange={e => setStagedWigPayments(prev =>
-                    prev.map(x => x.wigId === sp.wigId ? { ...x, method: e.target.value } : x)
-                  )}
-                  style={{ ...s.select, flex: '0 0 130px', fontSize: 12, padding: '3px 6px' }}
-                >
-                  {METHODS.map(m => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                </select>
-                <span style={s.stagedAmt}>${sp.amount.toFixed(2)}</span>
-                <button onClick={() => setStagedWigPayments(p => p.filter(x => x.wigId !== sp.wigId))} style={s.iconBtn}>
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* ── Payments ── */}
         <Section title="Payment">
           {payments.map((p) => (
@@ -565,14 +553,7 @@ export default function POSPage() {
               <span style={{ color: '#71717a', fontSize: 13 }}>Paid</span>
               <span style={{ fontWeight: 600 }}>${effectivePaid.toFixed(2)}</span>
               <span style={{ color: '#71717a', fontSize: 13, marginLeft: 16 }}>
-                {balanceDue > 0
-                  ? 'Balance due'
-                  : balanceDue < 0
-                  ? 'Overpaid'
-                  : stagedWigPayments.some(sp => sp.amount < sp.balance)
-                  ? 'Transaction balanced · Wig balance remaining'
-                  : 'Paid in full ✓'
-                }
+                {balanceDue > 0 ? 'Balance due' : balanceDue < 0 ? 'Overpaid' : 'Paid in full ✓'}
               </span>
               {balanceDue !== 0 && (
                 <span style={{ fontWeight: 700, color: balanceDue > 0 ? '#DF5198' : '#10b981' }}>
@@ -601,12 +582,6 @@ export default function POSPage() {
                 <div style={s.totalRow}>
                   <span>Shipping</span>
                   <span>${shippingAmount.toFixed(2)}</span>
-                </div>
-              )}
-              {wigBalanceTotal > 0 && (
-                <div style={s.totalRow}>
-                  <span>Wig balance payment(s)</span>
-                  <span>${wigBalanceTotal.toFixed(2)}</span>
                 </div>
               )}
               <div style={{ ...s.totalRow, ...s.totalGrand }}>
@@ -651,14 +626,9 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* ── Receipt Modal (new POS sale) ── */}
+      {/* ── Receipt Modal ── */}
       {receiptSale && (
-        <ReceiptModal sale={receiptSale} wigPayments={receiptWigPayments} onClose={() => setReceiptSale(null)} />
-      )}
-
-      {/* ── Receipt Modal (wig balance payment) ── */}
-      {receiptWig && (
-        <WigReceiptModal wig={receiptWig} onClose={() => setReceiptWig(null)} />
+        <ReceiptModal sale={receiptSale} balanceItems={receiptBalanceItems} onClose={() => setReceiptSale(null)} />
       )}
     </div>
   )
@@ -683,7 +653,7 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
         {ITEM_TYPE_LABEL[item.item_type]}
       </div>
 
-      {/* Description — dropdown for repairs, free text otherwise */}
+      {/* Description — dropdown for repairs, read-only label for balance, free text otherwise */}
       {item.item_type === 'repair' ? (
         <select
           value={item.description}
@@ -695,6 +665,8 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
             <option key={rs.id} value={rs.name}>{rs.name}</option>
           ))}
         </select>
+      ) : item.item_type === 'wig_balance' ? (
+        <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#18181b' }}>{item.description}</span>
       ) : (
         <input
           value={item.description}
@@ -725,36 +697,45 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
       {/* Remove */}
       <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
 
-      {/* Per-item tax toggle — full width second row */}
-      <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-        <span style={{ fontSize: 11, color: '#71717a', whiteSpace: 'nowrap' }}>Tax:</span>
-        {[
-          { label: 'Exempt', value: 0 },
-          ...(item.item_type === 'wash_set' || item.item_type === 'repair'
-            ? [{ label: '4.5%', value: 0.045 }]
-            : [{ label: '8.875%', value: 0.08875 }]
-          ),
-        ].map(opt => (
-          <button
-            key={opt.value}
-            onClick={() => onChange({ tax_rate: opt.value })}
-            style={{
-              padding: '2px 8px', borderRadius: 4, border: '1px solid',
-              fontSize: 11, cursor: 'pointer',
-              background: item.tax_rate === opt.value ? '#212121' : 'transparent',
-              color: item.tax_rate === opt.value ? '#fff' : '#71717a',
-              borderColor: item.tax_rate === opt.value ? '#212121' : '#d4d4d8',
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
-        {item.tax_rate > 0 && subtotal > 0 && (
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#71717a' }}>
-            +${(subtotal * item.tax_rate).toFixed(2)}
-          </span>
-        )}
-      </div>
+      {/* Per-item tax toggle — hidden for wig_balance (no new tax on balance payments) */}
+      {item.item_type !== 'wig_balance' && (
+        <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+          <span style={{ fontSize: 11, color: '#71717a', whiteSpace: 'nowrap' }}>Tax:</span>
+          {[
+            { label: 'Exempt', value: 0 },
+            ...(item.item_type === 'wash_set' || item.item_type === 'repair'
+              ? [{ label: '4.5%', value: 0.045 }]
+              : [{ label: '8.875%', value: 0.08875 }]
+            ),
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onChange({ tax_rate: opt.value })}
+              style={{
+                padding: '2px 8px', borderRadius: 4, border: '1px solid',
+                fontSize: 11, cursor: 'pointer',
+                background: item.tax_rate === opt.value ? '#212121' : 'transparent',
+                color: item.tax_rate === opt.value ? '#fff' : '#71717a',
+                borderColor: item.tax_rate === opt.value ? '#212121' : '#d4d4d8',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+          {item.tax_rate > 0 && subtotal > 0 && (
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#71717a' }}>
+              +${(subtotal * item.tax_rate).toFixed(2)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Partial balance note */}
+      {item.item_type === 'wig_balance' && item.wig_balance_due && subtotal < item.wig_balance_due && subtotal > 0 && (
+        <div style={{ width: '100%', fontSize: 11, color: '#71717a', marginTop: 4 }}>
+          Partial payment — ${(item.wig_balance_due - subtotal).toFixed(2)} will remain open
+        </div>
+      )}
 
       {/* Item notes — repair and wash & set */}
       {(item.item_type === 'repair' || item.item_type === 'wash_set') && (
@@ -766,7 +747,7 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
         />
       )}
 
-      {/* Wig serial linker — W&S and Repair */}
+      {/* Wig serial linker — W&S and Repair only */}
       {(item.item_type === 'repair' || item.item_type === 'wash_set') && (
         <WigLinkerField
           customerId={customerId}
@@ -776,7 +757,7 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
         />
       )}
 
-      {/* Wig specs — expandable */}
+      {/* Wig specs — expandable (new sales only, not balance payments) */}
       {item.item_type === 'wig' && (
         <div style={{ width: '100%', marginTop: 8 }}>
           <button
@@ -795,26 +776,6 @@ function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
               <WigSpecInput label="Color" value={item.wig_color} onChange={v => onChange({ wig_color: v })} placeholder="2/8" />
               <WigSpecInput label="Size" value={item.wig_size} onChange={v => onChange({ wig_size: v })} placeholder="M" />
               <WigSpecInput label="Front" value={item.wig_front} onChange={v => onChange({ wig_front: v })} placeholder="Top Lace" />
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, marginTop: 4 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={s.fieldLabel}>Deposit Paid</label>
-                  <div style={s.moneyRow}>
-                    <span style={s.moneySym}>$</span>
-                    <input type="number" min="0" step="0.01"
-                      value={item.wig_deposit_amount || ''}
-                      onChange={e => onChange({ wig_deposit_amount: e.target.value })}
-                      style={s.moneyInput} placeholder="0.00" />
-                  </div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={s.fieldLabel}>Deposit Method</label>
-                  <select value={item.wig_deposit_method || 'cash'}
-                    onChange={e => onChange({ wig_deposit_method: e.target.value })}
-                    style={s.select}>
-                    {METHODS.map(m => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                  </select>
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -1096,18 +1057,15 @@ function TodaySaleCard({ sale, onReceipt, canDelete }: { sale: PosSale; onReceip
   )
 }
 
-// ── Pending Orders Panel ──────────────────────────────────────
+// ── Open Balance Panel ────────────────────────────────────────
+// Shows a customer's open wig balances. Clicking "Add to Cart"
+// adds a wig_balance cart item — amount editable, no tax, logs payment on save.
 
-function PendingOrdersPanel({ customerId, staged, onStage, onUnstage }: {
+function OpenBalancePanel({ customerId, cart, onAdd }: {
   customerId: string
-  staged: StagedWigPayment[]
-  onStage: (sp: StagedWigPayment) => void
-  onUnstage: (wigId: string) => void
+  cart: CartItem[]
+  onAdd: (wig: WigOrder) => void
 }) {
-  const [openId, setOpenId]     = useState<string | null>(null)
-  const [payAmount, setPayAmount] = useState('')
-  const [payMethod, setPayMethod] = useState('cash')
-
   const { data: openWigs = [], isLoading } = useQuery<WigOrder[]>({
     queryKey: ['pending-wigs', customerId],
     queryFn: () =>
@@ -1119,94 +1077,33 @@ function PendingOrdersPanel({ customerId, staged, onStage, onUnstage }: {
 
   if (isLoading || openWigs.length === 0) return null
 
-  function openForm(wig: WigOrder) {
-    setOpenId(wig.id)
-    setPayAmount(Number(wig.balance_due).toFixed(2))
-    setPayMethod('cash')
-  }
-
-  function stagePayment(wig: WigOrder) {
-    const amt = parseFloat(payAmount)
-    if (!amt || amt <= 0) return
-    const wigName = [wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'
-    onStage({ wigId: wig.id, wigName, balance: Number(wig.balance_due), amount: amt, method: payMethod })
-    setOpenId(null)
-    setPayAmount('')
-  }
-
   return (
     <div style={s.pendingPanel}>
       <p style={s.pendingTitle}>
         <CreditCard size={13} style={{ marginRight: 6 }} />
-        Pending Wig Orders — {openWigs.length} open
+        Open Wig Balances — {openWigs.length}
       </p>
-
       {openWigs.map(wig => {
-        const balance    = Number(wig.balance_due)
-        const isOpen     = openId === wig.id
-        const isStaged   = staged.some(x => x.wigId === wig.id)
-        const wigName    = [wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'
+        const balance = Number(wig.balance_due)
+        const wigName = [wig.brand, wig.daysmart_serial, wig.length, wig.color].filter(Boolean).join(' · ') || 'Wig order'
+        const inCart  = cart.some(i => i.item_type === 'wig_balance' && i.inventory_item_id === wig.id)
 
         return (
           <div key={wig.id} style={s.pendingRow}>
-            {/* Wig summary */}
             <div style={{ flex: 1 }}>
               <div style={s.pendingWigName}>{wigName}</div>
               <div style={s.pendingWigMeta}>
                 Total ${Number(wig.total_price).toFixed(2)} · Paid ${Number(wig.amount_paid).toFixed(2)}
               </div>
             </div>
-
-            {/* Balance + action */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={s.pendingBalance}>Due ${balance.toFixed(2)}</span>
-              {!isOpen && !isStaged && (
-                <button onClick={() => openForm(wig)} style={s.payBalanceBtn}>Pay Balance</button>
-              )}
-              {isStaged && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>Staged ✓</span>
-                  <button onClick={() => onUnstage(wig.id)} style={{ ...s.ghostBtn, padding: '3px 8px', fontSize: 11 }}>Remove</button>
-                </div>
+              {inCart ? (
+                <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>In cart ✓</span>
+              ) : (
+                <button onClick={() => onAdd(wig)} style={s.payBalanceBtn}>Add to Cart</button>
               )}
             </div>
-
-            {/* Inline form — enter amount + method, then "Add to Sale" */}
-            {isOpen && (
-              <div style={s.pendingPayForm}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-                    style={{ ...s.select, width: 150 }}>
-                    {METHODS.map(m => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}
-                  </select>
-                  <div style={{ ...s.moneyRow, width: 130 }}>
-                    <span style={s.moneySym}>$</span>
-                    <input type="number" min="0" step="0.01"
-                      value={payAmount}
-                      onChange={e => setPayAmount(e.target.value)}
-                      style={s.moneyInput} />
-                  </div>
-                  <button
-                    onClick={() => stagePayment(wig)}
-                    disabled={!payAmount || parseFloat(payAmount) <= 0}
-                    style={s.primaryBtn}
-                  >
-                    Add to Sale
-                  </button>
-                  <button onClick={() => setOpenId(null)} style={s.ghostBtn}>Cancel</button>
-                </div>
-                {parseFloat(payAmount) > 0 && parseFloat(payAmount) < balance && (
-                  <p style={{ fontSize: 11, color: '#71717a', marginTop: 6 }}>
-                    Remaining after this payment: ${(balance - (parseFloat(payAmount) || 0)).toFixed(2)}
-                  </p>
-                )}
-                {parseFloat(payAmount) >= balance && (
-                  <p style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 6 }}>
-                    Paid in full — will save with the sale
-                  </p>
-                )}
-              </div>
-            )}
           </div>
         )
       })}
@@ -1215,9 +1112,9 @@ function PendingOrdersPanel({ customerId, staged, onStage, onUnstage }: {
 }
 
 
-// ── Wig Receipt Modal (for balance payments) ──────────────────
-
-function WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void }) {
+// ── Wig Receipt Modal (kept for history reference, unused in main flow) ──────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void }) {
   const printRef = useRef<HTMLDivElement>(null)
 
   function handlePrint() {
@@ -1368,7 +1265,7 @@ function WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void 
 
 // ── Receipt Modal ─────────────────────────────────────────────
 
-function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigPayments?: StagedWigPayment[]; onClose: () => void }) {
+function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; balanceItems?: CartItem[]; onClose: () => void }) {
   const printRef = useRef<HTMLDivElement>(null)
 
   function handlePrint() {
@@ -1401,7 +1298,11 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
   const total          = Number(sale.total_amount)
   const paid           = Number(sale.amount_paid)
   const balance        = Number(sale.balance_due)
-  const wigStillOwed   = wigPayments.reduce((sum, wp) => sum + Math.max(0, wp.balance - wp.amount), 0)
+  const wigStillOwed   = balanceItems.reduce((sum, i) => {
+    const paid = parseFloat(i.unit_price) || 0
+    const due  = i.wig_balance_due ?? paid
+    return sum + Math.max(0, due - paid)
+  }, 0)
 
   return (
     <div style={s.modalOverlay} onClick={onClose}>
@@ -1499,23 +1400,24 @@ function ReceiptModal({ sale, wigPayments = [], onClose }: { sale: PosSale; wigP
           )}
 
           {/* Wig balance payments on this receipt */}
-          {wigPayments.length > 0 && (
+          {balanceItems.length > 0 && (
             <table style={{ marginBottom: 16 }}>
               <thead>
                 <tr>
-                  {['Wig Balance Payment', 'Method', 'Paid', 'Still Owed'].map(h => (
+                  {['Wig Balance Payment', 'Paid', 'Still Owed'].map(h => (
                     <th key={h} style={r.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {wigPayments.map(wp => {
-                  const stillOwed = wp.balance - wp.amount
+                {balanceItems.map(i => {
+                  const amtPaid   = parseFloat(i.unit_price) || 0
+                  const due       = i.wig_balance_due ?? amtPaid
+                  const stillOwed = Math.max(0, due - amtPaid)
                   return (
-                    <tr key={wp.wigId}>
-                      <td style={r.td}>{wp.wigName}</td>
-                      <td style={r.td}>{METHOD_LABEL[wp.method] || wp.method}</td>
-                      <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${wp.amount.toFixed(2)}</td>
+                    <tr key={i._key}>
+                      <td style={r.td}>{i.description}</td>
+                      <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${amtPaid.toFixed(2)}</td>
                       <td style={{ ...r.td, fontWeight: 700, textAlign: 'right', color: stillOwed > 0 ? '#c0392b' : '#10b981' }}>
                         {stillOwed > 0 ? `$${stillOwed.toFixed(2)}` : '—'}
                       </td>
