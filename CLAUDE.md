@@ -17,6 +17,8 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | 011 | `backend/migrations/011_consolidate_wig_orders.sql` | ⚠️ Run ASAP |
 | 012 | `backend/migrations/012_pos_enhancements.sql` | ⚠️ Run ASAP |
 | 013 | `backend/migrations/013_expense_categories.sql` | ⚠️ Run ASAP |
+| 015 | `backend/migrations/015_pos_item_tax.sql` | ⚠️ Run ASAP |
+| ~~016~~ | ~~`backend/migrations/016_inventory_event_pos_sale.sql`~~ | ✅ Run |
 
 
 ## Color Palette
@@ -119,14 +121,21 @@ The "New Wig" button is gone — wigs are added via Inventory page, then sold vi
 - "Charitable Giving (מעשרות)" is also an expense category for direct tithe payments
 
 ### Sales Tax
-- **POS — by item type:**
+- **POS — per item, by item type:**
   - Services (W&S, Repairs): **4.5%**
   - Products / Wigs: **8.875%**
-  - Non-NY residents: **0%** (tax exempt toggle)
+  - Non-NY residents: **0%** (tax exempt toggle per item)
+  - Wig balance payments: **0%** (tax was applied at original sale)
 - **Deposit reconciliation — by payment method:**
   - Cash: 8.875%
   - CC / Check / Zelle: 4.5%
 - Always stripped before tithe calculation
+
+### Wig Tax Recognition (CRITICAL — accrual accounting)
+- Wig item tax is computed at sale time and stored in `inventory_items.sale_tax_amount`
+- Tax is NOT counted as collected on the sale date
+- Tax is recognized in reports on `pickup_date` (when `sale_status = paid_in_full`)
+- Non-wig item taxes on the same mixed sale are counted immediately via `pos_sale_items.tax_amount`
 
 ### 40% Bank Rule — PERMANENTLY REMOVED (as of 2026-06-04)
 **Do NOT add this back anywhere.** Reason: Avi deposits the actual amount needed for expenses now that the system tracks everything accurately. The percentage estimate is no longer needed.
@@ -181,6 +190,8 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - **011** ⚠️ — Consolidates wig_orders into `inventory_items` (inventory-first architecture)
 - **012** ⚠️ — `pos_sale_items.notes`, `pos_sales.tax_rate/tax_amount/shipping_amount/shipping_address`
 - **013** ⚠️ — 13 new expense category enum values (replaces old 14)
+- **015** ⚠️ — `inventory_items.sale_tax_amount` (wig tax locked at sale), `pos_sale_items.tax_amount` (per-item tax)
+- **016** ⚠️ — `inventory_events.pos_sale_id` FK (links events to creating sale for clean deletion)
 
 **Supabase enum naming:** Always snake_case in SQL. In SQLAlchemy, always pass `name=` explicitly.
 
@@ -211,6 +222,15 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - Every mutation on every page must `invalidateQueries({ queryKey: ['operation-overview'] })`
 - `staleTime: 0` on the reports query
 
+### POS — Key Architecture
+- Cart item types: `wash_set` | `repair` | `inventory` | `wig` | `wig_balance`
+- Per-item tax rate: each `CartItem` carries its own `tax_rate` (0, 0.045, or 0.08875)
+- `DEFAULT_TAX_RATE` map drives defaults per item type; user can toggle exempt per item
+- Wig balance payments: customer's open balances appear in `OpenBalancePanel`; clicking "Add to Cart" creates a `wig_balance` CartItem (no tax, editable amount)
+- Payment auto-fill: single payment row auto-syncs to grand total — Tzipora only picks the method
+- Delete sale: explicitly deletes linked WigPayments + InventoryEvents (via `pos_sale_id`), then recomputes wig status from remaining payments
+- Receipts: `logo-mark.jpeg` in header; wig sales trigger a second printed page (deposit agreement + warranty + signature fields)
+
 ---
 
 ## Design Principles
@@ -228,7 +248,7 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 
 ### Phase 1 — Core Web App (current)
 - [x] Auth (3 users, 3 roles)
-- [x] POS — multi-item cart, wig balance payments, sales tax, shipping, role-gated delete
+- [x] POS — multi-item cart, wig balance payments as cart items, per-item tax, auto-fill payment, receipt logo + deposit agreement page 2
 - [x] Inventory — unified wig + product stock, providers, repair services
 - [x] Operation Overview — Day/Month/Range, 5 tabs, Recharts charts
 - [x] Expenses — 13 industry-standard categories, add/delete
@@ -237,9 +257,8 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] Customers CRM
 - [x] Employees — time log modal
 - [x] AI chatbot (Ella) — 9 tools, /remember command
-- [x] All business logic (tithes, sales tax) automated
+- [x] All business logic (tithes, sales tax, wig tax deferral) automated
 - [ ] Edit sale/receipt (task #8 from Avi meeting)
-- [ ] Bank/Cash source tag per expense (task #13)
 - [ ] Bank statement auto-import (task #14)
 - [ ] Persist unsaved form data on navigation (task #15)
 - [ ] DaySmart PDF parsing → auto-fill
@@ -261,7 +280,9 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - `Documentation/Reporting_Breakdown.md` — analysis of current Excel workflow
 - `backend/app/models/models.py` — all SQLAlchemy models
 - `backend/app/routes/reports.py` — Operation Overview aggregation endpoint
-- `backend/app/routes/pos_sales.py` — POS sale creation + wig payment logic
+- `backend/app/routes/pos_sales.py` — POS sale creation + wig payment logic + delete handler
 - `backend/app/core/financials.py` — tithes, sales tax logic
 - `frontend/src/pages/bookkeeper/OperationOverviewPage.tsx` — reporting hub
 - `frontend/src/pages/bookkeeper/POSPage.tsx` — point of sale
+- `frontend/public/logo-mark.jpeg` — salon logo (used on receipts)
+- `frontend/public/logo-full.jpeg` — full salon logo

@@ -59,3 +59,5 @@
 | 011 | `backend/migrations/011_consolidate_wig_orders.sql` | Merges wig_orders into inventory_items |
 | 012 | `backend/migrations/012_pos_enhancements.sql` | Adds notes, tax_rate, tax_amount, shipping columns |
 | 013 | `backend/migrations/013_expense_categories.sql` | Replaces old categories with 13 industry-standard |
+| 015 | `backend/migrations/015_pos_item_tax.sql` | Adds `sale_tax_amount` to inventory_items + `tax_amount` to pos_sale_items |
+| ~~016~~ | ~~`backend/migrations/016_inventory_event_pos_sale.sql`~~ | ✅ Run |
