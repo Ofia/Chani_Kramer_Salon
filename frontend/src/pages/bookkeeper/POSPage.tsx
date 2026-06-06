@@ -62,10 +62,11 @@ type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig' | 'wig_balance'
 
 // Default tax rate per item type
 const DEFAULT_TAX_RATE: Record<CartItemType, number> = {
-  wash_set:  0.045,    // services: 4.5%
-  repair:    0.045,    // services: 4.5%
-  inventory: 0.08875,  // products: 8.875%
-  wig:       0.08875,  // products: 8.875%
+  wash_set:    0.045,    // services: 4.5%
+  repair:      0.045,    // services: 4.5%
+  inventory:   0.08875,  // products: 8.875%
+  wig:         0.08875,  // products: 8.875%
+  wig_balance: 0,        // no tax on balance payments
 }
 
 type CartItem = {
@@ -1107,157 +1108,6 @@ function OpenBalancePanel({ customerId, cart, onAdd }: {
           </div>
         )
       })}
-    </div>
-  )
-}
-
-
-// ── Wig Receipt Modal (kept for history reference, unused in main flow) ──────
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _WigReceiptModal({ wig, onClose }: { wig: WigOrder; onClose: () => void }) {
-  const printRef = useRef<HTMLDivElement>(null)
-
-  function handlePrint() {
-    if (!printRef.current) return
-    const content = printRef.current.innerHTML
-    const win = window.open('', '_blank', 'width=700,height=960')
-    if (!win) return
-    win.document.write(`
-      <html>
-        <head>
-          <title>Receipt — ${wig.customer_name}</title>
-          <style>
-            * { margin:0; padding:0; box-sizing:border-box; }
-            body { font-family: Arial, sans-serif; font-size: 13px; color: #000; padding: 32px; }
-            table { width: 100%; border-collapse: collapse; }
-            th { background: #222; color: #fff; padding: 5px 8px; text-align: left; font-size: 11px; }
-            td { padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 12px; }
-            .balance-box { padding: 4px 10px; font-weight: 700; font-size: 14px; color: #fff; display: inline-block; }
-          </style>
-        </head>
-        <body>${content}</body>
-      </html>
-    `)
-    win.document.close()
-    win.focus()
-    setTimeout(() => { win.print(); win.close() }, 400)
-  }
-
-  const total   = Number(wig.total_price)
-  const paid    = Number(wig.amount_paid)
-  const balance = Number(wig.balance_due)
-
-  return (
-    <div style={s.modalOverlay} onClick={onClose}>
-      <div style={s.modalBox} onClick={e => e.stopPropagation()}>
-
-        <div style={s.modalHeader}>
-          <span style={s.modalTitle}>Receipt — {wig.customer_name}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handlePrint} style={s.printBtn}><Printer size={14} /> Print</button>
-            <button onClick={onClose} style={s.iconBtn}><X size={16} /></button>
-          </div>
-        </div>
-
-        <div ref={printRef} style={s.receiptBody}>
-
-          {/* Salon header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={r.logoBox}><div style={r.logoCircle} /></div>
-              <div>
-                <div style={r.salonName}>CHANI</div>
-                <div style={r.salonName}>KRAMER</div>
-                <div style={r.salonSub}>WIGS SALON</div>
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={r.receiptNum}>Receipt #: {(wig.daysmart_receipt_no || wig.id.slice(0, 8)).toUpperCase()}</div>
-            </div>
-          </div>
-
-          {/* Date */}
-          <div style={{ textAlign: 'right', marginBottom: 18, fontSize: 12 }}>
-            Date: {fmtDate(new Date().toISOString().split('T')[0])}
-          </div>
-
-          {/* Customer */}
-          <div style={{ marginBottom: 20 }}>
-            <InfoRow label="Name"    value={wig.customer_name} />
-            <InfoRow label="Address" value="" />
-            <div style={{ height: 6 }} />
-            <InfoRow label="Phone"   value={wig.customer_phone || ''} />
-            <InfoRow label="Cell"    value="" />
-          </div>
-
-          {/* Wig table */}
-          <table style={{ marginBottom: 20 }}>
-            <thead>
-              <tr>
-                {['Wig', 'Company', 'Length', 'Color', 'Size', 'Front', 'Total'].map(h => (
-                  <th key={h} style={r.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={r.td}>{wig.daysmart_serial || '—'}</td>
-                <td style={r.td}>{wig.brand || '—'}</td>
-                <td style={r.td}>{wig.length || '—'}</td>
-                <td style={r.td}>{wig.color || '—'}</td>
-                <td style={r.td}>{wig.size || '—'}</td>
-                <td style={r.td}>{wig.front || '—'}</td>
-                <td style={{ ...r.td, fontWeight: 700, textAlign: 'right' }}>${total.toFixed(2)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Payments + Summary */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
-            <div style={{ flex: 1 }}>
-              {wig.payments.length > 0 && (
-                <>
-                  <div style={r.paymentsLabel}>Payment History</div>
-                  <table>
-                    <thead>
-                      <tr>
-                        {['Method', 'Date', 'Type', 'Amount'].map(h => (
-                          <th key={h} style={{ ...r.th, fontSize: 10 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {wig.payments.map(p => (
-                        <tr key={p.id}>
-                          <td style={r.td}>{METHOD_LABEL[p.payment_method] || p.payment_method}</td>
-                          <td style={r.td}>{fmtDate(p.payment_date)}</td>
-                          <td style={r.td}>{p.payment_type.charAt(0).toUpperCase() + p.payment_type.slice(1)}</td>
-                          <td style={r.td}>${Number(p.amount).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </div>
-
-            <div style={{ minWidth: 170, textAlign: 'right' }}>
-              <SummaryLine label="Total:" value={`$${total.toFixed(2)}`} />
-              <div style={{ height: 8 }} />
-              <SummaryLine label="Paid:" value={`$${paid.toFixed(2)}`} />
-              <div style={{ height: 8 }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontWeight: 600, fontSize: 13 }}>Balance Due:</span>
-                <span style={{ ...r.balanceBox, background: balance > 0 ? '#222' : '#10b981' }}>
-                  ${balance > 0 ? balance.toFixed(2) : '0.00'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={r.footer}>1474 60th st Brooklyn NY 11219&nbsp;&nbsp;(718) 676-6003</div>
-        </div>
-      </div>
     </div>
   )
 }
