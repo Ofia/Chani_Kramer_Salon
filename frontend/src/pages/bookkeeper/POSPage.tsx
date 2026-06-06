@@ -11,7 +11,7 @@
  * Daily Entry auto-fills from these records.
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/auth'
 import {
@@ -340,6 +340,17 @@ export default function POSPage() {
   const paymentsTotal    = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
   const effectivePaid    = paymentsTotal
   const balanceDue       = grandTotal - effectivePaid
+
+  // Auto-fill the single payment row from the grand total.
+  // This eliminates the double-entry perception: Tzipora sets the amount in
+  // the cart (or edits the wig_balance item), and the Payment field syncs.
+  // She only needs to pick the payment method.
+  // Split payments (multiple rows) are left alone — user controls each.
+  useEffect(() => {
+    if (payments.length !== 1) return
+    const filled = grandTotal > 0 ? grandTotal.toFixed(2) : ''
+    setPayments(prev => [{ ...prev[0], amount: filled }])
+  }, [grandTotal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save ──────────────────────────────────────────────────
 
