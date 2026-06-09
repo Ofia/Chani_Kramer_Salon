@@ -141,6 +141,16 @@ class AppointmentStatus(str, enum.Enum):
     cancelled   = "cancelled"
     no_show     = "no_show"
 
+class CartItemType(str, enum.Enum):
+    wig     = "wig"
+    product = "product"
+    service = "service"
+
+class CartItemStatus(str, enum.Enum):
+    pending      = "pending"
+    checked_out  = "checked_out"
+    cancelled    = "cancelled"
+
 
 # ── Tables ──────────────────────────────────────────────────
 
@@ -658,3 +668,30 @@ class Appointment(Base):
     created_at         = Column(DateTime(timezone=True), server_default=func.now())
 
     customer = relationship("Customer", foreign_keys=[customer_id])
+
+
+class PendingCartItem(Base):
+    """
+    An item added to a customer's open cart by any department.
+    Front desk loads this at POS checkout and converts it into a pos_sale.
+    """
+    __tablename__ = "pending_cart_items"
+
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id       = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False)
+    item_type         = Column(Enum(CartItemType, name="cart_item_type"), nullable=False)
+    inventory_item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True)
+    description       = Column(Text, nullable=False)
+    price             = Column(Numeric(10, 2), nullable=False, default=0)
+    tax_rate          = Column(Numeric(5, 4), nullable=False, default=0)
+    discount_amount   = Column(Numeric(10, 2), nullable=False, default=0)
+    notes             = Column(Text)
+    created_by        = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    department        = Column(String, nullable=False, default="sales")
+    status            = Column(Enum(CartItemStatus, name="cart_item_status"), nullable=False, default=CartItemStatus.pending)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at        = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    customer       = relationship("Customer",      foreign_keys=[customer_id])
+    inventory_item = relationship("InventoryItem", foreign_keys=[inventory_item_id])
+    creator        = relationship("User",          foreign_keys=[created_by])

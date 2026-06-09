@@ -23,7 +23,8 @@ from app.models.models import (
     UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
     WigStatus, WigPaymentType, PosItemType, PayrollStatus,
     InventoryItemType, WigItemStatus, InventoryEventType, ProviderType,
-    AppointmentDepartment, AppointmentStatus
+    AppointmentDepartment, AppointmentStatus,
+    CartItemType, CartItemStatus
 )
 
 
@@ -965,6 +966,51 @@ class AppointmentResponse(BaseModel):
     notes: Optional[str]
     created_by: Optional[UUID]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Pending Cart ──────────────────────────────────────────────
+
+class CartItemCreate(BaseModel):
+    customer_id: UUID
+    item_type: CartItemType
+    inventory_item_id: Optional[UUID] = None   # required for wig / product
+    description: str
+    price: Decimal
+    tax_rate: Decimal = Decimal("0")
+    discount_amount: Decimal = Decimal("0")
+    notes: Optional[str] = None
+    department: str = "sales"
+
+
+class CartItemUpdate(BaseModel):
+    price: Optional[Decimal] = None
+    tax_rate: Optional[Decimal] = None
+    discount_amount: Optional[Decimal] = None
+    notes: Optional[str] = None
+    status: Optional[CartItemStatus] = None
+
+
+class CartItemResponse(BaseModel):
+    id: UUID
+    customer_id: UUID
+    item_type: CartItemType
+    inventory_item_id: Optional[UUID]
+    description: str
+    price: float
+    tax_rate: float
+    discount_amount: float
+    notes: Optional[str]
+    created_by: Optional[UUID]
+    department: str
+    status: CartItemStatus
+    created_at: datetime
+    updated_at: datetime
+    # resolved from FK — convenience fields the frontend uses directly
+    customer_name: Optional[str] = None
+    inventory_item_name: Optional[str] = None
 
     class Config:
         from_attributes = True
