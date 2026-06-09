@@ -734,7 +734,7 @@ function CartEditPanel({
         department:        'sales',
         sales_rep_id:      null,
       })
-      qc.invalidateQueries({ queryKey: ['cart-active'] })
+      await qc.invalidateQueries({ queryKey: ['cart-active'] })
       setIncludeService(false)
       setSelectedService(null)
       setServiceCustomPrice(0)
@@ -777,8 +777,8 @@ function CartEditPanel({
         sales_rep_id:      null,
       })
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cart-active'] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['cart-active'] })
       setSearch('')
     },
     onError: () => alert('Failed to add item. Please try again.'),
@@ -804,7 +804,7 @@ function CartEditPanel({
           ) : cartItems.map((item, idx) => (
             <div
               key={item.id}
-              style={{ ...s.cartItemRow, borderBottom: idx < cartItems.length - 1 ? BORDER : 'none' }}
+              style={{ ...s.cartItemRow, alignItems: 'flex-start', borderBottom: idx < cartItems.length - 1 ? BORDER : 'none' }}
             >
               <div style={s.cartItemLeft}>
                 <div style={s.cartItemName}>{item.description}</div>
@@ -814,7 +814,7 @@ function CartEditPanel({
                   {item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
                 </div>
               </div>
-              <div style={s.cartItemRight}>
+              <div style={{ ...s.cartItemRight, marginTop: 1 }}>
                 <span style={s.cartItemPrice}>${item.price.toFixed(2)}</span>
                 <button style={s.removeBtn} onClick={() => onRemove(item.id)} title="Remove">
                   <Trash2 size={13} />
