@@ -561,6 +561,10 @@ class WigBalancePaymentIn(BaseModel):
     payment_method: PaymentMethod
 
 
+class DeleteSalePayload(BaseModel):
+    reason: str
+
+
 class PosSaleCreate(BaseModel):
     customer_id: Optional[UUID] = None
     customer_name: str

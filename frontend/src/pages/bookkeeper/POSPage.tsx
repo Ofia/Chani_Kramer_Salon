@@ -864,17 +864,20 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
 
 function TodaySaleCard({ sale, onReceipt, canDelete }: { sale: PosSale; onReceipt: () => void; canDelete: boolean }) {
   const [expanded, setExpanded] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
   const hasPayment = sale.amount_paid > 0
   const qc = useQueryClient()
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/pos-sales/${sale.id}`),
+    mutationFn: (reason: string) => api.delete(`/pos-sales/${sale.id}`, { data: { reason } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-sales-today'] })
       qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
       qc.invalidateQueries({ queryKey: ['inventory'] })
       qc.invalidateQueries({ queryKey: ['operation-overview'] })
+      setShowDeleteDialog(false)
+      setDeleteReason('')
     },
   })
 
@@ -917,24 +920,48 @@ function TodaySaleCard({ sale, onReceipt, canDelete }: { sale: PosSale; onReceip
           </div>
 
           {/* Delete — bookkeeper + owner only */}
-          {canDelete && !confirmDelete && (
-            <button onClick={() => setConfirmDelete(true)} style={s.deleteBtn}>
+          {canDelete && (
+            <button onClick={() => setShowDeleteDialog(true)} style={s.deleteBtn}>
               <Trash2 size={12} /> Delete Sale
             </button>
           )}
-          {canDelete && confirmDelete && (
-            <div style={s.deleteConfirm}>
-              <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>Delete this sale?</span>
-              <button
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-                style={s.deleteConfirmBtn}
-              >
-                {deleteMutation.isPending ? 'Deleting…' : 'Yes, delete'}
-              </button>
-              <button onClick={() => setConfirmDelete(false)} style={s.ghostBtn}>
-                Cancel
-              </button>
+
+          {/* Delete dialog */}
+          {showDeleteDialog && (
+            <div style={s.deleteDialog} onClick={e => e.stopPropagation()}>
+              <div style={s.deleteDialogInner}>
+                <div style={s.deleteDialogTitle}>
+                  <Trash2 size={14} color="#ef4444" />
+                  Delete this sale?
+                </div>
+                <p style={s.deleteDialogWarn}>
+                  This will permanently remove the sale and restore any wigs to inventory. This cannot be undone.
+                </p>
+                <label style={s.deleteDialogLabel}>Reason for deletion *</label>
+                <textarea
+                  style={s.deleteDialogTextarea}
+                  placeholder="e.g. Entered in error, duplicate entry…"
+                  rows={3}
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  autoFocus
+                />
+                <div style={s.deleteDialogActions}>
+                  <button
+                    style={s.ghostBtn}
+                    onClick={() => { setShowDeleteDialog(false); setDeleteReason('') }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    style={{ ...s.deleteConfirmBtn, opacity: (!deleteReason.trim() || deleteMutation.isPending) ? 0.5 : 1 }}
+                    disabled={!deleteReason.trim() || deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(deleteReason.trim())}
+                  >
+                    {deleteMutation.isPending ? 'Deleting…' : 'Delete Sale'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1419,9 +1446,15 @@ const s: Record<string, React.CSSProperties> = {
   saleCardFooter:{ padding: '8px 14px', borderTop: '1px solid rgba(0,0,0,0.06)' },
   miniRow:       { display: 'flex', gap: 8, padding: '4px 0', alignItems: 'center' },
   receiptBtn:    { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#212121', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
-  deleteBtn:     { display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '5px 10px', background: 'transparent', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit' },
-  deleteConfirm: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '8px 10px', background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8 },
-  deleteConfirmBtn: { padding: '5px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
+  deleteBtn:            { display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '5px 10px', background: 'transparent', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit' },
+  deleteConfirmBtn:     { padding: '7px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' },
+  deleteDialog:         { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  deleteDialogInner:    { background: '#fff', borderRadius: 14, padding: '24px 28px', width: 420, maxWidth: '90vw', display: 'flex', flexDirection: 'column' as const, gap: 14, boxShadow: '0 12px 40px rgba(0,0,0,0.18)' },
+  deleteDialogTitle:    { display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, color: '#18181b' },
+  deleteDialogWarn:     { fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0, lineHeight: 1.5 },
+  deleteDialogLabel:    { fontSize: 12, fontWeight: 600, color: 'rgba(13,13,13,0.55)', letterSpacing: '0.01em' },
+  deleteDialogTextarea: { border: '1px solid rgba(13,13,13,0.15)', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' as const, outline: 'none', color: '#18181b' },
+  deleteDialogActions:  { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 },
 
   emptyText:     { fontSize: 13, color: '#a1a1aa', textAlign: 'center' as const, padding: '20px 0' },
 

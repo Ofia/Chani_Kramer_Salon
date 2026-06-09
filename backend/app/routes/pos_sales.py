@@ -27,6 +27,7 @@ from app.models.models import (
 )
 from app.schemas.schemas import (
     PosSaleCreate, PosSaleResponse, DailyAutoFillResponse, WigBalancePaymentIn,
+    DeleteSalePayload,
 )
 from app.core.security import get_current_user
 
@@ -370,6 +371,7 @@ def get_pos_sale(
 @router.delete("/{sale_id}", status_code=204)
 def delete_pos_sale(
     sale_id: UUID,
+    payload: DeleteSalePayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -399,6 +401,20 @@ def delete_pos_sale(
     # Step 3 — delete the sale (cascades pos_sale_items + pos_sale_payments)
     db.delete(sale)
     db.flush()  # execute SQL so subsequent queries see the updated state
+
+    # Step 3b — log a deletion note on every affected wig's history
+    from datetime import date as _date
+    for wig_id in affected_wig_ids:
+        db.add(InventoryEvent(
+            inventory_item_id = wig_id,
+            event_type        = InventoryEventType.note,
+            customer_id       = None,
+            amount            = None,
+            description       = f"Sale deleted — {payload.reason}",
+            event_date        = _date.today(),
+            created_by        = current_user.id,
+            pos_sale_id       = None,
+        ))
 
     # Step 4 — recompute each affected wig's state from remaining payments
     for wig_id in affected_wig_ids:
