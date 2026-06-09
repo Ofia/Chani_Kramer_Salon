@@ -1,4 +1,4 @@
-# The Salon — Open Tasks (updated 2026-06-08)
+# The Salon — Open Tasks (updated 2026-06-09)
 
 ---
 
@@ -7,8 +7,7 @@
 | # | Task | Area | Notes |
 |---|------|------|-------|
 | F1 | **Overview payment tab bug** | Reports | Numbers adding up incorrectly — likely double-counting wig payments |
-| F2 | **Auto-update wig_status on POS sale** | POS / Inventory | Status doesn't flip to `sold` automatically; must also move wig to Sold Items tab |
-| F3 | **POS: lock product price, add discount field** | POS | Price comes from inventory — lock it. Add discount ($ or %) field instead |
+| F3 | **POS: lock product price, add discount field** | POS | Price comes from inventory — lock it. Add discount ($ or %) field instead. (Sales page is already locked — this is for POSPage specifically) |
 | F4 | **POS: remove wig detail edit mode** | POS | Color/length/size/front are set in Inventory — Sales + Front Desk should not edit them |
 
 ---
@@ -17,7 +16,6 @@
 
 | # | Task | Area | Notes |
 |---|------|------|-------|
-| M1 | **Inventory → Product Management** | Inventory Page | Rename page; Tab 1 = Inventory (in_stock), Tab 2 = Sold Items (wig_status=sold) |
 | M2 | **Abandoned deposit flow** | Wig Orders / Sales | "Mark as Abandoned" → return wig to inventory + convert deposit to misc revenue. Owner + Bookkeeper only |
 | M3 | **Backend role system** | Backend | Add `sales`, `repairs`, `front_desk` roles to `UserRole` enum + update route guards |
 | 8  | **Edit sale / receipt** | POS | Tzipora needs to fix mistakes without deleting and re-entering |
@@ -32,9 +30,32 @@
 |---|------|------|-------|
 | L1 | **Commission system** | Payroll / Wig Lifecycle | Per-employee %, lifecycle events, feeds into payroll. New table: `commission_entries` |
 | L2 | **Department-based routing + nav** | Frontend | Replace `/bookkeeper/*` with dept layouts: `/sales/*`, `/repairs/*`, `/front-desk/*`, `/bookkeeping/*` |
-| L3 | **Customer pending cart (DB)** | POS / All Depts | Depts add items to customer's cart before checkout. Lives in DB (persists like Amazon). New table: `pending_cart_items` |
 | L4 | **Repairs department page** | New Page | Consult → price → build cart items; wig travels until ready; customer invited back to pay |
 | L5 | **DaySmart PDF parser** | Integrations | Parse daily PDF → auto-fill Tzipora's data entry |
+
+---
+
+## ✅ Done (Session 17 — 2026-06-09)
+
+| Task | Commit |
+|------|--------|
+| F2: Auto-update wig_status → `sold` on POS checkout; reset to `in_stock` on sale delete | `bc5c4a3` |
+| Sold wigs hidden from Inventory Wigs tab (client-side filter) | `0869dd2` |
+| Sold Items tab added to Inventory page (SoldWigTable + history drawer on row click) | `bc5c4a3` |
+| Sales Management: read-only price field (set in Inventory, not editable in panel) | `bc5c4a3` |
+| Sales Management: card/list view toggle on Inventory tab | `bc5c4a3` |
+| Sales Management: panel width widened to `clamp(460px, 34vw, 600px)` | `bc5c4a3` |
+| Sales Management: Sales Rep field moved directly under Customer | `bc5c4a3` |
+| Sales Management: service/repair add-on inside Add to Cart panel (wigs only) | `bc5c4a3` |
+| Service price input: editable field, auto-fills from `default_price`, string state + placeholder | `70b7499` → `f3e3699` |
+| Discount shown on receipt above tax row | `bc5c4a3` |
+| Sales tax calculated on discounted price (discountRatio approach) | `bcabc15` |
+| Removed Tithes (מעשרות) from Overview Summary tab | `bcabc15` |
+| Delete sale: reason dialog required before deletion; reason logged as note event on wig history | `bc5c4a3` |
+| Active Carts: clicking cart card header opens CartEditPanel (add/remove items + service add-on) | `a7170dd` |
+| CartEditPanel: self-subscribes to `['cart-active']` — live updates without prop-threading | `f3e3699` |
+| CartEditPanel: flat list layout (borderTop + row borderBottom, no card wrapper) | `f3e3699` |
+| Migration 019 run in Supabase: `discount_amount` on pos_sales, `sales_rep_id` on pending_cart_items | — |
 
 ---
 
@@ -42,9 +63,8 @@
 
 | Task | Commit |
 |------|--------|
-| Calendar page (Day/Week/Month views, dept colors, create/update/delete) | `3a08e83` |
-| Appointments backend (migration 017, model, schemas, CRUD route) | `3a08e83` |
-| june_8.md meeting notes + full build plan | `3a08e83` |
+| Calendar page (Day/Week/Month views) + appointments backend (migration 017) | `3a08e83` |
+| June 8 meeting notes + full architectural build plan (`june_8.md`) | `3a08e83` |
 
 ---
 
@@ -52,6 +72,7 @@
 
 | Task | Area | Notes |
 |------|------|-------|
+| **Inventory → Product Management rename** | Inventory Page | Rename page; Sold Items tab already built. Just rename the page title and nav item |
 | **Super Board redesign** | Owner Dashboard | Currently reads from DailySummary (dead). Rebuild on `reports.py` — same source as Overview |
 | **Ella redesign** | AI Chatbot | `get_daily_summary` tool returns empty. All tools need to be rebuilt around POS/reports data |
 
@@ -67,6 +88,7 @@
 | 015 | `backend/migrations/015_pos_item_tax.sql` | Adds `sale_tax_amount` to inventory_items + `tax_amount` to pos_sale_items |
 | ~~016~~ | ~~`backend/migrations/016_inventory_event_pos_sale.sql`~~ | ✅ Run |
 | 017 | `backend/migrations/017_appointments.sql` | New appointments table + department/status enums |
+| ~~019~~ | ~~`backend/migrations/019_discount_and_salesrep.sql`~~ | ✅ Run (2026-06-09) |
 
 ---
 

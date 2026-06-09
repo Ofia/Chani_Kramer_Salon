@@ -19,6 +19,8 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | 013 | `backend/migrations/013_expense_categories.sql` | ⚠️ Run ASAP |
 | 015 | `backend/migrations/015_pos_item_tax.sql` | ⚠️ Run ASAP |
 | ~~016~~ | ~~`backend/migrations/016_inventory_event_pos_sale.sql`~~ | ✅ Run |
+| 017 | `backend/migrations/017_appointments.sql` | ⚠️ Run ASAP |
+| ~~019~~ | ~~`backend/migrations/019_discount_and_salesrep.sql`~~ | ✅ Run |
 
 
 ## Color Palette
@@ -228,8 +230,17 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - `DEFAULT_TAX_RATE` map drives defaults per item type; user can toggle exempt per item
 - Wig balance payments: customer's open balances appear in `OpenBalancePanel`; clicking "Add to Cart" creates a `wig_balance` CartItem (no tax, editable amount)
 - Payment auto-fill: single payment row auto-syncs to grand total — Tzipora only picks the method
-- Delete sale: explicitly deletes linked WigPayments + InventoryEvents (via `pos_sale_id`), then recomputes wig status from remaining payments
+- Delete sale: requires reason in dialog; deletes linked WigPayments + InventoryEvents; recomputes wig status; logs deletion as `note` event on affected wigs
 - Receipts: `logo-mark.jpeg` in header; wig sales trigger a second printed page (deposit agreement + warranty + signature fields)
+- Discount: `discount_amount` stored on `pos_sales`; tax calculated on discounted subtotal (`discountRatio` approach); discount shown on receipt above tax row
+
+### Sales Management — Key Architecture
+- Departments add items to customer's **pending cart** (`pending_cart_items` table) before POS checkout
+- Inventory tab: card/list view toggle; price read-only (set in Inventory); `clamp(460px, 34vw, 600px)` panel
+- Add to Cart panel (wigs): service/repair add-on checkbox → service dropdown + editable price + tax rate; creates 2 cart items
+- Service price: string state + `placeholder="0.00"`, auto-fills from `default_price` on dropdown change
+- Active Carts tab: grouped by customer; click header → `CartEditPanel` slide-in
+- `CartEditPanel`: self-subscribes to `['cart-active']` (NOT prop-derived) for live updates; flat list design; inventory search + service add-on
 
 ---
 
@@ -248,8 +259,8 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 
 ### Phase 1 — Core Web App (current)
 - [x] Auth (3 users, 3 roles)
-- [x] POS — multi-item cart, wig balance payments as cart items, per-item tax, auto-fill payment, receipt logo + deposit agreement page 2
-- [x] Inventory — unified wig + product stock, providers, repair services
+- [x] POS — multi-item cart, wig balance payments, per-item tax, discount, delete-reason dialog, receipt logo + deposit agreement page 2
+- [x] Inventory — unified wig + product stock, providers, repair services, Sold Items tab
 - [x] Operation Overview — Day/Month/Range, 5 tabs, Recharts charts
 - [x] Expenses — 13 industry-standard categories, add/delete
 - [x] Payroll — weekly accordion, clock-in/out, mark paid
@@ -257,11 +268,15 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] Customers CRM
 - [x] Employees — time log modal
 - [x] AI chatbot (Ella) — 9 tools, /remember command
-- [x] All business logic (tithes, sales tax, wig tax deferral) automated
-- [ ] Edit sale/receipt (task #8 from Avi meeting)
+- [x] Sales Management — inventory browse, Add to Cart (with service add-on), Active Carts with live editing
+- [x] Calendar — Day/Week/Month views, appointments backend
+- [x] All business logic (tithes, sales tax, wig tax deferral, wig_status lifecycle) automated
+- [ ] Edit sale/receipt (task #8)
 - [ ] Bank statement auto-import (task #14)
 - [ ] Persist unsaved form data on navigation (task #15)
-- [ ] DaySmart PDF parsing → auto-fill
+- [ ] Inventory page → rename to Product Management
+- [ ] Abandoned deposit flow (Mark as Abandoned)
+- [ ] Overview payment tab bug (F1)
 
 ### Phase 2 — Mobile
 - [ ] Hani mobile experience
