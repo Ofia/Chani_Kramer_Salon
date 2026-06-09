@@ -306,10 +306,12 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
   const [notes, setNotes]                     = useState('')
 
   // Service add-on (wigs only)
-  const [includeService, setIncludeService]     = useState(false)
-  const [selectedService, setSelectedService]   = useState<RepairService | null>(null)
-  const [serviceTaxRate, setServiceTaxRate]     = useState(TAX_RATE_SERVICE)
-  const [serviceCustomPrice, setServiceCustomPrice] = useState(0)
+  const [includeService, setIncludeService]               = useState(false)
+  const [selectedService, setSelectedService]             = useState<RepairService | null>(null)
+  const [serviceTaxRate, setServiceTaxRate]               = useState(TAX_RATE_SERVICE)
+  const [serviceCustomPriceStr, setServiceCustomPriceStr] = useState('')
+
+  const serviceCustomPrice = parseFloat(serviceCustomPriceStr) || 0
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ['customers'],
@@ -471,7 +473,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
         {/* ── Service add-on (wigs only) ── */}
         {isWig && (
           <div style={s.serviceSection}>
-            <button style={s.serviceSectionToggle} onClick={() => { setIncludeService(v => !v); setSelectedService(null) }}>
+            <button style={s.serviceSectionToggle} onClick={() => { setIncludeService(v => !v); setSelectedService(null); setServiceCustomPriceStr('') }}>
               <span style={{ ...s.serviceSectionCheck, background: includeService ? '#212121' : 'transparent', borderColor: includeService ? '#212121' : 'rgba(13,13,13,0.25)' }}>
                 {includeService && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
               </span>
@@ -486,7 +488,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
                     onChange={e => {
                       const svc = repairServices.find(r => r.id === e.target.value) ?? null
                       setSelectedService(svc)
-                      setServiceCustomPrice(svc?.default_price ?? 0)
+                      setServiceCustomPriceStr(svc?.default_price != null ? String(svc.default_price) : '')
                     }}>
                     <option value="">— Select service —</option>
                     {repairServices.filter(r => r.is_active).map(r => (
@@ -503,8 +505,9 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
                     <input
                       style={{ ...s.input, paddingLeft: 22 }}
                       type="number" min={0} step={0.01}
-                      value={serviceCustomPrice}
-                      onChange={e => setServiceCustomPrice(parseFloat(e.target.value) || 0)}
+                      value={serviceCustomPriceStr}
+                      placeholder="0.00"
+                      onChange={e => setServiceCustomPriceStr(e.target.value)}
                     />
                   </div>
                 </div>
@@ -672,7 +675,6 @@ function ActiveCartsTab() {
         <CartEditPanel
           customerId={editingCart.customerId}
           customerName={editingCart.customerName}
-          cartItems={grouped.find(g => g.customerId === editingCart.customerId)?.items ?? []}
           onRemove={id => removeMutation.mutate(id)}
           onClose={() => setEditingCart(null)}
         />
@@ -686,13 +688,11 @@ function ActiveCartsTab() {
 function CartEditPanel({
   customerId,
   customerName,
-  cartItems,
   onRemove,
   onClose,
 }: {
   customerId: string
   customerName: string
-  cartItems: CartItem[]
   onRemove: (id: string) => void
   onClose: () => void
 }) {
@@ -700,11 +700,24 @@ function CartEditPanel({
   const [search, setSearch] = useState('')
 
   // Service add-on
-  const [includeService, setIncludeService]         = useState(false)
-  const [selectedService, setSelectedService]       = useState<RepairService | null>(null)
-  const [serviceTaxRate, setServiceTaxRate]         = useState(TAX_RATE_SERVICE)
-  const [serviceCustomPrice, setServiceCustomPrice] = useState(0)
-  const [addingService, setAddingService]           = useState(false)
+  const [includeService, setIncludeService]             = useState(false)
+  const [selectedService, setSelectedService]           = useState<RepairService | null>(null)
+  const [serviceTaxRate, setServiceTaxRate]             = useState(TAX_RATE_SERVICE)
+  const [serviceCustomPriceStr, setServiceCustomPriceStr] = useState('')
+  const [addingService, setAddingService]               = useState(false)
+
+  const serviceCustomPrice = parseFloat(serviceCustomPriceStr) || 0
+
+  // Self-subscribe to cart-active — panel updates live on any invalidation
+  const { data: allActiveItems = [] } = useQuery<CartItem[]>({
+    queryKey: ['cart-active'],
+    queryFn: () => api.get('/cart/active').then(r => r.data),
+    staleTime: 0,
+  })
+  const cartItems = useMemo(
+    () => allActiveItems.filter(i => i.customer_id === customerId),
+    [allActiveItems, customerId],
+  )
 
   const { data: allInventory = [] } = useQuery<InventoryItem[]>({
     queryKey: ['inventory'],
@@ -734,10 +747,10 @@ function CartEditPanel({
         department:        'sales',
         sales_rep_id:      null,
       })
-      await qc.invalidateQueries({ queryKey: ['cart-active'] })
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
       setIncludeService(false)
       setSelectedService(null)
-      setServiceCustomPrice(0)
+      setServiceCustomPriceStr('')
     } catch {
       alert('Failed to add service. Please try again.')
     } finally {
@@ -777,8 +790,8 @@ function CartEditPanel({
         sales_rep_id:      null,
       })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['cart-active'] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
       setSearch('')
     },
     onError: () => alert('Failed to add item. Please try again.'),
@@ -796,33 +809,32 @@ function CartEditPanel({
         </div>
 
         {/* Current items */}
-        <div style={{ border: BORDER, borderRadius: 10, overflow: 'hidden' }}>
-          {cartItems.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center' as const, fontSize: 13, color: 'rgba(13,13,13,0.4)' }}>
-              Cart is empty
-            </div>
-          ) : cartItems.map((item, idx) => (
-            <div
-              key={item.id}
-              style={{ ...s.cartItemRow, alignItems: 'flex-start', borderBottom: idx < cartItems.length - 1 ? BORDER : 'none' }}
-            >
-              <div style={s.cartItemLeft}>
-                <div style={s.cartItemName}>{item.description}</div>
-                {item.notes && <div style={s.cartItemNotes}>{item.notes}</div>}
-                <div style={s.cartItemMeta}>
-                  {item.sales_rep_name ? `Rep: ${item.sales_rep_name} · ` : ''}
-                  {item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
+        {cartItems.length === 0 ? (
+          <div style={{ padding: '12px 0', textAlign: 'center' as const, fontSize: 13, color: 'rgba(13,13,13,0.4)', borderTop: BORDER, borderBottom: BORDER }}>
+            Cart is empty
+          </div>
+        ) : (
+          <div style={{ borderTop: BORDER }}>
+            {cartItems.map(item => (
+              <div key={item.id} style={s.cartItemRow}>
+                <div style={s.cartItemLeft}>
+                  <div style={s.cartItemName}>{item.description}</div>
+                  {item.notes && <div style={s.cartItemNotes}>{item.notes}</div>}
+                  <div style={s.cartItemMeta}>
+                    {item.sales_rep_name ? `Rep: ${item.sales_rep_name} · ` : ''}
+                    {item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
+                  </div>
+                </div>
+                <div style={s.cartItemRight}>
+                  <span style={s.cartItemPrice}>${item.price.toFixed(2)}</span>
+                  <button style={s.removeBtn} onClick={() => onRemove(item.id)} title="Remove">
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
-              <div style={{ ...s.cartItemRight, marginTop: 1 }}>
-                <span style={s.cartItemPrice}>${item.price.toFixed(2)}</span>
-                <button style={s.removeBtn} onClick={() => onRemove(item.id)} title="Remove">
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ ...s.panelSummary, fontWeight: 600 }}>
           <span>Cart total (incl. tax)</span>
@@ -909,7 +921,7 @@ function CartEditPanel({
                   onChange={e => {
                     const svc = repairServices.find(r => r.id === e.target.value) ?? null
                     setSelectedService(svc)
-                    setServiceCustomPrice(svc?.default_price ?? 0)
+                    setServiceCustomPriceStr(svc?.default_price != null ? String(svc.default_price) : '')
                   }}
                 >
                   <option value="">— Select service —</option>
@@ -927,8 +939,9 @@ function CartEditPanel({
                   <input
                     style={{ ...s.input, paddingLeft: 22 }}
                     type="number" min={0} step={0.01}
-                    value={serviceCustomPrice}
-                    onChange={e => setServiceCustomPrice(parseFloat(e.target.value) || 0)}
+                    value={serviceCustomPriceStr}
+                    placeholder="0.00"
+                    onChange={e => setServiceCustomPriceStr(e.target.value)}
                   />
                 </div>
               </div>
