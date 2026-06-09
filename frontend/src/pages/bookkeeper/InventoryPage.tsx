@@ -200,7 +200,8 @@ export default function InventoryPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const wigs = items.filter(i => i.item_type === 'wig')
+  // Wigs tab excludes sold items (they live in the Sold Items tab)
+  const wigs = items.filter(i => i.item_type === 'wig' && (statusFilter !== '' || i.wig_status !== 'sold'))
   const products = items.filter(i => i.item_type === 'product')
 
   return (
