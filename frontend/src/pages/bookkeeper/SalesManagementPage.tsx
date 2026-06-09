@@ -7,7 +7,7 @@
 
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ShoppingCart, Search, X, Package, Sparkles, ChevronRight, Trash2 } from 'lucide-react'
+import { ShoppingCart, Search, X, Package, Sparkles, ChevronRight, Trash2, LayoutGrid, List } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ────────────────────────────────────────────────────
@@ -100,6 +100,7 @@ function InventoryTab() {
   const [search, setSearch]             = useState('')
   const [typeFilter, setTypeFilter]     = useState<'all' | 'wig' | 'product'>('all')
   const [addingItem, setAddingItem]     = useState<InventoryItem | null>(null)
+  const [viewMode, setViewMode]         = useState<'card' | 'list'>('card')
 
   const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['inventory'],
@@ -154,14 +155,36 @@ function InventoryTab() {
           ))}
         </div>
         <span style={s.countBadge}>{filtered.length} items</span>
+        <div style={s.viewToggle}>
+          <button
+            style={{ ...s.viewToggleBtn, ...(viewMode === 'card' ? s.viewToggleBtnActive : {}) }}
+            onClick={() => setViewMode('card')}
+            title="Card view"
+          ><LayoutGrid size={14} /></button>
+          <button
+            style={{ ...s.viewToggleBtn, ...(viewMode === 'list' ? s.viewToggleBtnActive : {}) }}
+            onClick={() => setViewMode('list')}
+            title="List view"
+          ><List size={14} /></button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <div style={s.empty}>No in-stock items match your search.</div>
-      ) : (
+      ) : viewMode === 'card' ? (
         <div style={s.grid}>
           {filtered.map(item => (
             <InventoryCard
+              key={item.id}
+              item={item}
+              onAddToCart={() => setAddingItem(item)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div style={s.listView}>
+          {filtered.map(item => (
+            <InventoryListRow
               key={item.id}
               item={item}
               onAddToCart={() => setAddingItem(item)}
@@ -222,6 +245,43 @@ function InventoryCard({ item, onAddToCart }: { item: InventoryItem; onAddToCart
   )
 }
 
+// ── Inventory List Row ────────────────────────────────────────
+
+function InventoryListRow({ item, onAddToCart }: { item: InventoryItem; onAddToCart: () => void }) {
+  const isWig = item.item_type === 'wig'
+  const price = isWig ? (item.retail_price ?? 0) : (item.unit_price ?? 0)
+  const meta  = isWig
+    ? [item.brand, item.color, item.length, item.size].filter(Boolean).join(' · ')
+    : item.category ?? ''
+
+  return (
+    <div style={s.listRow}>
+      <div style={s.listRowLeft}>
+        <div style={s.listRowBadge}>
+          {isWig
+            ? <Sparkles size={10} color="#DF5198" />
+            : <Package  size={10} color="#5581B1" />}
+        </div>
+        <div>
+          <div style={s.listRowName}>{item.name}</div>
+          <div style={s.listRowMeta}>
+            {meta}
+            {isWig && item.daysmart_serial && <span style={{ color: 'rgba(13,13,13,0.3)', fontFamily: 'monospace' }}> · #{item.daysmart_serial}</span>}
+            {!isWig && <span> · Qty: {item.quantity}</span>}
+          </div>
+        </div>
+      </div>
+      <div style={s.listRowRight}>
+        <span style={s.listRowPrice}>${price.toFixed(2)}</span>
+        <button style={s.addBtn} onClick={onAddToCart}>
+          <ShoppingCart size={12} />
+          Add to Cart
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Add to Cart Panel ─────────────────────────────────────────
 
 function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
@@ -233,7 +293,6 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
 
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [price, setPrice]                   = useState(defaultPrice.toString())
   const [taxRate, setTaxRate]               = useState(defaultTax)
   const [notes, setNotes]                   = useState('')
   const [salesRepId, setSalesRepId]         = useState('')
@@ -271,15 +330,13 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
 
   function handleSubmit() {
     if (!selectedCustomer) { alert('Please select a customer.'); return }
-    const parsedPrice = parseFloat(price)
-    if (isNaN(parsedPrice) || parsedPrice < 0) { alert('Please enter a valid price.'); return }
 
     addMutation.mutate({
       customer_id:       selectedCustomer.id,
       item_type:         item.item_type,
       inventory_item_id: item.id,
       description:       item.name,
-      price:             parsedPrice,
+      price:             defaultPrice,
       tax_rate:          taxRate,
       discount_amount:   0,
       notes:             notes || null,
@@ -349,19 +406,11 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
           )}
         </div>
 
-        {/* Price */}
+        {/* Price — read-only, set by owner in Inventory */}
         <div style={s.field}>
-          <label style={s.label}>Price</label>
-          <div style={s.inputPrefix}>
-            <span style={s.prefix}>$</span>
-            <input
-              style={{ ...s.input, paddingLeft: 28 }}
-              type="number"
-              min="0"
-              step="0.01"
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-            />
+          <label style={s.label}>Price <span style={s.optional}>(set in Inventory)</span></label>
+          <div style={{ ...s.input, background: '#f7f7f5', color: '#0d0d0d', fontWeight: 600, cursor: 'default' }}>
+            ${defaultPrice.toFixed(2)}
           </div>
         </div>
 
@@ -417,15 +466,15 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
         {/* Summary line */}
         <div style={s.panelSummary}>
           <span>Subtotal</span>
-          <span>${parseFloat(price || '0').toFixed(2)}</span>
+          <span>${defaultPrice.toFixed(2)}</span>
         </div>
         <div style={s.panelSummary}>
           <span>Tax ({(taxRate * 100).toFixed(3).replace(/\.?0+$/, '')}%)</span>
-          <span>${(parseFloat(price || '0') * taxRate).toFixed(2)}</span>
+          <span>${(defaultPrice * taxRate).toFixed(2)}</span>
         </div>
         <div style={{ ...s.panelSummary, fontWeight: 600, borderTop: '1px solid rgba(13,13,13,0.08)', paddingTop: 10 }}>
           <span>Total</span>
-          <span>${(parseFloat(price || '0') * (1 + taxRate)).toFixed(2)}</span>
+          <span>${(defaultPrice * (1 + taxRate)).toFixed(2)}</span>
         </div>
 
         <button
@@ -570,8 +619,23 @@ const s: Record<string, React.CSSProperties> = {
   countBadge: { fontSize: 12, color: 'rgba(13,13,13,0.4)', marginLeft: 'auto' },
   empty:      { padding: '60px 0', textAlign: 'center', color: 'rgba(13,13,13,0.35)', fontSize: 14 },
 
+  // View toggle
+  viewToggle:        { display: 'flex', gap: 2, background: '#f4f4f4', borderRadius: 7, padding: 3 },
+  viewToggleBtn:     { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px', border: 'none', background: 'transparent', borderRadius: 5, cursor: 'pointer', color: 'rgba(13,13,13,0.4)' },
+  viewToggleBtnActive: { background: '#fff', color: '#0d0d0d', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
+
   // Inventory grid
   grid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 },
+
+  // Inventory list
+  listView:     { display: 'flex', flexDirection: 'column' as const, gap: 0, border: BORDER, borderRadius: 10, overflow: 'hidden' },
+  listRow:      { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderBottom: BORDER },
+  listRowLeft:  { display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
+  listRowBadge: { display: 'flex', alignItems: 'center', flexShrink: 0 },
+  listRowName:  { fontSize: 13, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em' },
+  listRowMeta:  { fontSize: 12, color: 'rgba(13,13,13,0.4)', marginTop: 2 },
+  listRowRight: { display: 'flex', alignItems: 'center', gap: 14, marginLeft: 16, flexShrink: 0 },
+  listRowPrice: { fontSize: 14, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.02em', minWidth: 70, textAlign: 'right' as const },
   card:       { background: '#fff', border: BORDER, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 },
   cardBadge:  { display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 },
   cardBadgeText: { fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const },

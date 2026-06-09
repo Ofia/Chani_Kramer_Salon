@@ -134,6 +134,7 @@ type PosSale = {
   notes?: string
   tax_rate: number
   tax_amount: number
+  discount_amount: number
   shipping_amount: number
   shipping_address?: string
   items: PosSaleItem[]
@@ -1245,9 +1246,15 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
 
             {/* Totals */}
             <div style={{ minWidth: 170, textAlign: 'right' }}>
-              {(sale.tax_amount > 0 || sale.shipping_amount > 0) && (
+              {(sale.tax_amount > 0 || sale.shipping_amount > 0 || sale.discount_amount > 0) && (
                 <>
-                  <SummaryLine label="Subtotal:" value={`$${(total - sale.tax_amount - sale.shipping_amount).toFixed(2)}`} />
+                  <SummaryLine label="Subtotal:" value={`$${(total - sale.tax_amount - sale.shipping_amount + sale.discount_amount).toFixed(2)}`} />
+                  <div style={{ height: 4 }} />
+                </>
+              )}
+              {sale.discount_amount > 0 && (
+                <>
+                  <SummaryLine label="Discount:" value={`-$${sale.discount_amount.toFixed(2)}`} />
                   <div style={{ height: 4 }} />
                 </>
               )}

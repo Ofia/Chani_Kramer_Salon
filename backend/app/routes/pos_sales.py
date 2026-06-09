@@ -23,7 +23,7 @@ from app.database import get_db
 from app.models.models import (
     PosSale, PosSaleItem, PosSalePayment,
     WigPayment, InventoryItem, InventoryItemType, InventoryEvent, InventoryEventType,
-    PosItemType, WigStatus, WigPaymentType, PaymentMethod, User,
+    PosItemType, WigStatus, WigItemStatus, WigPaymentType, PaymentMethod, User,
 )
 from app.schemas.schemas import (
     PosSaleCreate, PosSaleResponse, DailyAutoFillResponse, WigBalancePaymentIn,
@@ -133,6 +133,7 @@ def create_pos_sale(
                 wig.total_price      = item_data.subtotal
                 wig.amount_paid      = deposit_amt
                 wig.sale_status      = new_sale_status
+                wig.wig_status       = WigItemStatus.sold
                 wig.order_date       = data.sale_date
                 wig.pickup_date      = pickup_date
                 # Lock the wig's tax obligation at sale time — recognized on pickup_date
@@ -417,6 +418,7 @@ def delete_pos_sale(
             wig.total_price         = None
             wig.amount_paid         = Decimal("0")
             wig.sale_status         = None
+            wig.wig_status          = WigItemStatus.in_stock
             wig.order_date          = None
             wig.pickup_date         = None
             wig.daysmart_receipt_no = None
