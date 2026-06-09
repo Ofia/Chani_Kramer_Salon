@@ -309,14 +309,18 @@ export default function POSPage() {
     return s + price * i.quantity
   }, 0)
 
-  // Tax is per-item — each CartRow has its own tax_rate toggle
-  const taxAmount = cart.reduce((s, i) => {
-    const price = parseFloat(i.unit_price) || 0
-    return s + Math.round(price * i.quantity * (i.tax_rate || 0) * 100) / 100
-  }, 0)
   const shippingAmount   = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
   const discountAmount   = parseFloat(discount) || 0
-  const grandTotal       = Math.max(0, cartTotal + taxAmount + shippingAmount - discountAmount)
+
+  // Tax is per-item; discount reduces the taxable base proportionally across items
+  const taxableCartTotal = Math.max(0, cartTotal - discountAmount)
+  const discountRatio    = cartTotal > 0 ? taxableCartTotal / cartTotal : 1
+  const taxAmount = cart.reduce((s, i) => {
+    const price = parseFloat(i.unit_price) || 0
+    const taxablePrice = price * i.quantity * discountRatio
+    return s + Math.round(taxablePrice * (i.tax_rate || 0) * 100) / 100
+  }, 0)
+  const grandTotal       = Math.max(0, cartTotal - discountAmount + taxAmount + shippingAmount)
 
   const paymentsTotal    = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
   const effectivePaid    = paymentsTotal
