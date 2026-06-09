@@ -25,6 +25,14 @@ def _build_response(item: PendingCartItem) -> CartItemResponse:
         data.customer_name = f"{item.customer.first_name} {item.customer.last_name}"
     if item.inventory_item:
         data.inventory_item_name = item.inventory_item.name
+        # Populate wig specs so POS can pre-fill cart rows without extra fetches
+        if item.item_type.value == "wig":
+            data.wig_serial = item.inventory_item.daysmart_serial
+            data.wig_brand  = item.inventory_item.brand
+            data.wig_length = item.inventory_item.length
+            data.wig_color  = item.inventory_item.color
+            data.wig_size   = item.inventory_item.size
+            data.wig_front  = item.inventory_item.front
     return data
 
 

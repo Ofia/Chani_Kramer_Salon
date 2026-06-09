@@ -209,6 +209,7 @@ export default function POSPage() {
   const [shipping, setShipping] = useState({ enabled: false, amount: '', address: '' })
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptBalanceItems, setReceiptBalanceItems] = useState<CartItem[]>([])
+  const [loadedPendingIds, setLoadedPendingIds] = useState<string[]>([])
 
   const qc = useQueryClient()
 
@@ -222,6 +223,22 @@ export default function POSPage() {
     queryFn: () => api.get('/repair-services/').then(r => r.data).catch(() => []),
   })
 
+  // Pending cart items for the selected customer (added by Sales dept)
+  type PendingCartItem = {
+    id: string; item_type: 'wig' | 'product' | 'service'
+    inventory_item_id?: string; description: string
+    price: number; tax_rate: number; discount_amount: number; notes?: string
+    wig_serial?: string; wig_brand?: string; wig_length?: string
+    wig_color?: string; wig_size?: string; wig_front?: string
+  }
+  const { data: pendingCartItems = [] } = useQuery<PendingCartItem[]>({
+    queryKey: ['customer-cart', customer.id],
+    queryFn: () => api.get(`/cart/${customer.id}`).then(r => r.data).catch(() => []),
+    enabled: !!customer.id,
+    staleTime: 0,
+  })
+  const unloadedPending = pendingCartItems.filter(p => !loadedPendingIds.includes(p.id))
+
 
   const saveMutation = useMutation({
     mutationFn: (payload: object) => api.post('/pos-sales/', payload),
@@ -231,6 +248,11 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['inventory'] })
       qc.invalidateQueries({ queryKey: ['pending-wigs'] })
       qc.invalidateQueries({ queryKey: ['operation-overview'] })
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+      // Mark loaded pending cart items as checked_out
+      loadedPendingIds.forEach(id =>
+        api.patch(`/cart/${id}`, { status: 'checked_out' }).catch(() => {})
+      )
       // Capture balance items before reset so receipt can display them
       setReceiptBalanceItems(cart.filter(i => i.item_type === 'wig_balance'))
       // Auto-open receipt
@@ -240,6 +262,7 @@ export default function POSPage() {
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
       setShipping({ enabled: false, amount: '', address: '' })
+      setLoadedPendingIds([])
     },
   })
 
@@ -298,6 +321,31 @@ export default function POSPage() {
       inventory_item_id: wig.id,
       wig_balance_due: balanceDue,
     }])
+  }
+
+  function loadPendingCart() {
+    const TYPE_MAP: Record<string, CartItemType> = { wig: 'wig', product: 'inventory', service: 'repair' }
+    const newItems: CartItem[] = unloadedPending.map(p => ({
+      _key: nextKey(),
+      item_type: TYPE_MAP[p.item_type] ?? 'repair',
+      description: p.description,
+      quantity: 1,
+      unit_price: p.price.toFixed(2),
+      tax_rate: p.tax_rate,
+      notes: p.notes,
+      inventory_item_id: p.inventory_item_id,
+      ...(p.item_type === 'wig' ? {
+        showWigSpecs: true,
+        wig_serial: p.wig_serial,
+        wig_brand:  p.wig_brand,
+        wig_length: p.wig_length,
+        wig_color:  p.wig_color,
+        wig_size:   p.wig_size,
+        wig_front:  p.wig_front,
+      } : {}),
+    }))
+    setCart(c => [...c, ...newItems])
+    setLoadedPendingIds(ids => [...ids, ...unloadedPending.map(p => p.id)])
   }
 
   function updateItem(key: string, patch: Partial<CartItem>) {
@@ -454,6 +502,24 @@ export default function POSPage() {
               style={{ ...s.input, marginTop: 8 }} placeholder="Phone / cell" />
           )}
         </Section>
+
+        {/* ── Pending cart from Sales dept ── */}
+        {unloadedPending.length > 0 && (
+          <div style={s.pendingBanner}>
+            <div style={s.pendingBannerLeft}>
+              <CreditCard size={14} color="#5581B1" />
+              <span style={s.pendingBannerText}>
+                <strong>{unloadedPending.length} item{unloadedPending.length !== 1 ? 's' : ''}</strong> waiting from Sales
+              </span>
+              <span style={s.pendingBannerItems}>
+                {unloadedPending.map(p => p.description).join(' · ')}
+              </span>
+            </div>
+            <button style={s.pendingBannerBtn} onClick={loadPendingCart}>
+              Load to Cart
+            </button>
+          </div>
+        )}
 
         {/* ── Open wig balances for this customer ── */}
         {customer.id && (
@@ -1629,6 +1695,11 @@ const s: Record<string, React.CSSProperties> = {
   cartRow:       { padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff' },
   cartTotal:     { display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#f7f7f5' },
   emptyCart:     { padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#a1a1aa' },
+  pendingBanner: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#EFF4FB', border: '1px solid #97BBE9', borderRadius: 10, padding: '12px 16px', marginBottom: 16 },
+  pendingBannerLeft: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  pendingBannerText: { fontSize: 13, color: '#0d0d0d', whiteSpace: 'nowrap' as const },
+  pendingBannerItems: { fontSize: 12, color: 'rgba(13,13,13,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+  pendingBannerBtn: { background: '#5581B1', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' as const, flexShrink: 0 },
   typeBadge:     { fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, flexShrink: 0, letterSpacing: '0.02em' },
   subtotalCell:  { fontSize: 13, fontWeight: 700, color: '#18181b', minWidth: 60, textAlign: 'right' as const },
 

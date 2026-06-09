@@ -1011,6 +1011,13 @@ class CartItemResponse(BaseModel):
     # resolved from FK — convenience fields the frontend uses directly
     customer_name: Optional[str] = None
     inventory_item_name: Optional[str] = None
+    # wig spec fields — populated for wig items only
+    wig_serial: Optional[str] = None
+    wig_brand: Optional[str] = None
+    wig_length: Optional[str] = None
+    wig_color: Optional[str] = None
+    wig_size: Optional[str] = None
+    wig_front: Optional[str] = None
 
     class Config:
         from_attributes = True
