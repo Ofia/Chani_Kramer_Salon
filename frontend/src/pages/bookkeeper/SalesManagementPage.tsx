@@ -108,7 +108,6 @@ function InventoryTab() {
   const [search, setSearch]             = useState('')
   const [typeFilter, setTypeFilter]     = useState<'all' | 'wig' | 'product'>('all')
   const [addingItem, setAddingItem]     = useState<InventoryItem | null>(null)
-  const [showServicePanel, setShowServicePanel] = useState(false)
   const [viewMode, setViewMode]         = useState<'card' | 'list'>('card')
 
   const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
@@ -164,9 +163,6 @@ function InventoryTab() {
           ))}
         </div>
         <span style={s.countBadge}>{filtered.length} items</span>
-        <button style={s.serviceBtn} onClick={() => setShowServicePanel(true)}>
-          + Add Service / Repair
-        </button>
         <div style={s.viewToggle}>
           <button
             style={{ ...s.viewToggleBtn, ...(viewMode === 'card' ? s.viewToggleBtnActive : {}) }}
@@ -205,17 +201,11 @@ function InventoryTab() {
         </div>
       )}
 
-      {/* Add inventory item to cart panel */}
       {addingItem && (
         <AddToCartPanel
           item={addingItem}
           onClose={() => setAddingItem(null)}
         />
-      )}
-
-      {/* Add repair/service panel */}
-      {showServicePanel && (
-        <AddServicePanel onClose={() => setShowServicePanel(false)} />
       )}
     </>
   )
@@ -299,37 +289,46 @@ function InventoryListRow({ item, onAddToCart }: { item: InventoryItem; onAddToC
   )
 }
 
-// ── Add Service / Repair Panel ────────────────────────────────
+// ── Add to Cart Panel ─────────────────────────────────────────
 
-function AddServicePanel({ onClose }: { onClose: () => void }) {
+function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
   const qc = useQueryClient()
 
-  const [customerSearch, setCustomerSearch] = useState('')
+  const isWig        = item.item_type === 'wig'
+  const defaultPrice = isWig ? (item.retail_price ?? 0) : (item.unit_price ?? 0)
+  const defaultTax   = isWig ? TAX_RATE_WIG : TAX_RATE_NONE
+
+  const [customerSearch, setCustomerSearch]   = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [selectedService, setSelectedService]   = useState<RepairService | null>(null)
-  const [taxRate, setTaxRate]               = useState(TAX_RATE_SERVICE)
-  const [notes, setNotes]                   = useState('')
-  const [salesRepId, setSalesRepId]         = useState('')
-  const [showDropdown, setShowDropdown]     = useState(false)
+  const [showDropdown, setShowDropdown]       = useState(false)
+  const [salesRepId, setSalesRepId]           = useState('')
+  const [taxRate, setTaxRate]                 = useState(defaultTax)
+  const [notes, setNotes]                     = useState('')
+
+  // Service add-on (wigs only)
+  const [includeService, setIncludeService]   = useState(false)
+  const [selectedService, setSelectedService] = useState<RepairService | null>(null)
+  const [serviceTaxRate, setServiceTaxRate]   = useState(TAX_RATE_SERVICE)
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ['customers'],
     queryFn: () => api.get('/customers/').then(r => r.data),
     staleTime: 1000 * 60 * 5,
   })
-
-  const { data: repairServices = [] } = useQuery<RepairService[]>({
-    queryKey: ['repair-services'],
-    queryFn: () => api.get('/repair-services/').then(r => r.data),
-    staleTime: 1000 * 60 * 5,
-  })
-
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['employees'],
     queryFn: () => api.get('/employees/').then(r => r.data),
     staleTime: 1000 * 60 * 5,
   })
-  const activeEmployees = employees.filter(e => e.is_active)
+  const { data: repairServices = [] } = useQuery<RepairService[]>({
+    queryKey: ['repair-services'],
+    queryFn: () => api.get('/repair-services/').then(r => r.data),
+    staleTime: 1000 * 60 * 5,
+    enabled: isWig,
+  })
+
+  const activeEmployees  = employees.filter(e => e.is_active)
+  const servicePrice     = selectedService?.default_price ?? 0
 
   const matchedCustomers = useMemo(() => {
     if (!customerSearch.trim()) return []
@@ -339,38 +338,69 @@ function AddServicePanel({ onClose }: { onClose: () => void }) {
       .slice(0, 8)
   }, [customers, customerSearch])
 
-  const price = selectedService?.default_price ?? 0
+  const [adding, setAdding] = useState(false)
 
-  const addMutation = useMutation({
-    mutationFn: (data: object) => api.post('/cart/', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['cart-active'] }); onClose() },
-    onError: () => alert('Failed to add service to cart. Please try again.'),
-  })
-
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!selectedCustomer) { alert('Please select a customer.'); return }
-    if (!selectedService)  { alert('Please select a repair service.'); return }
-    addMutation.mutate({
-      customer_id:       selectedCustomer.id,
-      item_type:         'service',
-      inventory_item_id: null,
-      description:       selectedService.name,
-      price,
-      tax_rate:          taxRate,
-      discount_amount:   0,
-      notes:             notes || null,
-      department:        'sales',
-      sales_rep_id:      salesRepId || null,
-    })
+    if (includeService && !selectedService) { alert('Please select a service or uncheck the option.'); return }
+    setAdding(true)
+    try {
+      await api.post('/cart/', {
+        customer_id:       selectedCustomer.id,
+        item_type:         item.item_type,
+        inventory_item_id: item.id,
+        description:       item.name,
+        price:             defaultPrice,
+        tax_rate:          taxRate,
+        discount_amount:   0,
+        notes:             notes || null,
+        department:        'sales',
+        sales_rep_id:      salesRepId || null,
+      })
+      if (includeService && selectedService) {
+        await api.post('/cart/', {
+          customer_id:       selectedCustomer.id,
+          item_type:         'service',
+          inventory_item_id: null,
+          description:       selectedService.name,
+          price:             servicePrice,
+          tax_rate:          serviceTaxRate,
+          discount_amount:   0,
+          notes:             null,
+          department:        'sales',
+          sales_rep_id:      salesRepId || null,
+        })
+      }
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+      onClose()
+    } catch {
+      alert('Failed to add item to cart. Please try again.')
+    } finally {
+      setAdding(false)
+    }
   }
+
+  const wigTotal     = defaultPrice * (1 + taxRate)
+  const serviceTotal = includeService ? servicePrice * (1 + serviceTaxRate) : 0
+  const grandTotal   = wigTotal + serviceTotal
 
   return (
     <>
       <div style={s.backdrop} onClick={onClose} />
       <div style={s.panel}>
         <div style={s.panelHeader}>
-          <span style={s.panelTitle}>Add Service / Repair</span>
+          <span style={s.panelTitle}>Add to Cart</span>
           <button style={s.panelClose} onClick={onClose}><X size={16} /></button>
+        </div>
+
+        {/* Item summary */}
+        <div style={s.panelItem}>
+          <div style={s.panelItemName}>{item.name}</div>
+          {isWig && (
+            <div style={s.panelItemMeta}>
+              {[item.brand, item.color, item.length, item.daysmart_serial ? `#${item.daysmart_serial}` : ''].filter(Boolean).join(' · ')}
+            </div>
+          )}
         </div>
 
         {/* Customer */}
@@ -401,216 +431,6 @@ function AddServicePanel({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* Sales Representative */}
-        <div style={s.field}>
-          <label style={s.label}>Sales Representative <span style={s.optional}>(for commission)</span></label>
-          <select style={s.input} value={salesRepId} onChange={e => setSalesRepId(e.target.value)}>
-            <option value="">— None —</option>
-            {activeEmployees.map(e => (
-              <option key={e.id} value={e.id}>{e.first_name} {e.last_name} · {e.job_title}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Repair service */}
-        <div style={s.field}>
-          <label style={s.label}>Service / Repair</label>
-          <select style={s.input} value={selectedService?.id ?? ''}
-            onChange={e => {
-              const svc = repairServices.find(r => r.id === e.target.value) ?? null
-              setSelectedService(svc)
-            }}>
-            <option value="">— Select service —</option>
-            {repairServices.filter(r => r.is_active).map(r => (
-              <option key={r.id} value={r.id}>
-                {r.name}{r.default_price != null ? ` — $${r.default_price.toFixed(2)}` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Price (read-only from service) */}
-        <div style={s.field}>
-          <label style={s.label}>Price <span style={s.optional}>(from service rate)</span></label>
-          <div style={{ ...s.input, background: '#f7f7f5', fontWeight: 600, cursor: 'default' }}>
-            ${price.toFixed(2)}
-          </div>
-        </div>
-
-        {/* Tax rate */}
-        <div style={s.field}>
-          <label style={s.label}>Tax Rate</label>
-          <div style={s.taxBtns}>
-            {[
-              { label: 'None (0%)',      value: TAX_RATE_NONE    },
-              { label: 'Service (4.5%)', value: TAX_RATE_SERVICE },
-              { label: 'Product (8.875%)', value: TAX_RATE_WIG   },
-            ].map(opt => (
-              <button key={opt.label}
-                style={{ ...s.taxBtn, ...(taxRate === opt.value ? s.taxBtnActive : {}) }}
-                onClick={() => setTaxRate(opt.value)}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Notes */}
-        <div style={s.field}>
-          <label style={s.label}>Notes <span style={s.optional}>(optional)</span></label>
-          <textarea style={s.textarea} placeholder="Anything the front desk should know…"
-            rows={3} value={notes} onChange={e => setNotes(e.target.value)} />
-        </div>
-
-        {/* Summary */}
-        <div style={s.panelSummary}>
-          <span>Subtotal</span>
-          <span>${price.toFixed(2)}</span>
-        </div>
-        <div style={s.panelSummary}>
-          <span>Tax ({(taxRate * 100).toFixed(3).replace(/\.?0+$/, '')}%)</span>
-          <span>${(price * taxRate).toFixed(2)}</span>
-        </div>
-        <div style={{ ...s.panelSummary, fontWeight: 600, borderTop: '1px solid rgba(13,13,13,0.08)', paddingTop: 10 }}>
-          <span>Total</span>
-          <span>${(price * (1 + taxRate)).toFixed(2)}</span>
-        </div>
-
-        <button
-          style={{ ...s.submitBtn, opacity: addMutation.isPending ? 0.6 : 1 }}
-          onClick={handleSubmit} disabled={addMutation.isPending}>
-          {addMutation.isPending ? 'Adding…' : 'Add to Cart'}
-          {!addMutation.isPending && <ChevronRight size={15} />}
-        </button>
-      </div>
-    </>
-  )
-}
-
-// ── Add to Cart Panel ─────────────────────────────────────────
-
-function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
-  const qc = useQueryClient()
-
-  const isWig         = item.item_type === 'wig'
-  const defaultPrice  = isWig ? (item.retail_price ?? 0) : (item.unit_price ?? 0)
-  const defaultTax    = isWig ? TAX_RATE_WIG : TAX_RATE_NONE
-
-  const [customerSearch, setCustomerSearch] = useState('')
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [taxRate, setTaxRate]               = useState(defaultTax)
-  const [notes, setNotes]                   = useState('')
-  const [salesRepId, setSalesRepId]         = useState('')
-  const [showDropdown, setShowDropdown]     = useState(false)
-
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ['customers'],
-    queryFn: () => api.get('/customers/').then(r => r.data),
-    staleTime: 1000 * 60 * 5,
-  })
-
-  const { data: employees = [] } = useQuery<Employee[]>({
-    queryKey: ['employees'],
-    queryFn: () => api.get('/employees/').then(r => r.data),
-    staleTime: 1000 * 60 * 5,
-  })
-  const activeEmployees = employees.filter(e => e.is_active)
-
-  const matchedCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return []
-    const q = customerSearch.toLowerCase()
-    return customers
-      .filter(c => `${c.first_name} ${c.last_name} ${c.phone ?? ''} ${c.cell ?? ''}`.toLowerCase().includes(q))
-      .slice(0, 8)
-  }, [customers, customerSearch])
-
-  const addMutation = useMutation({
-    mutationFn: (data: object) => api.post('/cart/', data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cart-active'] })
-      onClose()
-    },
-    onError: () => alert('Failed to add item to cart. Please try again.'),
-  })
-
-  function handleSubmit() {
-    if (!selectedCustomer) { alert('Please select a customer.'); return }
-
-    addMutation.mutate({
-      customer_id:       selectedCustomer.id,
-      item_type:         item.item_type,
-      inventory_item_id: item.id,
-      description:       item.name,
-      price:             defaultPrice,
-      tax_rate:          taxRate,
-      discount_amount:   0,
-      notes:             notes || null,
-      department:        'sales',
-      sales_rep_id:      salesRepId || null,
-    })
-  }
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div style={s.backdrop} onClick={onClose} />
-
-      {/* Panel */}
-      <div style={s.panel}>
-        <div style={s.panelHeader}>
-          <span style={s.panelTitle}>Add to Cart</span>
-          <button style={s.panelClose} onClick={onClose}><X size={16} /></button>
-        </div>
-
-        {/* Item summary */}
-        <div style={s.panelItem}>
-          <div style={s.panelItemName}>{item.name}</div>
-          {isWig && (
-            <div style={s.panelItemMeta}>
-              {[item.brand, item.color, item.length, item.daysmart_serial ? `#${item.daysmart_serial}` : ''].filter(Boolean).join(' · ')}
-            </div>
-          )}
-        </div>
-
-        {/* Customer select */}
-        <div style={s.field}>
-          <label style={s.label}>Customer</label>
-          {selectedCustomer ? (
-            <div style={s.selectedCustomer}>
-              <span>{selectedCustomer.first_name} {selectedCustomer.last_name}</span>
-              <button style={s.clearBtn} onClick={() => { setSelectedCustomer(null); setCustomerSearch('') }}>
-                <X size={12} />
-              </button>
-            </div>
-          ) : (
-            <div style={{ position: 'relative' }}>
-              <input
-                style={s.input}
-                placeholder="Search customer…"
-                value={customerSearch}
-                onChange={e => { setCustomerSearch(e.target.value); setShowDropdown(true) }}
-                onFocus={() => setShowDropdown(true)}
-              />
-              {showDropdown && matchedCustomers.length > 0 && (
-                <div style={s.dropdown}>
-                  {matchedCustomers.map(c => (
-                    <button
-                      key={c.id}
-                      style={s.dropdownItem}
-                      onClick={() => { setSelectedCustomer(c); setShowDropdown(false); setCustomerSearch('') }}
-                    >
-                      {c.first_name} {c.last_name}
-                      {(c.phone || c.cell) && (
-                        <span style={s.dropdownPhone}>{c.phone || c.cell}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Sales representative */}
         <div style={s.field}>
           <label style={s.label}>Sales Representative <span style={s.optional}>(for commission)</span></label>
@@ -622,10 +442,10 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
           </select>
         </div>
 
-        {/* Price — read-only, set by owner in Inventory */}
+        {/* Price */}
         <div style={s.field}>
           <label style={s.label}>Price <span style={s.optional}>(set in Inventory)</span></label>
-          <div style={{ ...s.input, background: '#f7f7f5', color: '#0d0d0d', fontWeight: 600, cursor: 'default' }}>
+          <div style={{ ...s.input, background: '#f7f7f5', fontWeight: 600, cursor: 'default' }}>
             ${defaultPrice.toFixed(2)}
           </div>
         </div>
@@ -651,36 +471,83 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
         {/* Notes */}
         <div style={s.field}>
           <label style={s.label}>Notes <span style={s.optional}>(optional)</span></label>
-          <textarea
-            style={s.textarea}
-            placeholder="Anything the front desk should know…"
-            rows={3}
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-          />
+          <textarea style={s.textarea} placeholder="Anything the front desk should know…"
+            rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
 
-        {/* Summary line */}
+        {/* ── Service add-on (wigs only) ── */}
+        {isWig && (
+          <div style={s.serviceSection}>
+            <button style={s.serviceSectionToggle} onClick={() => { setIncludeService(v => !v); setSelectedService(null) }}>
+              <span style={{ ...s.serviceSectionCheck, background: includeService ? '#212121' : 'transparent', borderColor: includeService ? '#212121' : 'rgba(13,13,13,0.25)' }}>
+                {includeService && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+              </span>
+              Add a service / repair with this wig
+            </button>
+
+            {includeService && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+                <div style={s.field}>
+                  <label style={s.label}>Service / Repair</label>
+                  <select style={s.input} value={selectedService?.id ?? ''}
+                    onChange={e => setSelectedService(repairServices.find(r => r.id === e.target.value) ?? null)}>
+                    <option value="">— Select service —</option>
+                    {repairServices.filter(r => r.is_active).map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}{r.default_price != null ? ` — $${r.default_price.toFixed(2)}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={s.field}>
+                  <label style={s.label}>Service Tax Rate</label>
+                  <div style={s.taxBtns}>
+                    {[
+                      { label: 'None (0%)',      value: TAX_RATE_NONE    },
+                      { label: 'Service (4.5%)', value: TAX_RATE_SERVICE },
+                    ].map(opt => (
+                      <button key={opt.label}
+                        style={{ ...s.taxBtn, ...(serviceTaxRate === opt.value ? s.taxBtnActive : {}) }}
+                        onClick={() => setServiceTaxRate(opt.value)}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Summary */}
         <div style={s.panelSummary}>
-          <span>Subtotal</span>
+          <span>Wig subtotal</span>
           <span>${defaultPrice.toFixed(2)}</span>
         </div>
         <div style={s.panelSummary}>
           <span>Tax ({(taxRate * 100).toFixed(3).replace(/\.?0+$/, '')}%)</span>
           <span>${(defaultPrice * taxRate).toFixed(2)}</span>
         </div>
+        {includeService && selectedService && (
+          <>
+            <div style={s.panelSummary}>
+              <span>Service — {selectedService.name}</span>
+              <span>${servicePrice.toFixed(2)}</span>
+            </div>
+            <div style={s.panelSummary}>
+              <span>Service tax ({(serviceTaxRate * 100).toFixed(3).replace(/\.?0+$/, '')}%)</span>
+              <span>${(servicePrice * serviceTaxRate).toFixed(2)}</span>
+            </div>
+          </>
+        )}
         <div style={{ ...s.panelSummary, fontWeight: 600, borderTop: '1px solid rgba(13,13,13,0.08)', paddingTop: 10 }}>
           <span>Total</span>
-          <span>${(defaultPrice * (1 + taxRate)).toFixed(2)}</span>
+          <span>${grandTotal.toFixed(2)}</span>
         </div>
 
-        <button
-          style={{ ...s.submitBtn, opacity: addMutation.isPending ? 0.6 : 1 }}
-          onClick={handleSubmit}
-          disabled={addMutation.isPending}
-        >
-          {addMutation.isPending ? 'Adding…' : 'Add to Cart'}
-          {!addMutation.isPending && <ChevronRight size={15} />}
+        <button style={{ ...s.submitBtn, opacity: adding ? 0.6 : 1 }} onClick={handleSubmit} disabled={adding}>
+          {adding ? 'Adding…' : `Add to Cart${includeService && selectedService ? ' (2 items)' : ''}`}
+          {!adding && <ChevronRight size={15} />}
         </button>
       </div>
     </>
@@ -813,8 +680,7 @@ const s: Record<string, React.CSSProperties> = {
   filterGroup:{ display: 'flex', gap: 4 },
   filterBtn:  { background: '#fff', border: BORDER, borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.55)', cursor: 'pointer' },
   filterBtnActive: { background: '#212121', color: '#fff', borderColor: '#212121' },
-  countBadge: { fontSize: 12, color: 'rgba(13,13,13,0.4)' },
-  serviceBtn: { display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', background: 'none', border: BORDER, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'rgba(13,13,13,0.6)', cursor: 'pointer', whiteSpace: 'nowrap' as const },
+  countBadge: { fontSize: 12, color: 'rgba(13,13,13,0.4)', marginLeft: 'auto' },
   empty:      { padding: '60px 0', textAlign: 'center', color: 'rgba(13,13,13,0.35)', fontSize: 14 },
 
   // View toggle
@@ -854,6 +720,9 @@ const s: Record<string, React.CSSProperties> = {
   panelItemName: { fontSize: 14, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em' },
   panelItemMeta: { fontSize: 12, color: 'rgba(13,13,13,0.45)', marginTop: 4 },
   panelSummary:  { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'rgba(13,13,13,0.6)', paddingTop: 6 },
+  serviceSection:       { background: '#fafaf9', border: BORDER, borderRadius: 10, padding: '14px 16px' },
+  serviceSectionToggle: { display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#0d0d0d', padding: 0, width: '100%', textAlign: 'left' as const },
+  serviceSectionCheck:  { width: 18, height: 18, borderRadius: 4, border: '2px solid', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' },
   submitBtn:  { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#212121', color: '#fff', border: 'none', borderRadius: 9, padding: '13px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 4, letterSpacing: '-0.01em' },
 
   // Form fields
