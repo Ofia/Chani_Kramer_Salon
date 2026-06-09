@@ -22,7 +22,8 @@ from pydantic import BaseModel, EmailStr
 from app.models.models import (
     UserRole, PayType, PaymentMethod, ServiceType, ExpenseCategory, DataSource,
     WigStatus, WigPaymentType, PosItemType, PayrollStatus,
-    InventoryItemType, WigItemStatus, InventoryEventType, ProviderType
+    InventoryItemType, WigItemStatus, InventoryEventType, ProviderType,
+    AppointmentDepartment, AppointmentStatus
 )
 
 
@@ -923,3 +924,47 @@ class RepairServiceResponse(BaseModel):
 
 # Resolve forward reference: InventoryItemResponse.payments uses "WigPaymentResponse"
 InventoryItemResponse.model_rebuild()
+
+
+# ── Appointments ──────────────────────────────────────────────
+
+class AppointmentCreate(BaseModel):
+    customer_id: Optional[UUID] = None
+    customer_name: str
+    customer_phone: Optional[str] = None
+    appointment_date: datetime
+    duration_minutes: int = 60
+    department: AppointmentDepartment
+    services_requested: Optional[str] = None
+    status: AppointmentStatus = AppointmentStatus.scheduled
+    notes: Optional[str] = None
+
+
+class AppointmentUpdate(BaseModel):
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    appointment_date: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    department: Optional[AppointmentDepartment] = None
+    services_requested: Optional[str] = None
+    status: Optional[AppointmentStatus] = None
+    notes: Optional[str] = None
+
+
+class AppointmentResponse(BaseModel):
+    id: UUID
+    customer_id: Optional[UUID]
+    customer_name: str
+    customer_phone: Optional[str]
+    appointment_date: datetime
+    duration_minutes: int
+    department: AppointmentDepartment
+    services_requested: Optional[str]
+    status: AppointmentStatus
+    notes: Optional[str]
+    created_by: Optional[UUID]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

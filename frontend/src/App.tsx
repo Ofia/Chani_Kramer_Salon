@@ -38,6 +38,7 @@ import OwnerDashboard            from './pages/owner/OwnerDashboard'
 import InventoryPage             from './pages/bookkeeper/InventoryPage'
 import ProvidersPage             from './pages/bookkeeper/ProvidersPage'
 import OperationOverviewPage     from './pages/bookkeeper/OperationOverviewPage'
+import CalendarPage               from './pages/bookkeeper/CalendarPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
@@ -59,6 +60,7 @@ function AppRoutes() {
       <Route path="/bookkeeper" element={<RequireAuth><BookkeeperLayout /></RequireAuth>}>
         <Route index            element={<BookkeeperDashboard />} />
         <Route path="hello"     element={<HelloBoardPage />} />
+        <Route path="calendar"  element={<CalendarPage />} />
         <Route path="pos"       element={<POSPage />} />
         <Route path="overview"  element={<OperationOverviewPage />} />
         <Route path="payroll"   element={<PayrollEntryPage />} />

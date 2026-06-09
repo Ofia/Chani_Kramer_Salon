@@ -127,6 +127,20 @@ class ProviderType(str, enum.Enum):
     outside_color    = "outside_color"
     in_house_color   = "in_house_color"
 
+class AppointmentDepartment(str, enum.Enum):
+    sales      = "sales"
+    repairs    = "repairs"
+    wash_set   = "wash_set"
+    front_desk = "front_desk"
+
+class AppointmentStatus(str, enum.Enum):
+    scheduled   = "scheduled"
+    arrived     = "arrived"
+    in_progress = "in_progress"
+    completed   = "completed"
+    cancelled   = "cancelled"
+    no_show     = "no_show"
+
 
 # ── Tables ──────────────────────────────────────────────────
 
@@ -624,3 +638,23 @@ class EllaFact(Base):
     value      = Column(Text, nullable=False)     # the full note
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Appointment(Base):
+    """One row per customer appointment — powers the calendar page."""
+    __tablename__ = "appointments"
+
+    id                 = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id        = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    customer_name      = Column(String, nullable=False)
+    customer_phone     = Column(String, nullable=True)
+    appointment_date   = Column(DateTime(timezone=True), nullable=False)
+    duration_minutes   = Column(Integer, nullable=False, default=60)
+    department         = Column(Enum(AppointmentDepartment, name="appointment_department"), nullable=False)
+    services_requested = Column(Text, nullable=True)
+    status             = Column(Enum(AppointmentStatus, name="appointment_status"), nullable=False, default=AppointmentStatus.scheduled)
+    notes              = Column(Text, nullable=True)
+    created_by         = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at         = Column(DateTime(timezone=True), server_default=func.now())
+
+    customer = relationship("Customer", foreign_keys=[customer_id])
