@@ -31,25 +31,6 @@ type Customer = {
   address?: string
 }
 
-type InventoryItem = {
-  id: string
-  name: string
-  item_type: string          // 'wig' | 'product'
-  category?: string
-  quantity: number
-  unit_price: number
-  // wig physical fields (present when item_type = 'wig')
-  brand?: string
-  daysmart_serial?: string
-  length?: string
-  color?: string
-  size?: string
-  front?: string
-  retail_price?: number | null  // wigs use this; products use unit_price
-  wig_status?: string           // 'in_stock' | 'on_order' | ...
-  sale_status?: string | null   // null = unsold, set = already on a sale
-  customer_id?: string | null
-}
 
 type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig' | 'wig_balance'
 
