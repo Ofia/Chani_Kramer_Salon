@@ -447,11 +447,6 @@ function SummaryTab({ data }: { data: ReportData }) {
       <div style={s.divider} />
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ ...s.infoBox, flex: 1, minWidth: 200 }}>
-          <p style={s.infoLabel}>Tithes (מעשרות)</p>
-          <p style={s.infoValue}>{fmt(data.tithes)}</p>
-          <p style={s.infoNote}>10% of net profit</p>
-        </div>
         <div style={{ ...s.infoBox, flex: 1, minWidth: 200, background: '#fff7ed', border: '1px solid #fed7aa' }}>
           <p style={{ ...s.infoLabel, color: '#92400e' }}>Tax to Remit</p>
           <p style={{ ...s.infoValue, color: '#92400e' }}>{fmt(data.payments.tax_collected)}</p>
