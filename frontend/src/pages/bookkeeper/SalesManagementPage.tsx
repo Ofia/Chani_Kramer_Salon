@@ -903,7 +903,7 @@ function CartEditPanel({
         <div style={s.serviceSection}>
           <button
             style={s.serviceSectionToggle}
-            onClick={() => { setIncludeService(v => !v); setSelectedService(null); setServiceCustomPrice(0) }}
+            onClick={() => { setIncludeService(v => !v); setSelectedService(null); setServiceCustomPriceStr('') }}
           >
             <span style={{ ...s.serviceSectionCheck, background: includeService ? '#212121' : 'transparent', borderColor: includeService ? '#212121' : 'rgba(13,13,13,0.25)' }}>
               {includeService && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
