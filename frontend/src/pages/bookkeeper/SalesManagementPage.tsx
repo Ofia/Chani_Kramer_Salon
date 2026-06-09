@@ -558,6 +558,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
 
 function ActiveCartsTab() {
   const qc = useQueryClient()
+  const [editingCart, setEditingCart] = useState<{ customerId: string; customerName: string } | null>(null)
 
   const { data: items = [], isLoading } = useQuery<CartItem[]>({
     queryKey: ['cart-active'],
@@ -597,50 +598,244 @@ function ActiveCartsTab() {
   }
 
   return (
-    <div style={s.cartList}>
-      {grouped.map(({ customerId, customer_name, items: cartItems }) => {
-        const total = cartItems.reduce((sum, i) => sum + i.price * (1 + i.tax_rate) - i.discount_amount, 0)
-        return (
-          <div key={customerId} style={s.cartCard}>
-            <div style={s.cartCardHeader}>
-              <div>
-                <div style={s.cartCustomerName}>{customer_name}</div>
-                <div style={s.cartMeta}>{cartItems.length} item{cartItems.length !== 1 ? 's' : ''}</div>
+    <>
+      <div style={s.cartList}>
+        {grouped.map(({ customerId, customer_name, items: cartItems }) => {
+          const total = cartItems.reduce((sum, i) => sum + i.price * (1 + i.tax_rate) - i.discount_amount, 0)
+          return (
+            <div key={customerId} style={s.cartCard}>
+              <div
+                style={{ ...s.cartCardHeader, cursor: 'pointer' }}
+                onClick={() => setEditingCart({ customerId, customerName: customer_name })}
+              >
+                <div>
+                  <div style={s.cartCustomerName}>{customer_name}</div>
+                  <div style={s.cartMeta}>
+                    {cartItems.length} item{cartItems.length !== 1 ? 's' : ''} · <span style={{ color: '#0d0d0d', fontWeight: 500 }}>Edit cart</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={s.cartTotal}>${total.toFixed(2)}</div>
+                  <ChevronRight size={15} color="rgba(13,13,13,0.3)" />
+                </div>
               </div>
-              <div style={s.cartTotal}>${total.toFixed(2)}</div>
-            </div>
 
-            <div style={s.cartItems}>
-              {cartItems.map(item => (
-                <div key={item.id} style={s.cartItemRow}>
-                  <div style={s.cartItemLeft}>
-                    <div style={s.cartItemName}>{item.description}</div>
-                    {item.notes && <div style={s.cartItemNotes}>{item.notes}</div>}
-                    <div style={s.cartItemMeta}>
-                      {item.sales_rep_name ? `Rep: ${item.sales_rep_name} · ` : ''}{item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
+              <div style={s.cartItems}>
+                {cartItems.map(item => (
+                  <div key={item.id} style={s.cartItemRow}>
+                    <div style={s.cartItemLeft}>
+                      <div style={s.cartItemName}>{item.description}</div>
+                      {item.notes && <div style={s.cartItemNotes}>{item.notes}</div>}
+                      <div style={s.cartItemMeta}>
+                        {item.sales_rep_name ? `Rep: ${item.sales_rep_name} · ` : ''}{item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
+                      </div>
+                    </div>
+                    <div style={s.cartItemRight}>
+                      <span style={s.cartItemPrice}>${item.price.toFixed(2)}</span>
+                      <button
+                        style={s.removeBtn}
+                        onClick={e => { e.stopPropagation(); removeMutation.mutate(item.id) }}
+                        title="Remove from cart"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
-                  <div style={s.cartItemRight}>
-                    <span style={s.cartItemPrice}>${item.price.toFixed(2)}</span>
+                ))}
+              </div>
+
+              <div style={s.cartCardFooter}>
+                Customer checks out at the <strong>Front Desk → Point of Sale</strong>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {editingCart && (
+        <CartEditPanel
+          customerId={editingCart.customerId}
+          customerName={editingCart.customerName}
+          cartItems={grouped.find(g => g.customerId === editingCart.customerId)?.items ?? []}
+          onRemove={id => removeMutation.mutate(id)}
+          onClose={() => setEditingCart(null)}
+        />
+      )}
+    </>
+  )
+}
+
+// ── Cart Edit Panel ───────────────────────────────────────────
+
+function CartEditPanel({
+  customerId,
+  customerName,
+  cartItems,
+  onRemove,
+  onClose,
+}: {
+  customerId: string
+  customerName: string
+  cartItems: CartItem[]
+  onRemove: (id: string) => void
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const [search, setSearch] = useState('')
+
+  const { data: allInventory = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['inventory'],
+    queryFn: () => api.get('/inventory/').then(r => r.data),
+    staleTime: 0,
+  })
+
+  const searchResults = useMemo(() => {
+    if (!search.trim()) return []
+    const q = search.toLowerCase()
+    return allInventory
+      .filter(item => {
+        if (item.item_type === 'wig' && item.wig_status !== 'in_stock') return false
+        if (item.item_type === 'product' && (item.quantity ?? 0) <= 0) return false
+        const label = item.item_type === 'wig'
+          ? [item.brand, item.color, item.length, item.daysmart_serial, item.name].join(' ')
+          : [item.name, item.category].join(' ')
+        return label.toLowerCase().includes(q)
+      })
+      .slice(0, 6)
+  }, [allInventory, search])
+
+  const addMutation = useMutation({
+    mutationFn: (item: InventoryItem) => {
+      const price   = item.item_type === 'wig' ? (item.retail_price ?? 0) : (item.unit_price ?? 0)
+      const taxRate = item.item_type === 'wig' ? TAX_RATE_WIG : TAX_RATE_NONE
+      return api.post('/cart/', {
+        customer_id:       customerId,
+        item_type:         item.item_type,
+        inventory_item_id: item.id,
+        description:       item.name,
+        price,
+        tax_rate:          taxRate,
+        discount_amount:   0,
+        notes:             null,
+        department:        'sales',
+        sales_rep_id:      null,
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+      setSearch('')
+    },
+    onError: () => alert('Failed to add item. Please try again.'),
+  })
+
+  const cartTotal = cartItems.reduce((sum, i) => sum + i.price * (1 + i.tax_rate) - i.discount_amount, 0)
+
+  return (
+    <>
+      <div style={s.backdrop} onClick={onClose} />
+      <div style={s.panel}>
+        <div style={s.panelHeader}>
+          <span style={s.panelTitle}>{customerName}'s Cart</span>
+          <button style={s.panelClose} onClick={onClose}><X size={16} /></button>
+        </div>
+
+        {/* Current items */}
+        <div style={{ border: BORDER, borderRadius: 10, overflow: 'hidden' }}>
+          {cartItems.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center' as const, fontSize: 13, color: 'rgba(13,13,13,0.4)' }}>
+              Cart is empty
+            </div>
+          ) : cartItems.map((item, idx) => (
+            <div
+              key={item.id}
+              style={{ ...s.cartItemRow, borderBottom: idx < cartItems.length - 1 ? BORDER : 'none' }}
+            >
+              <div style={s.cartItemLeft}>
+                <div style={s.cartItemName}>{item.description}</div>
+                {item.notes && <div style={s.cartItemNotes}>{item.notes}</div>}
+                <div style={s.cartItemMeta}>
+                  {item.sales_rep_name ? `Rep: ${item.sales_rep_name} · ` : ''}
+                  {item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
+                </div>
+              </div>
+              <div style={s.cartItemRight}>
+                <span style={s.cartItemPrice}>${item.price.toFixed(2)}</span>
+                <button style={s.removeBtn} onClick={() => onRemove(item.id)} title="Remove">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ ...s.panelSummary, fontWeight: 600 }}>
+          <span>Cart total (incl. tax)</span>
+          <span>${cartTotal.toFixed(2)}</span>
+        </div>
+
+        <div style={{ borderTop: BORDER }} />
+
+        {/* Add item */}
+        <div style={s.field}>
+          <label style={s.label}>Add Item</label>
+          <div style={s.searchWrap}>
+            <Search size={14} color="rgba(13,13,13,0.35)" />
+            <input
+              style={s.searchInput}
+              placeholder="Search by name, brand, serial…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && (
+              <button style={s.clearBtn} onClick={() => setSearch('')}><X size={12} /></button>
+            )}
+          </div>
+        </div>
+
+        {search.trim() && searchResults.length === 0 && (
+          <div style={{ fontSize: 13, color: 'rgba(13,13,13,0.4)', textAlign: 'center' as const, padding: '6px 0' }}>
+            No available items match "{search}"
+          </div>
+        )}
+
+        {searchResults.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+            {searchResults.map(item => {
+              const price = item.item_type === 'wig' ? (item.retail_price ?? 0) : (item.unit_price ?? 0)
+              return (
+                <div
+                  key={item.id}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafaf9', border: BORDER, borderRadius: 8, padding: '10px 14px' }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={s.cartItemName}>{item.name}</div>
+                    <div style={s.cartItemMeta}>
+                      {item.item_type === 'wig'
+                        ? [item.brand, item.color, item.daysmart_serial ? `#${item.daysmart_serial}` : ''].filter(Boolean).join(' · ')
+                        : `product · qty ${item.quantity ?? 0}`}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, marginLeft: 12 }}>
+                    <span style={s.cartItemPrice}>${price.toFixed(2)}</span>
                     <button
-                      style={s.removeBtn}
-                      onClick={() => removeMutation.mutate(item.id)}
-                      title="Remove from cart"
+                      style={{ ...s.addBtn, padding: '6px 12px', fontSize: 12 }}
+                      onClick={() => addMutation.mutate(item)}
+                      disabled={addMutation.isPending}
                     >
-                      <Trash2 size={13} />
+                      Add
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            <div style={s.cartCardFooter}>
-              Customer checks out at the <strong>Front Desk → Point of Sale</strong>
-            </div>
+              )
+            })}
           </div>
-        )
-      })}
-    </div>
+        )}
+
+        <div style={{ ...s.cartCardFooter, marginTop: 'auto', borderTop: BORDER }}>
+          Customer checks out at the <strong>Front Desk → Point of Sale</strong>
+        </div>
+      </div>
+    </>
   )
 }
 
