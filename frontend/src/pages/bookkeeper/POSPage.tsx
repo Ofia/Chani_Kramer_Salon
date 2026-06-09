@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/auth'
 import {
   Search, Plus, X, Printer, ChevronDown, ChevronUp,
-  Scissors, Wrench, Package, Trash2, CreditCard,
+  Trash2, CreditCard,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
@@ -29,13 +29,6 @@ type Customer = {
   phone?: string
   cell?: string
   address?: string
-}
-
-type RepairService = {
-  id: string
-  name: string
-  sort_order: number
-  is_active: boolean
 }
 
 type InventoryItem = {
@@ -210,17 +203,13 @@ export default function POSPage() {
   const [receiptSale, setReceiptSale] = useState<PosSale | null>(null)
   const [receiptBalanceItems, setReceiptBalanceItems] = useState<CartItem[]>([])
   const [loadedPendingIds, setLoadedPendingIds] = useState<string[]>([])
+  const [discount, setDiscount] = useState('')
 
   const qc = useQueryClient()
 
   const { data: todaySales = [] } = useQuery<PosSale[]>({
     queryKey: ['pos-sales-today', saleDate],
     queryFn: () => api.get(`/pos-sales/date/${saleDate}`).then(r => r.data).catch(() => []),
-  })
-
-  const { data: repairServices = [] } = useQuery<RepairService[]>({
-    queryKey: ['repair-services'],
-    queryFn: () => api.get('/repair-services/').then(r => r.data).catch(() => []),
   })
 
   // Pending cart items for the selected customer (added by Sales dept)
@@ -262,51 +251,12 @@ export default function POSPage() {
       setCart([])
       setPayments([{ _key: nextKey(), payment_method: 'cash', amount: '' }])
       setShipping({ enabled: false, amount: '', address: '' })
+      setDiscount('')
       setLoadedPendingIds([])
     },
   })
 
   // ── Cart helpers ──────────────────────────────────────────
-
-  function addWashSet() {
-    setCart(c => [...c, {
-      _key: nextKey(), item_type: 'wash_set',
-      description: 'Wash & Set', quantity: 1, unit_price: '',
-      tax_rate: DEFAULT_TAX_RATE.wash_set,
-    }])
-  }
-
-  function addRepair() {
-    setCart(c => [...c, {
-      _key: nextKey(), item_type: 'repair',
-      description: 'Repair', quantity: 1, unit_price: '',
-      tax_rate: DEFAULT_TAX_RATE.repair,
-    }])
-  }
-
-  function addInventoryItem(inv: InventoryItem) {
-    const isWig = inv.item_type === 'wig'
-    const itemType: CartItemType = isWig ? 'wig' : 'inventory'
-    setCart(c => [...c, {
-      _key: nextKey(),
-      item_type: itemType,
-      description: inv.name,
-      quantity: 1,
-      unit_price: String(isWig ? (inv.retail_price ?? inv.unit_price ?? 0) : inv.unit_price),
-      tax_rate: DEFAULT_TAX_RATE[itemType],
-      inventory_item_id: inv.id,
-      showWigSpecs: isWig,
-      // Pre-fill wig specs from inventory — no need to re-enter
-      ...(isWig ? {
-        wig_serial:  inv.daysmart_serial,
-        wig_brand:   inv.brand,
-        wig_length:  inv.length,
-        wig_color:   inv.color,
-        wig_size:    inv.size,
-        wig_front:   inv.front,
-      } : {}),
-    }])
-  }
 
   function addWigBalanceToCart(wig: WigOrder) {
     const balanceDue = Number(wig.balance_due)
@@ -383,7 +333,8 @@ export default function POSPage() {
     return s + Math.round(price * i.quantity * (i.tax_rate || 0) * 100) / 100
   }, 0)
   const shippingAmount   = shipping.enabled ? (parseFloat(shipping.amount) || 0) : 0
-  const grandTotal       = cartTotal + taxAmount + shippingAmount
+  const discountAmount   = parseFloat(discount) || 0
+  const grandTotal       = Math.max(0, cartTotal + taxAmount + shippingAmount - discountAmount)
 
   const paymentsTotal    = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
   const effectivePaid    = paymentsTotal
@@ -460,6 +411,7 @@ export default function POSPage() {
       sale_date: saleDate,
       tax_rate: 0,
       tax_amount_override: taxAmount || undefined,
+      discount_amount: discountAmount || undefined,
       shipping_amount: shippingAmount,
       shipping_address: shipping.enabled && shipping.address ? shipping.address : undefined,
       items,
@@ -530,16 +482,14 @@ export default function POSPage() {
           />
         )}
 
-        {/* ── Add items ── */}
+        {/* ── Cart ── */}
         <Section title="Cart">
-          <div style={s.addBtns}>
-            <AddBtn icon={<Scissors size={13} />} label="Wash & Set" color="#DF5198" onClick={addWashSet} />
-            <AddBtn icon={<Wrench size={13} />} label="Repair" color="#E3CD94" onClick={addRepair} />
-            <InventoryPickerBtn onAdd={addInventoryItem} />
-          </div>
-
           {cart.length === 0 ? (
-            <div style={s.emptyCart}>Add items above to build the cart</div>
+            <div style={s.emptyCart}>
+              {customer.id
+                ? 'No items yet — add items from the Sales page'
+                : 'Select a customer to begin'}
+            </div>
           ) : (
             <div style={s.cartList}>
               {cart.map(item => (
@@ -548,13 +498,28 @@ export default function POSPage() {
                   item={item}
                   onChange={patch => updateItem(item._key, patch)}
                   onRemove={() => removeItem(item._key)}
-                  repairServices={repairServices}
-                  customerId={customer.id}
                 />
               ))}
               <div style={s.cartTotal}>
                 <span style={{ color: '#71717a' }}>Subtotal</span>
                 <span style={{ fontWeight: 700, fontSize: 18 }}>${cartTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Discount */}
+          {cart.length > 0 && (
+            <div style={s.discountRow}>
+              <span style={s.discountLabel}>Discount</span>
+              <div style={{ ...s.moneyRow, width: 140 }}>
+                <span style={s.moneySym}>-$</span>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={discount}
+                  onChange={e => setDiscount(e.target.value)}
+                  style={s.moneyInput}
+                  placeholder="0.00"
+                />
               </div>
             </div>
           )}
@@ -662,6 +627,12 @@ export default function POSPage() {
                   <span>${shippingAmount.toFixed(2)}</span>
                 </div>
               )}
+              {discountAmount > 0 && (
+                <div style={{ ...s.totalRow, color: '#10b981' }}>
+                  <span>Discount</span>
+                  <span>-${discountAmount.toFixed(2)}</span>
+                </div>
+              )}
               <div style={{ ...s.totalRow, ...s.totalGrand }}>
                 <span>Grand Total</span>
                 <span>${grandTotal.toFixed(2)}</span>
@@ -713,151 +684,75 @@ export default function POSPage() {
 }
 
 // ── Cart Row ──────────────────────────────────────────────────
+// Checkout-only: items come pre-filled from the Sales / Repairs dept.
+// Price is locked (read-only). Tax can be toggled exempt. Amount editable for wig_balance only.
 
-function CartRow({ item, onChange, onRemove, repairServices, customerId }: {
+function CartRow({ item, onChange, onRemove }: {
   item: CartItem
   onChange: (patch: Partial<CartItem>) => void
   onRemove: () => void
-  repairServices: RepairService[]
-  customerId: string
 }) {
-  const subtotal = (parseFloat(item.unit_price) || 0) * item.quantity
-  const color = ITEM_TYPE_COLOR[item.item_type]
+  const price    = parseFloat(item.unit_price) || 0
+  const subtotal = price * item.quantity
+  const taxAmt   = Math.round(subtotal * (item.tax_rate || 0) * 100) / 100
+  const isBalance = item.item_type === 'wig_balance'
+  const color    = ITEM_TYPE_COLOR[item.item_type]
 
   return (
     <div style={s.cartRow}>
-      {/* Type badge */}
-      <div style={{ ...s.typeBadge, background: color + '22', color }}>
-        {ITEM_TYPE_LABEL[item.item_type]}
-      </div>
-
-      {/* Description — dropdown for repairs, read-only label for balance, free text otherwise */}
-      {item.item_type === 'repair' ? (
-        <select
-          value={item.description}
-          onChange={e => onChange({ description: e.target.value })}
-          style={{ ...s.select, flex: 1 }}
-        >
-          <option value="">— select repair type —</option>
-          {repairServices.map(rs => (
-            <option key={rs.id} value={rs.name}>{rs.name}</option>
-          ))}
-        </select>
-      ) : item.item_type === 'wig_balance' ? (
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#18181b' }}>{item.description}</span>
-      ) : (
-        <input
-          value={item.description}
-          onChange={e => onChange({ description: e.target.value })}
-          style={{ ...s.input, flex: 1 }}
-          placeholder="Description"
-        />
-      )}
-
-      {/* Qty (only relevant for inventory products) */}
-      {item.item_type === 'inventory' && (
-        <input type="number" min="1" value={item.quantity}
-          onChange={e => onChange({ quantity: parseInt(e.target.value) || 1 })}
-          style={{ ...s.input, width: 52, textAlign: 'center' }} />
-      )}
-
-      {/* Price */}
-      <div style={{ ...s.moneyRow, width: 110 }}>
-        <span style={s.moneySym}>$</span>
-        <input type="number" min="0" step="0.01" value={item.unit_price}
-          onChange={e => onChange({ unit_price: e.target.value })}
-          style={s.moneyInput} placeholder="0.00" />
-      </div>
-
-      {/* Subtotal — hidden for wig_balance (the editable input IS the amount) */}
-      {item.item_type !== 'wig_balance' && (
-        <span style={s.subtotalCell}>${subtotal.toFixed(2)}</span>
-      )}
-
-      {/* Remove */}
-      <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
-
-      {/* Per-item tax toggle — hidden for wig_balance (no new tax on balance payments) */}
-      {item.item_type !== 'wig_balance' && (
-        <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-          <span style={{ fontSize: 11, color: '#71717a', whiteSpace: 'nowrap' }}>Tax:</span>
-          {[
-            { label: 'Exempt', value: 0 },
-            ...(item.item_type === 'wash_set' || item.item_type === 'repair'
-              ? [{ label: '4.5%', value: 0.045 }]
-              : [{ label: '8.875%', value: 0.08875 }]
-            ),
-          ].map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => onChange({ tax_rate: opt.value })}
-              style={{
-                padding: '2px 8px', borderRadius: 4, border: '1px solid',
-                fontSize: 11, cursor: 'pointer',
-                background: item.tax_rate === opt.value ? '#212121' : 'transparent',
-                color: item.tax_rate === opt.value ? '#fff' : '#71717a',
-                borderColor: item.tax_rate === opt.value ? '#212121' : '#d4d4d8',
-              }}
-            >
-              {opt.label}
-            </button>
-          ))}
-          {item.tax_rate > 0 && subtotal > 0 && (
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#71717a' }}>
-              +${(subtotal * item.tax_rate).toFixed(2)}
-            </span>
-          )}
+      <div style={s.cartRowMain}>
+        {/* Left: badge + description + notes */}
+        <div style={s.cartRowLeft}>
+          <span style={{ ...s.typeBadge, background: color + '22', color }}>
+            {ITEM_TYPE_LABEL[item.item_type]}
+          </span>
+          <div>
+            <div style={s.cartRowName}>{item.description}</div>
+            {item.notes && <div style={s.cartRowNotes}>{item.notes}</div>}
+          </div>
         </div>
+
+        {/* Right: price + tax badge + remove */}
+        <div style={s.cartRowRight}>
+          {isBalance ? (
+            <div style={{ ...s.moneyRow, width: 110 }}>
+              <span style={s.moneySym}>$</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={item.unit_price}
+                onChange={e => onChange({ unit_price: e.target.value })}
+                style={s.moneyInput} placeholder="0.00"
+              />
+            </div>
+          ) : (
+            <span style={s.cartRowPrice}>${subtotal.toFixed(2)}</span>
+          )}
+
+          {!isBalance && (
+            <button
+              onClick={() => onChange({ tax_rate: item.tax_rate > 0 ? 0 : DEFAULT_TAX_RATE[item.item_type] })}
+              style={item.tax_rate > 0 ? s.taxBadgeActive : s.taxBadgeExempt}
+              title={item.tax_rate > 0 ? 'Click to exempt' : 'Click to apply tax'}
+            >
+              {item.tax_rate > 0
+                ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}%`
+                : 'Exempt'}
+            </button>
+          )}
+
+          <button onClick={onRemove} style={s.iconBtn}><Trash2 size={13} /></button>
+        </div>
+      </div>
+
+      {/* Tax line */}
+      {!isBalance && item.tax_rate > 0 && taxAmt > 0 && (
+        <div style={s.cartRowTax}>Tax: +${taxAmt.toFixed(2)}</div>
       )}
 
       {/* Partial balance note */}
-      {item.item_type === 'wig_balance' && item.wig_balance_due && subtotal < item.wig_balance_due && subtotal > 0 && (
-        <div style={{ width: '100%', fontSize: 11, color: '#71717a', marginTop: 4 }}>
-          Partial payment — ${(item.wig_balance_due - subtotal).toFixed(2)} will remain open
-        </div>
-      )}
-
-      {/* Item notes — repair and wash & set */}
-      {(item.item_type === 'repair' || item.item_type === 'wash_set') && (
-        <input
-          value={item.notes || ''}
-          onChange={e => onChange({ notes: e.target.value })}
-          style={{ ...s.input, width: '100%', marginTop: 6, fontSize: 12 }}
-          placeholder={item.item_type === 'repair' ? 'Repair notes (optional)…' : 'Wash & Set notes (optional)…'}
-        />
-      )}
-
-      {/* Wig serial linker — W&S and Repair only */}
-      {(item.item_type === 'repair' || item.item_type === 'wash_set') && (
-        <WigLinkerField
-          customerId={customerId}
-          wigId={item.inventory_item_id}
-          wigSerial={item.wig_serial}
-          onChange={(wigId, serial) => onChange({ inventory_item_id: wigId, wig_serial: serial })}
-        />
-      )}
-
-      {/* Wig specs — expandable (new sales only, not balance payments) */}
-      {item.item_type === 'wig' && (
-        <div style={{ width: '100%', marginTop: 8 }}>
-          <button
-            onClick={() => onChange({ showWigSpecs: !item.showWigSpecs })}
-            style={s.wigToggle}
-          >
-            {item.showWigSpecs ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            Wig specs & deposit
-          </button>
-
-          {item.showWigSpecs && (
-            <div style={s.wigSpecsGrid}>
-              <WigSpecInput label="Serial" value={item.wig_serial} onChange={v => onChange({ wig_serial: v })} placeholder="rina44871" />
-              <WigSpecInput label="Brand" value={item.wig_brand} onChange={v => onChange({ wig_brand: v })} placeholder="e.g. RINA" />
-              <WigSpecInput label="Length" value={item.wig_length} onChange={v => onChange({ wig_length: v })} placeholder='14"' />
-              <WigSpecInput label="Color" value={item.wig_color} onChange={v => onChange({ wig_color: v })} placeholder="2/8" />
-              <WigSpecInput label="Size" value={item.wig_size} onChange={v => onChange({ wig_size: v })} placeholder="M" />
-              <WigSpecInput label="Front" value={item.wig_front} onChange={v => onChange({ wig_front: v })} placeholder="Top Lace" />
-            </div>
-          )}
+      {isBalance && item.wig_balance_due && price < item.wig_balance_due && price > 0 && (
+        <div style={s.cartRowTax}>
+          Partial — ${(item.wig_balance_due - price).toFixed(2)} remains open
         </div>
       )}
     </div>
@@ -978,73 +873,6 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
   )
 }
 
-// ── Inventory Picker Button ───────────────────────────────────
-
-function InventoryPickerBtn({ onAdd }: { onAdd: (item: InventoryItem) => void }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-
-  const { data: items = [] } = useQuery<InventoryItem[]>({
-    queryKey: ['inventory'],
-    queryFn: () => api.get('/inventory/').then(r => r.data).catch(() => []),
-  })
-
-  // Exclude wigs that already have an active sale
-  const available = items.filter(i => !(i.item_type === 'wig' && i.sale_status != null))
-  const filtered = available.filter(i =>
-    i.name.toLowerCase().includes(query.toLowerCase()) ||
-    (i.category || '').toLowerCase().includes(query.toLowerCase()) ||
-    (i.brand || '').toLowerCase().includes(query.toLowerCase()) ||
-    (i.daysmart_serial || '').toLowerCase().includes(query.toLowerCase())
-  )
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(v => !v)} style={{ ...s.addTypeBtn, color: '#97BBE9', borderColor: '#97BBE9' }}>
-        <Package size={13} /> From Inventory
-      </button>
-
-      {open && (
-        <div style={{ ...s.dropdown, width: 260, top: '100%', left: 0, zIndex: 200 }}>
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-            <input
-              autoFocus
-              value={query} onChange={e => setQuery(e.target.value)}
-              style={{ ...s.input, fontSize: 12 }}
-              placeholder="Search inventory…"
-            />
-          </div>
-          <div style={{ maxHeight: 240, overflow: 'auto' }}>
-            {filtered.length === 0 ? (
-              <p style={{ padding: '12px 12px', fontSize: 12, color: '#a1a1aa' }}>No items found</p>
-            ) : filtered.map(item => (
-              <button
-                key={item.id}
-                onClick={() => { onAdd(item); setOpen(false); setQuery('') }}
-                style={s.dropdownItem}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
-                    background: item.item_type === 'wig' ? '#5581B122' : '#97BBE922',
-                    color: item.item_type === 'wig' ? '#5581B1' : '#6b7280' }}>
-                    {item.item_type === 'wig' ? 'WIG' : 'PRODUCT'}
-                  </span>
-                </div>
-                <span style={{ fontSize: 11, color: '#71717a' }}>
-                  {item.item_type === 'wig'
-                    ? [item.brand, item.daysmart_serial, item.length, item.color].filter(Boolean).join(' · ')
-                    : `${item.category || ''} · ${item.quantity} in stock`
-                  }{' '}· ${(item.retail_price ?? item.unit_price ?? 0).toFixed(2)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── Today Sale Card ───────────────────────────────────────────
 
@@ -1504,143 +1332,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function AddBtn({ icon, label, color, onClick }: { icon: React.ReactNode; label: string; color: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{ ...s.addTypeBtn, color, borderColor: color }}>
-      {icon} {label}
-    </button>
-  )
-}
-
-// ── Wig Linker Field ──────────────────────────────────────────
-// Appears on W&S and Repair cart rows.
-// 1. Suggests wigs the customer bought from the salon (linked via customer_id).
-// 2. Falls back to serial-number search for any wig in inventory.
-// 3. If no inventory match, accepts a free-text serial (external/client-owned wig).
-
-function WigLinkerField({ customerId, wigId, wigSerial, onChange }: {
-  customerId: string
-  wigId?: string
-  wigSerial?: string
-  onChange: (wigId: string | undefined, serial: string) => void
-}) {
-  const [query, setQuery] = useState('')
-  const [open, setOpen] = useState(false)
-
-  // Wigs this customer bought from the salon
-  const { data: customerWigs = [] } = useQuery<InventoryItem[]>({
-    queryKey: ['customer-wigs', customerId],
-    queryFn: () => customerId
-      ? api.get('/inventory/', { params: { item_type: 'wig', customer_id: customerId } })
-          .then(r => r.data).catch(() => [])
-      : Promise.resolve([]),
-    enabled: !!customerId,
-  })
-
-  // Serial search across all inventory wigs
-  const { data: searchResults = [] } = useQuery<InventoryItem[]>({
-    queryKey: ['wig-serial-search', query],
-    queryFn: () => api.get('/inventory/', { params: { item_type: 'wig', serial: query } })
-      .then(r => r.data).catch(() => []),
-    enabled: query.length >= 2,
-  })
-
-  // Already linked — show chip
-  if (wigId || wigSerial) {
-    const label = wigSerial || wigId?.slice(0, 8) || '—'
-    return (
-      <div style={s.wigLinkedChip}>
-        <span style={{ fontSize: 11, color: '#5581B1', fontWeight: 700 }}>Wig</span>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
-        <button
-          onClick={() => onChange(undefined, '')}
-          style={{ ...s.iconBtn, marginLeft: 'auto', padding: '2px 5px' }}
-        >
-          <X size={11} />
-        </button>
-      </div>
-    )
-  }
-
-  function selectWig(inv: InventoryItem) {
-    onChange(inv.id, inv.daysmart_serial || '')
-    setOpen(false)
-    setQuery('')
-  }
-
-  function useExternalSerial() {
-    onChange(undefined, query.trim())
-    setOpen(false)
-    setQuery('')
-  }
-
-  return (
-    <div style={{ width: '100%', marginTop: 6, position: 'relative' }}>
-      {/* Customer's wigs — quick picks (shown when no query typed yet) */}
-      {customerId && customerWigs.length > 0 && !query && (
-        <div style={{ marginBottom: 6 }}>
-          <span style={s.wigLinkerLabel}>Client's wigs:</span>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-            {customerWigs.map(w => (
-              <button
-                key={w.id}
-                onMouseDown={() => selectWig(w)}
-                style={s.wigSuggestionChip}
-              >
-                {w.daysmart_serial || '—'} {w.brand ? `· ${w.brand}` : ''} {w.color ? `· ${w.color}` : ''}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Serial search input */}
-      <div style={s.wigSearchRow}>
-        <input
-          value={query}
-          onChange={e => { setQuery(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 180)}
-          style={{ ...s.input, fontSize: 12, flex: 1 }}
-          placeholder={customerId && customerWigs.length > 0 ? 'Or search any serial…' : 'Search wig serial…'}
-        />
-      </div>
-
-      {/* Search dropdown */}
-      {open && query.length >= 2 && (
-        <div style={{ ...s.dropdown, top: '100%', zIndex: 150 }}>
-          {searchResults.map(w => (
-            <button
-              key={w.id}
-              onMouseDown={() => selectWig(w)}
-              style={s.dropdownItem}
-            >
-              <span style={{ fontWeight: 600 }}>{w.daysmart_serial || '—'}</span>
-              <span style={{ fontSize: 11, color: '#71717a' }}>
-                {[w.brand, w.length, w.color].filter(Boolean).join(' · ')}
-              </span>
-            </button>
-          ))}
-          {searchResults.length === 0 && (
-            <button onMouseDown={useExternalSerial} style={{ ...s.dropdownItem, color: '#5581B1', fontWeight: 600 }}>
-              Use "{query}" — external wig (not in salon inventory)
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function WigSpecInput({ label, value, onChange, placeholder }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <div>
-      <label style={s.fieldLabel}>{label}</label>
-      <input value={value || ''} onChange={e => onChange(e.target.value)}
-        style={s.input} placeholder={placeholder} />
-    </div>
-  )
-}
 
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -1691,10 +1382,21 @@ const s: Record<string, React.CSSProperties> = {
   addBtns:       { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 },
   addTypeBtn:    { display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', border: '1.5px solid', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#fff', fontFamily: 'inherit' },
 
-  cartList:      { display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' },
-  cartRow:       { padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: '#fff' },
-  cartTotal:     { display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#f7f7f5' },
-  emptyCart:     { padding: '20px 0', textAlign: 'center', fontSize: 13, color: '#a1a1aa' },
+  cartList:       { display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' },
+  cartRow:        { padding: '12px 14px', borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 },
+  cartRowMain:    { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  cartRowLeft:    { display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0 },
+  cartRowRight:   { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  cartRowName:    { fontSize: 13, fontWeight: 600, color: '#18181b', lineHeight: 1.3 },
+  cartRowNotes:   { fontSize: 11, color: '#71717a', marginTop: 2, fontStyle: 'italic' },
+  cartRowPrice:   { fontSize: 14, fontWeight: 700, color: '#18181b', minWidth: 64, textAlign: 'right' as const },
+  cartRowTax:     { fontSize: 11, color: '#71717a', paddingLeft: 2 },
+  taxBadgeActive: { fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer', fontFamily: 'inherit' },
+  taxBadgeExempt: { fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 5, border: '1px solid #e4e4e7', background: '#f4f4f5', color: '#a1a1aa', cursor: 'pointer', fontFamily: 'inherit' },
+  cartTotal:      { display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#f7f7f5' },
+  discountRow:    { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, padding: '8px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 },
+  discountLabel:  { fontSize: 13, fontWeight: 500, color: '#14532d' },
+  emptyCart:      { padding: '28px 0', textAlign: 'center', fontSize: 13, color: '#a1a1aa' },
   pendingBanner: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#EFF4FB', border: '1px solid #97BBE9', borderRadius: 10, padding: '12px 16px', marginBottom: 16 },
   pendingBannerLeft: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   pendingBannerText: { fontSize: 13, color: '#0d0d0d', whiteSpace: 'nowrap' as const },

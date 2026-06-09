@@ -37,6 +37,14 @@ type Customer = {
   cell?: string
 }
 
+type Employee = {
+  id: string
+  first_name: string
+  last_name: string
+  job_title: string
+  is_active: boolean
+}
+
 type CartItem = {
   id: string
   customer_id: string
@@ -49,6 +57,7 @@ type CartItem = {
   tax_rate: number
   discount_amount: number
   notes?: string
+  sales_rep_name?: string
   department: string
   status: string
   created_at: string
@@ -227,6 +236,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
   const [price, setPrice]                   = useState(defaultPrice.toString())
   const [taxRate, setTaxRate]               = useState(defaultTax)
   const [notes, setNotes]                   = useState('')
+  const [salesRepId, setSalesRepId]         = useState('')
   const [showDropdown, setShowDropdown]     = useState(false)
 
   const { data: customers = [] } = useQuery<Customer[]>({
@@ -234,6 +244,13 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
     queryFn: () => api.get('/customers/').then(r => r.data),
     staleTime: 1000 * 60 * 5,
   })
+
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['employees'],
+    queryFn: () => api.get('/employees/').then(r => r.data),
+    staleTime: 1000 * 60 * 5,
+  })
+  const activeEmployees = employees.filter(e => e.is_active)
 
   const matchedCustomers = useMemo(() => {
     if (!customerSearch.trim()) return []
@@ -267,6 +284,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
       discount_amount:   0,
       notes:             notes || null,
       department:        'sales',
+      sales_rep_id:      salesRepId || null,
     })
   }
 
@@ -365,6 +383,23 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Sales representative */}
+        <div style={s.field}>
+          <label style={s.label}>Sales Representative <span style={s.optional}>(for commission)</span></label>
+          <select
+            style={s.input}
+            value={salesRepId}
+            onChange={e => setSalesRepId(e.target.value)}
+          >
+            <option value="">— None —</option>
+            {activeEmployees.map(e => (
+              <option key={e.id} value={e.id}>
+                {e.first_name} {e.last_name} · {e.job_title}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Notes */}
@@ -469,7 +504,7 @@ function ActiveCartsTab() {
                     <div style={s.cartItemName}>{item.description}</div>
                     {item.notes && <div style={s.cartItemNotes}>{item.notes}</div>}
                     <div style={s.cartItemMeta}>
-                      {item.department} · {item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
+                      {item.sales_rep_name ? `Rep: ${item.sales_rep_name} · ` : ''}{item.tax_rate > 0 ? `${(item.tax_rate * 100).toFixed(3).replace(/\.?0+$/, '')}% tax` : 'Tax exempt'}
                     </div>
                   </div>
                   <div style={s.cartItemRight}>

@@ -569,6 +569,7 @@ class PosSaleCreate(BaseModel):
     notes: Optional[str] = None
     tax_rate: Decimal = Decimal("0")         # 0 = exempt, 0.045 = 4.5% flat, 0.08875 = 8.875% flat
     tax_amount_override: Optional[Decimal] = None  # custom dollar amount, bypasses rate calculation
+    discount_amount: Decimal = Decimal("0")  # flat dollar discount applied at checkout
     shipping_amount: Decimal = Decimal("0")
     shipping_address: Optional[str] = None
     items: List[PosSaleItemCreate] = []
@@ -588,6 +589,7 @@ class PosSaleResponse(BaseModel):
     balance_due: float
     tax_rate: float
     tax_amount: float
+    discount_amount: float
     shipping_amount: float
     shipping_address: Optional[str]
     items: List[PosSaleItemResponse] = []
@@ -983,6 +985,7 @@ class CartItemCreate(BaseModel):
     discount_amount: Decimal = Decimal("0")
     notes: Optional[str] = None
     department: str = "sales"
+    sales_rep_id: Optional[UUID] = None
 
 
 class CartItemUpdate(BaseModel):
@@ -1008,9 +1011,11 @@ class CartItemResponse(BaseModel):
     status: CartItemStatus
     created_at: datetime
     updated_at: datetime
+    sales_rep_id: Optional[UUID] = None
     # resolved from FK — convenience fields the frontend uses directly
     customer_name: Optional[str] = None
     inventory_item_name: Optional[str] = None
+    sales_rep_name: Optional[str] = None
     # wig spec fields — populated for wig items only
     wig_serial: Optional[str] = None
     wig_brand: Optional[str] = None

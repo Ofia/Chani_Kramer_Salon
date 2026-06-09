@@ -33,6 +33,8 @@ def _build_response(item: PendingCartItem) -> CartItemResponse:
             data.wig_color  = item.inventory_item.color
             data.wig_size   = item.inventory_item.size
             data.wig_front  = item.inventory_item.front
+    if item.sales_rep:
+        data.sales_rep_name = f"{item.sales_rep.first_name} {item.sales_rep.last_name}"
     return data
 
 
@@ -64,6 +66,7 @@ def add_cart_item(
         discount_amount=payload.discount_amount,
         notes=payload.notes,
         department=payload.department,
+        sales_rep_id=payload.sales_rep_id,
         created_by=current_user.id,
     )
     db.add(item)
