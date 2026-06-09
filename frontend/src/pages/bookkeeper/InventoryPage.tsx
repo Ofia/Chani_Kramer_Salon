@@ -16,6 +16,7 @@ import { api } from '../../lib/api'
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type ItemType = 'wig' | 'product'
+type Tab      = 'wig' | 'product' | 'sold'
 
 type WigStatus =
   | 'in_stock' | 'sold' | 'on_service'
@@ -48,6 +49,14 @@ interface InventoryItem {
   wig_status: WigStatus | null
   supplier: string | null
   arrival_date: string | null
+  // sale fields (populated when wig is sold)
+  customer_name: string | null
+  customer_phone: string | null
+  total_price: number | null
+  amount_paid: number | null
+  sale_status: string | null   // 'ordered' | 'ready' | 'paid_in_full'
+  order_date: string | null
+  pickup_date: string | null
 }
 
 interface InventoryEvent {
@@ -132,7 +141,7 @@ function wigLabel(w: InventoryItem) {
 export default function InventoryPage() {
   const qc = useQueryClient()
 
-  const [tab, setTab] = useState<ItemType>('wig')
+  const [tab, setTab] = useState<Tab>('wig')
   const [statusFilter, setStatusFilter] = useState<WigStatus | ''>('')
   const [brandFilter, setBrandFilter] = useState('')
 
@@ -150,8 +159,12 @@ export default function InventoryPage() {
   const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['inventory', tab, statusFilter, brandFilter],
     queryFn: () => {
-      const params = new URLSearchParams({ item_type: tab })
-      if (statusFilter) params.set('wig_status', statusFilter)
+      const params = new URLSearchParams({ item_type: tab === 'sold' ? 'wig' : tab })
+      if (tab === 'sold') {
+        params.set('wig_status', 'sold')
+      } else {
+        if (statusFilter) params.set('wig_status', statusFilter)
+      }
       if (brandFilter) params.set('brand', brandFilter)
       return api.get(`/inventory/?${params}`).then(r => Array.isArray(r.data) ? r.data : [])
     },
@@ -213,14 +226,14 @@ export default function InventoryPage() {
 
       {/* Tabs */}
       <div style={s.tabBar}>
-        {(['wig', 'product'] as ItemType[]).map(t => (
+        {(['wig', 'product', 'sold'] as Tab[]).map(t => (
           <button key={t} style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }} onClick={() => setTab(t)}>
-            {t === 'wig' ? 'Wigs' : 'Products'}
+            {t === 'wig' ? 'Wigs' : t === 'product' ? 'Products' : 'Sold Items'}
           </button>
         ))}
       </div>
 
-      {/* Wig Filters */}
+      {/* Wig Filters (not shown on Sold tab — always filtered to sold) */}
       {tab === 'wig' && (
         <div style={s.filterBar}>
           <select
@@ -242,6 +255,18 @@ export default function InventoryPage() {
         </div>
       )}
 
+      {/* Brand filter on Sold tab */}
+      {tab === 'sold' && (
+        <div style={s.filterBar}>
+          <input
+            style={s.input}
+            placeholder="Filter by brand…"
+            value={brandFilter}
+            onChange={e => setBrandFilter(e.target.value)}
+          />
+        </div>
+      )}
+
       {/* Table */}
       {isLoading ? (
         <div style={s.empty}>Loading…</div>
@@ -250,6 +275,11 @@ export default function InventoryPage() {
           wigs={wigs}
           onRowClick={setDrawerWig}
           onDelete={(id, label) => setConfirmDelete({ id, label })}
+        />
+      ) : tab === 'sold' ? (
+        <SoldWigTable
+          wigs={items}
+          onRowClick={setDrawerWig}
         />
       ) : (
         <ProductTable
@@ -430,6 +460,79 @@ function WigTable({ wigs, onRowClick, onDelete }: {
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Sold Wig Table ─────────────────────────────────────────────────────────
+
+const SALE_STATUS_LABEL: Record<string, string> = {
+  ordered:      'Deposit',
+  ready:        'Ready',
+  paid_in_full: 'Paid in Full',
+}
+const SALE_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
+  ordered:      { bg: '#fef3c7', color: '#92400e' },
+  ready:        { bg: '#dbeafe', color: '#1e3a8a' },
+  paid_in_full: { bg: '#dcfce7', color: '#166534' },
+}
+
+function SoldWigTable({ wigs, onRowClick }: {
+  wigs: InventoryItem[]
+  onRowClick: (w: InventoryItem) => void
+}) {
+  if (wigs.length === 0) return <div style={s.empty}>No sold wigs.</div>
+
+  return (
+    <div style={s.tableWrap}>
+      <table style={s.table}>
+        <thead>
+          <tr>
+            {['Serial', 'Brand', 'Specs', 'Customer', 'Sale Price', 'Paid', 'Balance', 'Status', ''].map(h => (
+              <th key={h} style={s.th}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {wigs.map(w => {
+            const balance = (w.total_price ?? 0) - (w.amount_paid ?? 0)
+            const saleStatus = w.sale_status ?? 'ordered'
+            const statusStyle = SALE_STATUS_COLOR[saleStatus] ?? { bg: '#f3f4f6', color: '#374151' }
+            return (
+              <tr key={w.id} style={s.tr} onClick={() => onRowClick(w)}>
+                <td style={s.td}><span style={s.serial}>{w.daysmart_serial ?? '—'}</span></td>
+                <td style={s.td}>{w.brand ?? '—'}</td>
+                <td style={s.td}>
+                  <span style={s.specs}>
+                    {[w.length, w.color, w.size, w.front].filter(Boolean).join(' · ') || '—'}
+                  </span>
+                </td>
+                <td style={s.td}>
+                  <div style={{ fontWeight: 500 }}>{w.customer_name ?? '—'}</div>
+                  {w.customer_phone && <div style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)' }}>{w.customer_phone}</div>}
+                </td>
+                <td style={s.td}>{fmt(w.total_price)}</td>
+                <td style={s.td}>{fmt(w.amount_paid)}</td>
+                <td style={{ ...s.td, fontWeight: balance > 0 ? 600 : 400, color: balance > 0 ? '#c0392b' : 'rgba(13,13,13,0.4)' }}>
+                  {balance > 0 ? fmt(balance) : '—'}
+                </td>
+                <td style={s.td}>
+                  {w.sale_status && (
+                    <span style={{ ...s.badge, ...statusStyle }}>
+                      {SALE_STATUS_LABEL[saleStatus] ?? saleStatus}
+                    </span>
+                  )}
+                </td>
+                <td style={s.td}>
+                  <button style={s.rowBtn} onClick={() => onRowClick(w)}>
+                    <ChevronRight size={14} />
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
