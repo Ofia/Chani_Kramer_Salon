@@ -468,13 +468,6 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
           </div>
         </div>
 
-        {/* Notes */}
-        <div style={s.field}>
-          <label style={s.label}>Notes <span style={s.optional}>(optional)</span></label>
-          <textarea style={s.textarea} placeholder="Anything the front desk should know…"
-            rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
-        </div>
-
         {/* ── Service add-on (wigs only) ── */}
         {isWig && (
           <div style={s.serviceSection}>
@@ -518,6 +511,13 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
             )}
           </div>
         )}
+
+        {/* Notes */}
+        <div style={s.field}>
+          <label style={s.label}>Notes <span style={s.optional}>(optional)</span></label>
+          <textarea style={s.textarea} placeholder="Anything the front desk should know…"
+            rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
 
         {/* Summary */}
         <div style={s.panelSummary}>
