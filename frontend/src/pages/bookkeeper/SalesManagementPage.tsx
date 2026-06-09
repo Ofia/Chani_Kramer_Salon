@@ -306,9 +306,10 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
   const [notes, setNotes]                     = useState('')
 
   // Service add-on (wigs only)
-  const [includeService, setIncludeService]   = useState(false)
-  const [selectedService, setSelectedService] = useState<RepairService | null>(null)
-  const [serviceTaxRate, setServiceTaxRate]   = useState(TAX_RATE_SERVICE)
+  const [includeService, setIncludeService]     = useState(false)
+  const [selectedService, setSelectedService]   = useState<RepairService | null>(null)
+  const [serviceTaxRate, setServiceTaxRate]     = useState(TAX_RATE_SERVICE)
+  const [serviceCustomPrice, setServiceCustomPrice] = useState(0)
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ['customers'],
@@ -328,7 +329,6 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
   })
 
   const activeEmployees  = employees.filter(e => e.is_active)
-  const servicePrice     = selectedService?.default_price ?? 0
 
   const matchedCustomers = useMemo(() => {
     if (!customerSearch.trim()) return []
@@ -363,7 +363,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
           item_type:         'service',
           inventory_item_id: null,
           description:       selectedService.name,
-          price:             servicePrice,
+          price:             serviceCustomPrice,
           tax_rate:          serviceTaxRate,
           discount_amount:   0,
           notes:             null,
@@ -381,7 +381,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
   }
 
   const wigTotal     = defaultPrice * (1 + taxRate)
-  const serviceTotal = includeService ? servicePrice * (1 + serviceTaxRate) : 0
+  const serviceTotal = includeService ? serviceCustomPrice * (1 + serviceTaxRate) : 0
   const grandTotal   = wigTotal + serviceTotal
 
   return (
@@ -483,7 +483,11 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
                 <div style={s.field}>
                   <label style={s.label}>Service / Repair</label>
                   <select style={s.input} value={selectedService?.id ?? ''}
-                    onChange={e => setSelectedService(repairServices.find(r => r.id === e.target.value) ?? null)}>
+                    onChange={e => {
+                      const svc = repairServices.find(r => r.id === e.target.value) ?? null
+                      setSelectedService(svc)
+                      setServiceCustomPrice(svc?.default_price ?? 0)
+                    }}>
                     <option value="">— Select service —</option>
                     {repairServices.filter(r => r.is_active).map(r => (
                       <option key={r.id} value={r.id}>
@@ -491,6 +495,18 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
                       </option>
                     ))}
                   </select>
+                </div>
+                <div style={s.field}>
+                  <label style={s.label}>Service Price</label>
+                  <div style={s.inputPrefix}>
+                    <span style={s.prefix}>$</span>
+                    <input
+                      style={{ ...s.input, paddingLeft: 22 }}
+                      type="number" min={0} step={0.01}
+                      value={serviceCustomPrice}
+                      onChange={e => setServiceCustomPrice(parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
                 </div>
                 <div style={s.field}>
                   <label style={s.label}>Service Tax Rate</label>
@@ -532,11 +548,11 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
           <>
             <div style={s.panelSummary}>
               <span>Service — {selectedService.name}</span>
-              <span>${servicePrice.toFixed(2)}</span>
+              <span>${serviceCustomPrice.toFixed(2)}</span>
             </div>
             <div style={s.panelSummary}>
               <span>Service tax ({(serviceTaxRate * 100).toFixed(3).replace(/\.?0+$/, '')}%)</span>
-              <span>${(servicePrice * serviceTaxRate).toFixed(2)}</span>
+              <span>${(serviceCustomPrice * serviceTaxRate).toFixed(2)}</span>
             </div>
           </>
         )}
@@ -683,11 +699,51 @@ function CartEditPanel({
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
 
+  // Service add-on
+  const [includeService, setIncludeService]         = useState(false)
+  const [selectedService, setSelectedService]       = useState<RepairService | null>(null)
+  const [serviceTaxRate, setServiceTaxRate]         = useState(TAX_RATE_SERVICE)
+  const [serviceCustomPrice, setServiceCustomPrice] = useState(0)
+  const [addingService, setAddingService]           = useState(false)
+
   const { data: allInventory = [] } = useQuery<InventoryItem[]>({
     queryKey: ['inventory'],
     queryFn: () => api.get('/inventory/').then(r => r.data),
     staleTime: 0,
   })
+
+  const { data: repairServices = [] } = useQuery<RepairService[]>({
+    queryKey: ['repair-services'],
+    queryFn: () => api.get('/repair-services/').then(r => r.data),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  async function handleAddService() {
+    if (!selectedService) return
+    setAddingService(true)
+    try {
+      await api.post('/cart/', {
+        customer_id:       customerId,
+        item_type:         'service',
+        inventory_item_id: null,
+        description:       selectedService.name,
+        price:             serviceCustomPrice,
+        tax_rate:          serviceTaxRate,
+        discount_amount:   0,
+        notes:             null,
+        department:        'sales',
+        sales_rep_id:      null,
+      })
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+      setIncludeService(false)
+      setSelectedService(null)
+      setServiceCustomPrice(0)
+    } catch {
+      alert('Failed to add service. Please try again.')
+    } finally {
+      setAddingService(false)
+    }
+  }
 
   const searchResults = useMemo(() => {
     if (!search.trim()) return []
@@ -830,6 +886,79 @@ function CartEditPanel({
             })}
           </div>
         )}
+
+        {/* Service / Repair add-on */}
+        <div style={s.serviceSection}>
+          <button
+            style={s.serviceSectionToggle}
+            onClick={() => { setIncludeService(v => !v); setSelectedService(null); setServiceCustomPrice(0) }}
+          >
+            <span style={{ ...s.serviceSectionCheck, background: includeService ? '#212121' : 'transparent', borderColor: includeService ? '#212121' : 'rgba(13,13,13,0.25)' }}>
+              {includeService && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+            </span>
+            Add a service / repair
+          </button>
+
+          {includeService && (
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12, marginTop: 12 }}>
+              <div style={s.field}>
+                <label style={s.label}>Service / Repair</label>
+                <select
+                  style={s.input}
+                  value={selectedService?.id ?? ''}
+                  onChange={e => {
+                    const svc = repairServices.find(r => r.id === e.target.value) ?? null
+                    setSelectedService(svc)
+                    setServiceCustomPrice(svc?.default_price ?? 0)
+                  }}
+                >
+                  <option value="">— Select service —</option>
+                  {repairServices.filter(r => r.is_active).map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}{r.default_price != null ? ` — $${r.default_price.toFixed(2)}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Price</label>
+                <div style={s.inputPrefix}>
+                  <span style={s.prefix}>$</span>
+                  <input
+                    style={{ ...s.input, paddingLeft: 22 }}
+                    type="number" min={0} step={0.01}
+                    value={serviceCustomPrice}
+                    onChange={e => setServiceCustomPrice(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+              <div style={s.field}>
+                <label style={s.label}>Tax Rate</label>
+                <div style={s.taxBtns}>
+                  {[
+                    { label: 'None (0%)',      value: TAX_RATE_NONE    },
+                    { label: 'Service (4.5%)', value: TAX_RATE_SERVICE },
+                  ].map(opt => (
+                    <button
+                      key={opt.label}
+                      style={{ ...s.taxBtn, ...(serviceTaxRate === opt.value ? s.taxBtnActive : {}) }}
+                      onClick={() => setServiceTaxRate(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                style={{ ...s.submitBtn, opacity: addingService || !selectedService ? 0.6 : 1 }}
+                onClick={handleAddService}
+                disabled={addingService || !selectedService}
+              >
+                {addingService ? 'Adding…' : `Add Service — $${(serviceCustomPrice * (1 + serviceTaxRate)).toFixed(2)}`}
+              </button>
+            </div>
+          )}
+        </div>
 
         <div style={{ ...s.cartCardFooter, marginTop: 'auto', borderTop: BORDER }}>
           Customer checks out at the <strong>Front Desk → Point of Sale</strong>
