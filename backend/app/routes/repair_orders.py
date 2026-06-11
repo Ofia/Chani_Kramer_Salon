@@ -18,6 +18,7 @@ from app.models.models import (
     RepairOrder, RepairOrderStatus,
     PendingCartItem, CartItemType, CartItemStatus,
     Customer, InventoryItem, Provider,
+    InventoryEvent, InventoryEventType,
 )
 from app.schemas.schemas import (
     RepairOrderCreate, RepairOrderUpdate, RepairOrderResponse,
@@ -80,6 +81,27 @@ def create_repair_order(
         created_by=current_user.id,
     )
     db.add(order)
+    db.flush()  # get order.id before committing
+
+    # Log a service event on the wig's history
+    if payload.inventory_item_id:
+        customer_label = ""
+        if payload.customer_id:
+            customer = db.get(Customer, payload.customer_id)
+            if customer:
+                customer_label = f" for {customer.first_name} {customer.last_name}"
+        elif payload.customer_name:
+            customer_label = f" for {payload.customer_name}"
+
+        event = InventoryEvent(
+            inventory_item_id=payload.inventory_item_id,
+            event_type=InventoryEventType.service,
+            customer_id=payload.customer_id,
+            description=f"Repair order opened{customer_label}" + (f" — {payload.notes}" if payload.notes else ""),
+            created_by=current_user.id,
+        )
+        db.add(event)
+
     db.commit()
     db.refresh(order)
     return _build_response(order, db)
