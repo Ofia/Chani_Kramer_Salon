@@ -25,7 +25,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~020~~ | ~~`backend/migrations/020_seed_sary_provider.sql`~~ | ✅ Run (2026-06-11) |
 | ~~021~~ | ~~`backend/migrations/021_provider_contact_and_wig_models.sql`~~ | ✅ Run (2026-06-11) |
 | ~~022~~ | ~~`backend/migrations/022_seed_provider_wig_models.sql`~~ | ✅ Run (2026-06-11) |
-| 023 | `backend/migrations/023_repair_orders.sql` | ❓ Run — repair_orders table + repair_order_id on pending_cart_items |
+| ~~023~~ | ~~`backend/migrations/023_repair_orders.sql`~~ | ✅ Run (2026-06-11) |
 
 
 ## Color Palette
@@ -279,7 +279,7 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] All business logic (tithes, sales tax, wig tax deferral, wig_status lifecycle) automated
 - [x] Overview payment tab F1 bug fixed (commit 9569c84)
 - [x] Invoice import (P1) — upload PDF invoice → parse → markup lookup from provider rules → preview table → bulk add to inventory (commit bed8d2a)
-- [ ] Repairs management page (L4) — consult + price + cart; wig travels to repairs; customer pays at Front Desk
+- [x] Repairs management page (L4) — create order (customer + wig + services), status tracking, wig history logged, cart integration (commit b2a9f07)
 - [ ] Edit sale/receipt (task #8)
 - [ ] Bank statement auto-import (task #14)
 - [ ] Persist unsaved form data on navigation (task #15)
