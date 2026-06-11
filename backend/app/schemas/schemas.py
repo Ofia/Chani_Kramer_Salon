@@ -892,7 +892,7 @@ class WeekHoursSummaryItem(BaseModel):
 
 class WigModel(BaseModel):
     name: str
-    markup_pct: float = 0.0
+    markup_usd: float = 0.0
 
 
 class ProviderCreate(BaseModel):

@@ -16,7 +16,7 @@ type ProviderType = 'wig_company' | 'in_house_repairs' | 'outside_color' | 'in_h
 
 interface WigModel {
   name: string
-  markup_pct: number
+  markup_usd: number
 }
 
 interface Provider {
@@ -275,13 +275,13 @@ function WigModelsEditor({ provider, onSaved }: { provider: Provider; onSaved: (
 
   function update(idx: number, field: keyof WigModel, value: string) {
     setModels(prev => prev.map((m, i) =>
-      i === idx ? { ...m, [field]: field === 'markup_pct' ? parseFloat(value) || 0 : value } : m
+      i === idx ? { ...m, [field]: field === 'markup_usd' ? parseFloat(value) || 0 : value } : m
     ))
     setDirty(true)
   }
 
   function addRow() {
-    setModels(prev => [...prev, { name: '', markup_pct: 0 }])
+    setModels(prev => [...prev, { name: '', markup_usd: 0 }])
     setDirty(true)
   }
 
@@ -316,7 +316,7 @@ function WigModelsEditor({ provider, onSaved }: { provider: Provider; onSaved: (
         <div style={s.modelsGrid}>
           <div style={s.modelsGridHeader}>
             <span>Model Name</span>
-            <span>Markup %</span>
+            <span>Markup ($)</span>
             <span />
           </div>
           {models.map((m, i) => (
@@ -328,15 +328,15 @@ function WigModelsEditor({ provider, onSaved }: { provider: Provider; onSaved: (
                 onChange={e => update(i, 'name', e.target.value)}
               />
               <div style={s.markupWrap}>
+                <span style={s.dollarSymbol}>$</span>
                 <input
-                  style={{ ...s.modelInput, textAlign: 'right' }}
+                  style={{ ...s.modelInput, paddingLeft: 22, textAlign: 'right' }}
                   type="number"
                   min={0}
-                  step={0.1}
-                  value={m.markup_pct}
-                  onChange={e => update(i, 'markup_pct', e.target.value)}
+                  step={0.01}
+                  value={m.markup_usd}
+                  onChange={e => update(i, 'markup_usd', e.target.value)}
                 />
-                <span style={s.pctSymbol}>%</span>
               </div>
               <button style={s.removeModelBtn} onClick={() => removeRow(i)} title="Remove">
                 <X size={13} />
@@ -544,7 +544,7 @@ const s: Record<string, React.CSSProperties> = {
   modelRow:         { display: 'grid', gridTemplateColumns: '1fr 120px 32px', gap: 8, alignItems: 'center' },
   modelInput:       { padding: '7px 10px', border: BORDER, borderRadius: 7, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const, fontFamily: 'inherit', background: '#fff' },
   markupWrap:       { position: 'relative', display: 'flex', alignItems: 'center' },
-  pctSymbol:        { position: 'absolute', right: 10, fontSize: 13, color: 'rgba(13,13,13,0.4)', pointerEvents: 'none' as const },
+  dollarSymbol:     { position: 'absolute', left: 9, fontSize: 13, color: 'rgba(13,13,13,0.4)', pointerEvents: 'none' as const, zIndex: 1 },
   removeModelBtn:   { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: BORDER, borderRadius: 6, cursor: 'pointer', width: 32, height: 32, color: 'rgba(13,13,13,0.4)' },
   addModelBtn:      { display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: BORDER, borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.55)' },
   saveModelsBtn:    { background: '#212121', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },

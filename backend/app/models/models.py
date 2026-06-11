@@ -619,7 +619,7 @@ class Provider(Base):
     email         = Column(String)
     phone         = Column(String)
     address       = Column(Text)
-    # List of {name: str, markup_pct: float} — wig model markups per provider
+    # List of {name: str, markup_usd: float} — wig model markups per provider (flat $ amount)
     wig_models    = Column(JSONB, nullable=False, default=list)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
