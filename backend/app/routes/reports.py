@@ -159,12 +159,16 @@ def get_report(
 
     # ── 5. Payment method totals ──────────────────────────
     #
-    # Strategy to avoid double-counting:
-    #   A) ALL WigPayments in the date range (deposits, partials, finals —
-    #      regardless of whether they came through POS or direct entry).
-    #   B) PosSalePayments ONLY for sales that contain NO wig line items
-    #      (i.e. pure service / product sales). Wig-containing POS sales
-    #      are already covered by WigPayment records.
+    # Strategy (no double-counting):
+    #   A) ALL PosSalePayments from POS sales in the range — this captures every
+    #      dollar that came through the register: services, products, wig deposits,
+    #      and wig balance payments. The POS always records the real cash flow.
+    #   B) WigPayments where pos_sale_id IS NULL — manual entries made outside
+    #      the POS (e.g. direct wig payment recorded separately).
+    #
+    # Why NOT "all WigPayments": wig deposits and balance payments each create
+    # BOTH a WigPayment AND a PosSalePayment. Counting both leads to double-counting.
+    # The PosSalePayment is the authoritative cash-flow record for anything via POS.
     #
     cash = cc = quickpay = check = zelle = 0.0
     tax_collected = 0.0
@@ -182,35 +186,35 @@ def get_report(
         elif method == PaymentMethod.zelle:
             zelle += amt
 
-    # A) All wig payments in the period
-    all_wig_pmts = (
-        db.query(WigPayment)
-        .filter(
-            WigPayment.payment_date >= start,
-            WigPayment.payment_date <= end,
-        )
-        .all()
-    )
-    for wp in all_wig_pmts:
-        _add_by_method(wp.payment_method, float(wp.amount))
-
-    # B) Non-wig POS sales — count cash flow + immediate tax (services/products)
-    #    Wig tax is deferred: recognized on pickup_date (paid_in_full), not sale date.
+    # A) All PosSalePayments — real cash flow through the register
     for sale in pos_sales:
+        for pmt in sale.payments:
+            _add_by_method(pmt.payment_method, float(pmt.amount))
+
+        # Tax: wig item tax is deferred to pickup_date — count only non-wig tax now.
         has_wig = any(item.item_type == PosItemType.wig for item in sale.items)
         if has_wig:
-            # Count only the non-wig portion of this sale's tax immediately.
-            # Wig item taxes are counted below via sale_tax_amount on pickup_date.
             non_wig_tax = sum(
                 float(item.tax_amount)
                 for item in sale.items
                 if item.item_type != PosItemType.wig
             )
             tax_collected += non_wig_tax
-            continue
-        tax_collected += float(sale.tax_amount)
-        for pmt in sale.payments:
-            _add_by_method(pmt.payment_method, float(pmt.amount))
+        else:
+            tax_collected += float(sale.tax_amount)
+
+    # B) Direct WigPayments not linked to a POS sale (manual entries)
+    direct_wig_pmts = (
+        db.query(WigPayment)
+        .filter(
+            WigPayment.payment_date >= start,
+            WigPayment.payment_date <= end,
+            WigPayment.pos_sale_id.is_(None),
+        )
+        .all()
+    )
+    for wp in direct_wig_pmts:
+        _add_by_method(wp.payment_method, float(wp.amount))
 
     # C) Wig tax recognized on pickup_date (same wigs already counted for revenue)
     wig_tax = sum(float(w.sale_tax_amount or 0) for w in wig_sales_items)
