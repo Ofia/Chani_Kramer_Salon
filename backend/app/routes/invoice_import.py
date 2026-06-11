@@ -122,7 +122,11 @@ def _extract_color(description: str) -> str:
 
 
 def _parse_invoice_lines(text: str) -> list[dict]:
-    """Extract line items from a single page of invoice text."""
+    """Extract line items from a single page of invoice text.
+
+    The description always starts with a size code like '11M' or '18L'.
+    We append that code to the serial so inventory reads 'RINA55361-11M'.
+    """
     items = []
     for line in text.splitlines():
         m = _LINE_RE.match(line.strip())
@@ -130,6 +134,10 @@ def _parse_invoice_lines(text: str) -> list[dict]:
             continue
         serial, description, _qty, price_str = m.group(1), m.group(2), m.group(3), m.group(4)
         cost = float(price_str.replace(',', ''))
+        # Append size code (e.g. "11M", "18L") from start of description to serial
+        size_m = re.match(r'^(\d+[ML]?)\s', description.strip(), re.IGNORECASE)
+        if size_m:
+            serial = f"{serial}-{size_m.group(1).upper()}"
         items.append({"serial": serial, "description": description, "cost": cost})
     return items
 
