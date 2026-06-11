@@ -823,120 +823,149 @@ function ProductForm({ item, onClose, onSaved }: {
   )
 }
 
-// ── File Import Modal ──────────────────────────────────────────────────────
+// ── Invoice Import Modal ───────────────────────────────────────────────────
 
-type ImportRow = {
+type PreviewRow = {
   serial: string
-  brand: string
+  provider_name: string | null
+  provider_id: string | null
+  model_type: string
+  length: string | null
   color: string
-  length: string
-  size: string
-  cost_price: string
+  description: string
+  cost: number
+  markup_usd: number | null
+  retail: number | null
+  already_exists: boolean
 }
 
-const IMPORT_COLS: (keyof ImportRow)[] = ['serial', 'brand', 'color', 'length', 'size', 'cost_price']
-const IMPORT_HEADERS = ['Serial', 'Brand', 'Color', 'Length', 'Size', 'Cost $']
+type EditableRow = PreviewRow & {
+  markup_edit: string
+  retail_edit: string
+  selected: boolean
+}
 
 function FileImportModal({ onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
   const [file, setFile] = useState<File | null>(null)
-  const [rows, setRows] = useState<ImportRow[]>([])
+  const [rows, setRows] = useState<EditableRow[]>([])
   const [parseError, setParseError] = useState('')
-  const [importing, setImporting] = useState(false)
-  const [results, setResults] = useState<{ ok: number; failed: number } | null>(null)
+  const [loading, setLoading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null)
 
   function handleFile(f: File) {
-    setFile(f)
-    setParseError('')
-    setRows([])
-    setResults(null)
-
-    const ext = f.name.toLowerCase().split('.').pop()
-    if (ext !== 'csv') {
-      setParseError(`${ext?.toUpperCase()} parsing is not supported in-browser yet. Please export your data as a CSV file.`)
+    if (!f.name.toLowerCase().endsWith('.pdf')) {
+      setParseError('Only PDF invoices are supported. Please upload the delivery invoice PDF.')
       return
     }
+    setFile(f)
+    setParseError('')
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const text = e.target?.result as string
-      const lines = text.trim().split('\n').filter(l => l.trim())
-      if (lines.length < 2) {
-        setParseError('CSV must have a header row and at least one data row.')
-        return
-      }
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, ''))
-      const parsed: ImportRow[] = lines.slice(1).map(line => {
-        const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-        const row: ImportRow = { serial: '', brand: '', color: '', length: '', size: '', cost_price: '' }
-        IMPORT_COLS.forEach(k => {
-          const idx = headers.indexOf(k)
-          row[k] = idx >= 0 ? (cols[idx] ?? '') : ''
-        })
-        return row
-      })
-      setRows(parsed)
-    }
-    reader.readAsText(f)
+    // actual parsing happens server-side; this just stores the file
   }
 
-  function updateRow(i: number, key: keyof ImportRow, val: string) {
-    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [key]: val } : r))
+  async function parseInvoice() {
+    if (!file) return
+    setLoading(true)
+    setParseError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await api.post('/inventory/invoice-preview', formData)
+      const preview: PreviewRow[] = res.data
+      setRows(preview.map(row => ({
+        ...row,
+        markup_edit: row.markup_usd != null ? String(row.markup_usd) : '',
+        retail_edit: row.retail != null ? String(row.retail) : '',
+        selected: !row.already_exists,
+      })))
+      setStep('preview')
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } }
+      setParseError(e.response?.data?.detail || 'Failed to parse the invoice. Please check the file.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function updateMarkup(i: number, val: string) {
+    setRows(rs => rs.map((r, idx) => {
+      if (idx !== i) return r
+      const markup = parseFloat(val)
+      const retail = !isNaN(markup) ? (r.cost + markup).toFixed(2) : r.retail_edit
+      return { ...r, markup_edit: val, retail_edit: retail }
+    }))
+  }
+
+  function updateRetail(i: number, val: string) {
+    setRows(rs => rs.map((r, idx) => {
+      if (idx !== i) return r
+      const retail = parseFloat(val)
+      const markup = !isNaN(retail) ? (retail - r.cost).toFixed(2) : r.markup_edit
+      return { ...r, retail_edit: val, markup_edit: markup }
+    }))
+  }
+
+  function toggleRow(i: number) {
+    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, selected: !r.selected } : r))
   }
 
   async function confirm() {
-    setImporting(true)
-    let ok = 0, failed = 0
-    for (const row of rows) {
-      try {
-        await api.post('/inventory/', {
-          item_type: 'wig',
-          name: [row.brand, row.length, row.color].filter(Boolean).join(' ') || 'Wig',
-          daysmart_serial: row.serial || null,
-          brand: row.brand || null,
-          color: row.color || null,
-          length: row.length || null,
-          size: row.size || null,
-          cost_price: row.cost_price ? parseFloat(row.cost_price) : null,
-          wig_status: 'in_stock',
-        })
-        ok++
-      } catch {
-        failed++
-      }
+    const toCreate = rows.filter(r => r.selected && !r.already_exists)
+    if (toCreate.length === 0) return
+    setLoading(true)
+    try {
+      const payload = toCreate.map(r => ({
+        serial: r.serial,
+        provider_id: r.provider_id,
+        provider_name: r.provider_name,
+        model_type: r.model_type,
+        length: r.length,
+        color: r.color,
+        cost: r.cost,
+        retail: parseFloat(r.retail_edit) || r.cost,
+      }))
+      const res = await api.post('/inventory/invoice-confirm', payload)
+      setResult(res.data)
+      setStep('done')
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } }
+      setParseError(e.response?.data?.detail || 'Failed to create items.')
+    } finally {
+      setLoading(false)
     }
-    setImporting(false)
-    setResults({ ok, failed })
   }
+
+  const selectedCount = rows.filter(r => r.selected && !r.already_exists).length
+  const existingCount = rows.filter(r => r.already_exists).length
 
   return (
     <div style={s.modalOverlay} onClick={onClose}>
-      <div style={{ ...s.modal, maxWidth: rows.length > 0 ? 720 : 480 }} onClick={e => e.stopPropagation()}>
+      <div
+        style={{
+          ...s.modal,
+          maxWidth: step === 'preview' ? '90vw' : 500,
+          width: step === 'preview' ? '90vw' : '100%',
+          maxHeight: '92vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         <div style={s.modalHeader}>
-          <span style={s.modalTitle}>Add from File</span>
+          <span style={s.modalTitle}>Import Invoice</span>
           <button style={s.iconBtnSm} onClick={onClose}><X size={16} /></button>
         </div>
-        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {results ? (
-            /* Done state */
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>Import complete</p>
-              <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', marginTop: 6 }}>
-                {results.ok} wig{results.ok !== 1 ? 's' : ''} added
-                {results.failed > 0 ? `, ${results.failed} failed` : ''}.
-              </p>
-              <div style={{ ...s.modalFooter, paddingTop: 16 }}>
-                {results.failed > 0 && <button style={s.cancelBtn} onClick={() => setResults(null)}>Try Again</button>}
-                <button style={s.primaryBtn} onClick={onSaved}>Done</button>
-              </div>
-            </div>
+        <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', flex: 1 }}>
 
-          ) : rows.length === 0 ? (
-            /* Upload state */
+          {/* ── Upload step ── */}
+          {step === 'upload' && (
             <>
               <div
                 style={{
@@ -951,67 +980,143 @@ function FileImportModal({ onClose, onSaved }: {
                 onDragOver={e => { e.preventDefault(); setDragging(true) }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]) }}
-                onClick={() => document.getElementById('file-import-input')?.click()}
+                onClick={() => document.getElementById('invoice-file-input')?.click()}
               >
                 <Upload size={24} color="rgba(13,13,13,0.35)" style={{ marginBottom: 8 }} />
-                <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>Drop a file here or click to browse</p>
-                <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)', marginTop: 4, marginBottom: 0 }}>CSV, DOC, PDF accepted</p>
+                <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
+                  Drop a delivery invoice PDF here or click to browse
+                </p>
+                <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)', marginTop: 4, marginBottom: 0 }}>
+                  PDF only — Sary/Rina combined invoices supported
+                </p>
                 <input
-                  id="file-import-input"
+                  id="invoice-file-input"
                   type="file"
-                  accept=".csv,.doc,.docx,.pdf"
+                  accept=".pdf"
                   style={{ display: 'none' }}
                   onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
                 />
               </div>
               {file && <p style={{ fontSize: 12, color: 'rgba(13,13,13,0.5)', margin: 0 }}>{file.name}</p>}
               {parseError && <div style={s.errMsg}>{parseError}</div>}
-              <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)', margin: 0 }}>
-                CSV columns: <code>serial, brand, color, length, size, cost_price</code>
-              </p>
               <div style={s.modalFooter}>
                 <button style={s.cancelBtn} onClick={onClose}>Cancel</button>
+                <button style={s.primaryBtn} onClick={parseInvoice} disabled={!file || loading}>
+                  {loading ? 'Parsing…' : 'Parse Invoice'}
+                </button>
               </div>
             </>
+          )}
 
-          ) : (
-            /* Review state */
+          {/* ── Preview step ── */}
+          {step === 'preview' && (
             <>
-              <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
-                Review {rows.length} row{rows.length !== 1 ? 's' : ''} before importing. Edit any cell inline.
-              </p>
-              <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
+                  {rows.length} item{rows.length !== 1 ? 's' : ''} found
+                  {existingCount > 0 && ` · ${existingCount} already in inventory`}
+                </p>
+                <span style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)' }}>
+                  Edit markup or retail inline. Retail = Cost + Markup.
+                </span>
+              </div>
+
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(92vh - 230px)' }}>
                 <table style={{ ...s.table, fontSize: 12 }}>
                   <thead>
                     <tr>
-                      {IMPORT_HEADERS.map(h => <th key={h} style={s.th}>{h}</th>)}
+                      <th style={s.th}></th>
+                      <th style={s.th}>Serial</th>
+                      <th style={s.th}>Provider</th>
+                      <th style={s.th}>Model</th>
+                      <th style={s.th}>Length</th>
+                      <th style={s.th}>Color</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Cost</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Markup</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Retail</th>
+                      <th style={s.th}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((row, i) => (
-                      <tr key={i} style={s.tr}>
-                        {IMPORT_COLS.map(k => (
-                          <td key={k} style={s.td}>
+                      <tr key={row.serial} style={{ ...s.tr, opacity: row.already_exists ? 0.45 : 1 }}>
+                        <td style={s.td}>
+                          <input
+                            type="checkbox"
+                            checked={row.selected}
+                            disabled={row.already_exists}
+                            onChange={() => toggleRow(i)}
+                          />
+                        </td>
+                        <td style={s.td}><span style={s.serial}>{row.serial}</span></td>
+                        <td style={s.td}>
+                          {row.provider_name
+                            ?? <span style={{ color: '#f59e0b', fontWeight: 600 }}>Unknown</span>}
+                        </td>
+                        <td style={s.td}>{row.model_type}</td>
+                        <td style={s.td}>{row.length ?? '—'}</td>
+                        <td style={s.td}>{row.color || '—'}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>${row.cost.toLocaleString()}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          {row.already_exists ? '—' : (
                             <input
-                              style={{ ...s.fi, padding: '4px 6px', fontSize: 12 }}
-                              value={row[k]}
-                              onChange={e => updateRow(i, k, e.target.value)}
+                              style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 70, textAlign: 'right' }}
+                              value={row.markup_edit}
+                              onChange={e => updateMarkup(i, e.target.value)}
                             />
-                          </td>
-                        ))}
+                          )}
+                        </td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          {row.already_exists ? '—' : (
+                            <input
+                              style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 80, textAlign: 'right', color: '#22c55e', fontWeight: 600 }}
+                              value={row.retail_edit}
+                              onChange={e => updateRetail(i, e.target.value)}
+                            />
+                          )}
+                        </td>
+                        <td style={s.td}>
+                          {row.already_exists
+                            ? <span style={{ ...s.badge, background: '#f3f4f6', color: '#6b7280' }}>In inventory</span>
+                            : row.markup_usd == null
+                              ? <span style={{ ...s.badge, background: '#fef3c7', color: '#92400e' }}>No rule</span>
+                              : <span style={{ ...s.badge, background: '#dcfce7', color: '#166534' }}>Ready</span>
+                          }
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {parseError && <div style={s.errMsg}>{parseError}</div>}
               <div style={s.modalFooter}>
-                <button style={s.cancelBtn} onClick={() => { setRows([]); setFile(null) }}>Back</button>
-                <button style={s.primaryBtn} onClick={confirm} disabled={importing}>
-                  {importing ? 'Importing…' : `Import ${rows.length} Wig${rows.length !== 1 ? 's' : ''}`}
+                <button style={s.cancelBtn} onClick={() => { setStep('upload'); setRows([]); setFile(null) }}>Back</button>
+                <button style={s.primaryBtn} onClick={confirm} disabled={selectedCount === 0 || loading}>
+                  {loading ? 'Adding…' : `Add ${selectedCount} Wig${selectedCount !== 1 ? 's' : ''} to Inventory`}
                 </button>
               </div>
             </>
           )}
+
+          {/* ── Done step ── */}
+          {step === 'done' && result && (
+            <>
+              <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>Import complete</p>
+              <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', marginTop: 6 }}>
+                {result.created} wig{result.created !== 1 ? 's' : ''} added to inventory
+                {result.skipped > 0 ? ` · ${result.skipped} skipped (already exist)` : ''}
+                {result.errors.length > 0 ? ` · ${result.errors.length} error${result.errors.length !== 1 ? 's' : ''}` : ''}.
+              </p>
+              {result.errors.length > 0 && (
+                <div style={s.errMsg}>{result.errors.map((e, i) => <div key={i}>{e}</div>)}</div>
+              )}
+              <div style={s.modalFooter}>
+                <button style={s.primaryBtn} onClick={onSaved}>Done</button>
+              </div>
+            </>
+          )}
+
         </div>
       </div>
     </div>
