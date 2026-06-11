@@ -14,9 +14,15 @@ import { api } from '../../lib/api'
 
 type ProviderType = 'wig_company' | 'in_house_repairs' | 'outside_color' | 'in_house_color'
 
+interface WigModelLength {
+  length: string
+  cost: number
+}
+
 interface WigModel {
   name: string
   markup_usd: number
+  lengths: WigModelLength[]
 }
 
 interface Provider {
@@ -267,27 +273,56 @@ function ContactField({ label, value, span }: { label: string; value: string | n
 // ── Wig Models Inline Editor ───────────────────────────────────────────────
 
 function WigModelsEditor({ provider, onSaved }: { provider: Provider; onSaved: () => void }) {
-  const [models, setModels] = useState<WigModel[]>(
-    provider.wig_models.length > 0 ? provider.wig_models : []
-  )
-  const [saving, setSaving] = useState(false)
-  const [dirty, setDirty]   = useState(false)
+  const [models, setModels]       = useState<WigModel[]>(provider.wig_models ?? [])
+  const [expandedModel, setExpandedModel] = useState<number | null>(null)
+  const [saving, setSaving]       = useState(false)
+  const [dirty, setDirty]         = useState(false)
 
-  function update(idx: number, field: keyof WigModel, value: string) {
+  function mark() { setDirty(true) }
+
+  function updateModelField(idx: number, field: 'name' | 'markup_usd', value: string) {
     setModels(prev => prev.map((m, i) =>
       i === idx ? { ...m, [field]: field === 'markup_usd' ? parseFloat(value) || 0 : value } : m
     ))
-    setDirty(true)
+    mark()
   }
 
-  function addRow() {
-    setModels(prev => [...prev, { name: '', markup_usd: 0 }])
-    setDirty(true)
+  function addModel() {
+    setModels(prev => [...prev, { name: '', markup_usd: 0, lengths: [] }])
+    setExpandedModel(models.length)
+    mark()
   }
 
-  function removeRow(idx: number) {
+  function removeModel(idx: number) {
     setModels(prev => prev.filter((_, i) => i !== idx))
-    setDirty(true)
+    if (expandedModel === idx) setExpandedModel(null)
+    mark()
+  }
+
+  function addLength(modelIdx: number) {
+    setModels(prev => prev.map((m, i) =>
+      i === modelIdx ? { ...m, lengths: [...(m.lengths ?? []), { length: '', cost: 0 }] } : m
+    ))
+    mark()
+  }
+
+  function updateLength(modelIdx: number, lenIdx: number, field: keyof WigModelLength, value: string) {
+    setModels(prev => prev.map((m, i) =>
+      i === modelIdx ? {
+        ...m,
+        lengths: (m.lengths ?? []).map((l, j) =>
+          j === lenIdx ? { ...l, [field]: field === 'cost' ? parseFloat(value) || 0 : value } : l
+        ),
+      } : m
+    ))
+    mark()
+  }
+
+  function removeLength(modelIdx: number, lenIdx: number) {
+    setModels(prev => prev.map((m, i) =>
+      i === modelIdx ? { ...m, lengths: (m.lengths ?? []).filter((_, j) => j !== lenIdx) } : m
+    ))
+    mark()
   }
 
   async function save() {
@@ -301,11 +336,13 @@ function WigModelsEditor({ provider, onSaved }: { provider: Provider; onSaved: (
     }
   }
 
+  const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0 })
+
   return (
     <div style={s.modelsSection}>
       <div style={s.modelsSectionHeader}>
-        <span style={s.sectionLabel}>Wig Models & Markups</span>
-        <button style={s.addModelBtn} onClick={addRow}>
+        <span style={s.sectionLabel}>Wig Models & Pricing Rules</span>
+        <button style={s.addModelBtn} onClick={addModel}>
           <Plus size={12} /> Add Model
         </button>
       </div>
@@ -313,43 +350,98 @@ function WigModelsEditor({ provider, onSaved }: { provider: Provider; onSaved: (
       {models.length === 0 ? (
         <div style={s.modelsEmpty}>No models added yet.</div>
       ) : (
-        <div style={s.modelsGrid}>
-          <div style={s.modelsGridHeader}>
-            <span>Model Name</span>
-            <span>Markup ($)</span>
-            <span />
-          </div>
-          {models.map((m, i) => (
-            <div key={i} style={s.modelRow}>
-              <input
-                style={s.modelInput}
-                value={m.name}
-                placeholder="e.g. Elite, Skin, Fall…"
-                onChange={e => update(i, 'name', e.target.value)}
-              />
-              <div style={s.markupWrap}>
-                <span style={s.dollarSymbol}>$</span>
-                <input
-                  style={{ ...s.modelInput, paddingLeft: 22, textAlign: 'right' }}
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={m.markup_usd}
-                  onChange={e => update(i, 'markup_usd', e.target.value)}
-                />
+        <div style={s.modelsList}>
+          {models.map((m, mi) => (
+            <div key={mi} style={s.modelCard}>
+              {/* Model header row */}
+              <div style={s.modelCardHeader}>
+                <div
+                  style={s.modelCardToggle}
+                  onClick={() => setExpandedModel(expandedModel === mi ? null : mi)}
+                >
+                  <span style={s.chevron}>
+                    {expandedModel === mi
+                      ? <ChevronDown size={13} strokeWidth={2} />
+                      : <ChevronRight size={13} strokeWidth={2} />}
+                  </span>
+                  <input
+                    style={s.modelNameInput}
+                    value={m.name}
+                    placeholder="Model name…"
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => updateModelField(mi, 'name', e.target.value)}
+                  />
+                </div>
+                <div style={s.modelCardRight}>
+                  <span style={s.markupLabel}>Markup</span>
+                  <div style={s.markupWrap}>
+                    <span style={s.dollarSymbol}>$</span>
+                    <input
+                      style={{ ...s.modelInput, paddingLeft: 22, width: 90, textAlign: 'right' }}
+                      type="number" min={0} step={1}
+                      value={m.markup_usd}
+                      onChange={e => updateModelField(mi, 'markup_usd', e.target.value)}
+                    />
+                  </div>
+                  {(m.lengths?.length ?? 0) > 0 && (
+                    <span style={s.lenCount}>{m.lengths.length} length{m.lengths.length !== 1 ? 's' : ''}</span>
+                  )}
+                  <button style={s.removeModelBtn} onClick={() => removeModel(mi)} title="Remove model">
+                    <X size={13} />
+                  </button>
+                </div>
               </div>
-              <button style={s.removeModelBtn} onClick={() => removeRow(i)} title="Remove">
-                <X size={13} />
-              </button>
+
+              {/* Lengths table (expanded) */}
+              {expandedModel === mi && (
+                <div style={s.lengthsPanel}>
+                  {(m.lengths?.length ?? 0) > 0 && (
+                    <div style={s.lengthsGrid}>
+                      <div style={s.lengthsHeader}>
+                        <span>Length</span>
+                        <span style={{ textAlign: 'right' }}>Cost</span>
+                        <span style={{ textAlign: 'right' }}>Retail</span>
+                        <span />
+                      </div>
+                      {(m.lengths ?? []).map((l, li) => (
+                        <div key={li} style={s.lengthRow}>
+                          <input
+                            style={s.modelInput}
+                            value={l.length}
+                            placeholder='e.g. 11"'
+                            onChange={e => updateLength(mi, li, 'length', e.target.value)}
+                          />
+                          <div style={s.markupWrap}>
+                            <span style={s.dollarSymbol}>$</span>
+                            <input
+                              style={{ ...s.modelInput, paddingLeft: 22, textAlign: 'right' }}
+                              type="number" min={0} step={1}
+                              value={l.cost}
+                              onChange={e => updateLength(mi, li, 'cost', e.target.value)}
+                            />
+                          </div>
+                          <div style={s.retailCell}>{fmt(l.cost + m.markup_usd)}</div>
+                          <button style={s.removeModelBtn} onClick={() => removeLength(mi, li)} title="Remove">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button style={s.addLengthBtn} onClick={() => addLength(mi)}>
+                    <Plus size={11} /> Add Length
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {dirty && (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 12 }}>
           <button style={s.saveModelsBtn} onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Models'}
+            {saving ? 'Saving…' : 'Save All Changes'}
           </button>
         </div>
       )}
@@ -539,13 +631,26 @@ const s: Record<string, React.CSSProperties> = {
   sectionLabel:        { fontSize: 11, fontWeight: 600, color: 'rgba(13,13,13,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em' },
   modelsEmpty:         { fontSize: 13, color: 'rgba(13,13,13,0.35)', fontStyle: 'italic' },
 
-  modelsGrid:       { display: 'flex', flexDirection: 'column', gap: 6 },
-  modelsGridHeader: { display: 'grid', gridTemplateColumns: '1fr 120px 32px', gap: 8, fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', paddingBottom: 2 },
-  modelRow:         { display: 'grid', gridTemplateColumns: '1fr 120px 32px', gap: 8, alignItems: 'center' },
+  modelsList:          { display: 'flex', flexDirection: 'column', gap: 4 },
+  modelCard:           { border: BORDER, borderRadius: 8, overflow: 'hidden', background: '#fff' },
+  modelCardHeader:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', gap: 8 },
+  modelCardToggle:     { display: 'flex', alignItems: 'center', gap: 6, flex: 1, cursor: 'pointer', minWidth: 0 },
+  modelCardRight:      { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  markupLabel:         { fontSize: 11, color: 'rgba(13,13,13,0.4)', whiteSpace: 'nowrap' as const },
+  lenCount:            { fontSize: 11, color: 'rgba(13,13,13,0.35)', whiteSpace: 'nowrap' as const },
+  modelNameInput:      { border: 'none', outline: 'none', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', background: 'transparent', minWidth: 0, flex: 1 },
+
+  lengthsPanel:    { borderTop: BORDER, padding: '10px 12px 12px', background: '#fafaf9', display: 'flex', flexDirection: 'column', gap: 8 },
+  lengthsGrid:     { display: 'flex', flexDirection: 'column', gap: 4 },
+  lengthsHeader:   { display: 'grid', gridTemplateColumns: '1fr 120px 100px 32px', gap: 8, fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', paddingBottom: 2 },
+  lengthRow:       { display: 'grid', gridTemplateColumns: '1fr 120px 100px 32px', gap: 8, alignItems: 'center' },
+  retailCell:      { fontSize: 13, fontWeight: 600, color: '#166534', textAlign: 'right' as const, paddingRight: 4 },
+  addLengthBtn:    { display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: BORDER, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', color: 'rgba(13,13,13,0.45)', alignSelf: 'flex-start' as const },
+
   modelInput:       { padding: '7px 10px', border: BORDER, borderRadius: 7, fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' as const, fontFamily: 'inherit', background: '#fff' },
   markupWrap:       { position: 'relative', display: 'flex', alignItems: 'center' },
   dollarSymbol:     { position: 'absolute', left: 9, fontSize: 13, color: 'rgba(13,13,13,0.4)', pointerEvents: 'none' as const, zIndex: 1 },
-  removeModelBtn:   { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: BORDER, borderRadius: 6, cursor: 'pointer', width: 32, height: 32, color: 'rgba(13,13,13,0.4)' },
+  removeModelBtn:   { display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: BORDER, borderRadius: 6, cursor: 'pointer', width: 32, height: 32, color: 'rgba(13,13,13,0.4)', flexShrink: 0 },
   addModelBtn:      { display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: BORDER, borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.55)' },
   saveModelsBtn:    { background: '#212121', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
 

@@ -890,9 +890,15 @@ class WeekHoursSummaryItem(BaseModel):
 
 # ── Providers ─────────────────────────────────────────────────
 
+class WigModelLength(BaseModel):
+    length: str
+    cost: float = 0.0
+
+
 class WigModel(BaseModel):
     name: str
     markup_usd: float = 0.0
+    lengths: list[WigModelLength] = []
 
 
 class ProviderCreate(BaseModel):
