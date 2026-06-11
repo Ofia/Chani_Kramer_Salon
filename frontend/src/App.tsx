@@ -39,6 +39,7 @@ import InventoryPage             from './pages/bookkeeper/InventoryPage'
 import ProvidersPage             from './pages/bookkeeper/ProvidersPage'
 import OperationOverviewPage     from './pages/bookkeeper/OperationOverviewPage'
 import CalendarPage               from './pages/bookkeeper/CalendarPage'
+import RepairsPage                from './pages/bookkeeper/RepairsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
@@ -66,6 +67,7 @@ function AppRoutes() {
         <Route path="payroll"   element={<PayrollEntryPage />} />
         <Route path="expenses"  element={<ExpensesPage />} />
         <Route path="sales"     element={<SalesManagementPage />} />
+        <Route path="repairs"   element={<RepairsPage />} />
         <Route path="providers" element={<ProvidersPage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="employees" element={<EmployeesPage />} />

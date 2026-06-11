@@ -67,6 +67,7 @@ def add_cart_item(
         notes=payload.notes,
         department=payload.department,
         sales_rep_id=payload.sales_rep_id,
+        repair_order_id=payload.repair_order_id,
         created_by=current_user.id,
     )
     db.add(item)

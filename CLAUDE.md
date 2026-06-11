@@ -25,6 +25,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~020~~ | ~~`backend/migrations/020_seed_sary_provider.sql`~~ | ✅ Run (2026-06-11) |
 | ~~021~~ | ~~`backend/migrations/021_provider_contact_and_wig_models.sql`~~ | ✅ Run (2026-06-11) |
 | ~~022~~ | ~~`backend/migrations/022_seed_provider_wig_models.sql`~~ | ✅ Run (2026-06-11) |
+| 023 | `backend/migrations/023_repair_orders.sql` | ❓ Run — repair_orders table + repair_order_id on pending_cart_items |
 
 
 ## Color Palette

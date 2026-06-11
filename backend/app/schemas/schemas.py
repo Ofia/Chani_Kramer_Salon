@@ -24,7 +24,7 @@ from app.models.models import (
     WigStatus, WigPaymentType, PosItemType, PayrollStatus,
     InventoryItemType, WigItemStatus, InventoryEventType, ProviderType,
     AppointmentDepartment, AppointmentStatus,
-    CartItemType, CartItemStatus
+    CartItemType, CartItemStatus, RepairOrderStatus
 )
 
 
@@ -1013,6 +1013,7 @@ class CartItemCreate(BaseModel):
     notes: Optional[str] = None
     department: str = "sales"
     sales_rep_id: Optional[UUID] = None
+    repair_order_id: Optional[UUID] = None
 
 
 class CartItemUpdate(BaseModel):
@@ -1036,6 +1037,7 @@ class CartItemResponse(BaseModel):
     created_by: Optional[UUID]
     department: str
     status: CartItemStatus
+    repair_order_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     sales_rep_id: Optional[UUID] = None
@@ -1050,6 +1052,54 @@ class CartItemResponse(BaseModel):
     wig_color: Optional[str] = None
     wig_size: Optional[str] = None
     wig_front: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ── Repair Orders ──────────────────────────────────────────────
+
+class RepairOrderCreate(BaseModel):
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    inventory_item_id: Optional[UUID] = None
+    wig_description: Optional[str] = None
+    notes: Optional[str] = None
+    video_url: Optional[str] = None
+    external_provider_id: Optional[UUID] = None
+
+
+class RepairOrderUpdate(BaseModel):
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    inventory_item_id: Optional[UUID] = None
+    wig_description: Optional[str] = None
+    notes: Optional[str] = None
+    video_url: Optional[str] = None
+    external_provider_id: Optional[UUID] = None
+    status: Optional[RepairOrderStatus] = None
+
+
+class RepairOrderResponse(BaseModel):
+    id: UUID
+    customer_id: Optional[UUID]
+    customer_name: Optional[str]
+    customer_phone: Optional[str]
+    inventory_item_id: Optional[UUID]
+    wig_description: Optional[str]
+    notes: Optional[str]
+    video_url: Optional[str]
+    external_provider_id: Optional[UUID]
+    status: RepairOrderStatus
+    created_by: Optional[UUID]
+    created_at: datetime
+    updated_at: datetime
+    # resolved convenience fields
+    customer_full_name: Optional[str] = None
+    wig_serial: Optional[str] = None
+    external_provider_name: Optional[str] = None
+    cart_item_count: int = 0
 
     class Config:
         from_attributes = True

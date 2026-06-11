@@ -141,6 +141,13 @@ class AppointmentStatus(str, enum.Enum):
     cancelled   = "cancelled"
     no_show     = "no_show"
 
+class RepairOrderStatus(str, enum.Enum):
+    pending       = "pending"
+    in_progress   = "in_progress"
+    with_external = "with_external"
+    ready         = "ready"
+    completed     = "completed"
+
 class CartItemType(str, enum.Enum):
     wig     = "wig"
     product = "product"
@@ -676,6 +683,35 @@ class Appointment(Base):
     customer = relationship("Customer", foreign_keys=[customer_id])
 
 
+class RepairOrder(Base):
+    """
+    A repair job created by the repairs department.
+    Services are added to the customer's pending cart linked via repair_order_id.
+    Front desk checks out the cart at POS.
+    """
+    __tablename__ = "repair_orders"
+
+    id                   = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id          = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    customer_name        = Column(Text, nullable=True)
+    customer_phone       = Column(Text, nullable=True)
+    inventory_item_id    = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="SET NULL"), nullable=True)
+    wig_description      = Column(Text, nullable=True)
+    notes                = Column(Text, nullable=True)
+    video_url            = Column(Text, nullable=True)
+    external_provider_id = Column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    status               = Column(Enum(RepairOrderStatus, name="repair_order_status"), nullable=False, default=RepairOrderStatus.pending)
+    created_by           = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at           = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at           = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    customer          = relationship("Customer",       foreign_keys=[customer_id])
+    inventory_item    = relationship("InventoryItem",  foreign_keys=[inventory_item_id])
+    external_provider = relationship("Provider",       foreign_keys=[external_provider_id])
+    creator           = relationship("User",           foreign_keys=[created_by])
+    cart_items        = relationship("PendingCartItem", back_populates="repair_order")
+
+
 class PendingCartItem(Base):
     """
     An item added to a customer's open cart by any department.
@@ -696,6 +732,7 @@ class PendingCartItem(Base):
     sales_rep_id      = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     department        = Column(String, nullable=False, default="sales")
     status            = Column(Enum(CartItemStatus, name="cart_item_status"), nullable=False, default=CartItemStatus.pending)
+    repair_order_id   = Column(UUID(as_uuid=True), ForeignKey("repair_orders.id", ondelete="SET NULL"), nullable=True)
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
     updated_at        = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -703,3 +740,4 @@ class PendingCartItem(Base):
     inventory_item = relationship("InventoryItem", foreign_keys=[inventory_item_id])
     creator        = relationship("User",          foreign_keys=[created_by])
     sales_rep      = relationship("Employee",      foreign_keys=[sales_rep_id])
+    repair_order   = relationship("RepairOrder",   foreign_keys=[repair_order_id], back_populates="cart_items")

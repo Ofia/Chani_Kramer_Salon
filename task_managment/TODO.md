@@ -18,6 +18,7 @@
 | ~~020~~ | `020_seed_sary_provider.sql` | ✅ Run (2026-06-11) |
 | ~~021~~ | `021_provider_contact_and_wig_models.sql` | ✅ Run (2026-06-11) |
 | ~~022~~ | `022_seed_provider_wig_models.sql` | ✅ Run (2026-06-11) |
+| 023 | `023_repair_orders.sql` | ❓ Run — repair_orders table + repair_order_id on pending_cart_items |
 
 ---
 
@@ -47,7 +48,7 @@
 |---|------|------|-------|
 | L1 | **Commission system** | Payroll / Wig Lifecycle | Per-employee %, lifecycle events (sold/cancelled/returned), feeds into payroll. New table: `commission_entries` |
 | L2 | **Department-based routing + nav** | Frontend | Replace `/bookkeeper/*` with dept layouts: `/sales/*`, `/repairs/*`, `/front-desk/*`, `/bookkeeping/*` |
-| L4 | **Repairs department page** | New Page | Consult → price → build cart items; wig travels; customer pays at Front Desk |
+| ~~L4~~ | ~~**Repairs department page**~~ | ~~New Page~~ | ✅ Built — Session 20 |
 | L5 | **DaySmart PDF parser** | Integrations | Parse daily PDF → auto-fill Tzipora's data entry |
 
 ---
@@ -59,6 +60,17 @@
 | **Inventory → Product Management rename** | Inventory Page | Rename page title + nav item. Sold Items tab already built. |
 | **Super Board redesign** | Owner Dashboard | Currently reads from DailySummary (dead). Rebuild on `reports.py` |
 | **Ella redesign** | AI Chatbot | `get_daily_summary` tool returns empty. Rebuild tools around POS/reports data |
+
+---
+
+## ✅ Done — Session 20 (2026-06-11)
+
+| Task | Notes |
+|------|-------|
+| L4: Repairs Management Page | `RepairsPage.tsx` — two tabs: Repair Orders + Active Carts. Create order (customer + wig + services), status management, edit panel. Migration 023 needs to be run. |
+| Migration 023 | `023_repair_orders.sql` — repair_orders table, repair_order_status enum, repair_order_id FK on pending_cart_items |
+| Backend: RepairOrder model + schemas + route | `models.py`, `schemas.py`, `repair_orders.py`, `main.py` |
+| cart.py: repair_order_id passthrough | CartItemCreate now passes repair_order_id to PendingCartItem |
 
 ---
 
