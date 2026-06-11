@@ -1159,32 +1159,6 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
             <InfoRow label="Cell"    value="" />
           </div>
 
-          {/* Non-wig items table */}
-          {sale.items.filter(i => i.item_type !== 'wig').length > 0 && (
-            <table style={{ marginBottom: 16 }}>
-              <thead>
-                <tr>
-                  <th style={r.th}>Type</th>
-                  <th style={r.th}>Description</th>
-                  <th style={{ ...r.th, textAlign: 'center' }}>Qty</th>
-                  <th style={{ ...r.th, textAlign: 'right' }}>Price</th>
-                  <th style={{ ...r.th, textAlign: 'right' }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sale.items.filter(i => i.item_type !== 'wig').map(item => (
-                  <tr key={item.id}>
-                    <td style={r.td}>{ITEM_TYPE_LABEL[item.item_type]}</td>
-                    <td style={r.td}>{item.description}</td>
-                    <td style={{ ...r.td, textAlign: 'center' }}>{item.quantity}</td>
-                    <td style={{ ...r.td, textAlign: 'right' }}>${item.unit_price.toFixed(2)}</td>
-                    <td style={{ ...r.td, textAlign: 'right', fontWeight: 700 }}>${item.subtotal.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
           {/* Wig items — dedicated spec table */}
           {sale.items.filter(i => i.item_type === 'wig').length > 0 && (
             <table style={{ marginBottom: 20 }}>
@@ -1204,6 +1178,32 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
                     <td style={r.td}>{item.wig_color || '—'}</td>
                     <td style={r.td}>{item.wig_size || '—'}</td>
                     <td style={r.td}>{item.wig_front || '—'}</td>
+                    <td style={{ ...r.td, textAlign: 'right', fontWeight: 700 }}>${item.subtotal.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Non-wig items table */}
+          {sale.items.filter(i => i.item_type !== 'wig').length > 0 && (
+            <table style={{ marginBottom: 16 }}>
+              <thead>
+                <tr>
+                  <th style={r.th}>Type</th>
+                  <th style={r.th}>Description</th>
+                  <th style={{ ...r.th, textAlign: 'center' }}>Qty</th>
+                  <th style={{ ...r.th, textAlign: 'right' }}>Price</th>
+                  <th style={{ ...r.th, textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sale.items.filter(i => i.item_type !== 'wig').map(item => (
+                  <tr key={item.id}>
+                    <td style={r.td}>{ITEM_TYPE_LABEL[item.item_type]}</td>
+                    <td style={r.td}>{item.description}</td>
+                    <td style={{ ...r.td, textAlign: 'center' }}>{item.quantity}</td>
+                    <td style={{ ...r.td, textAlign: 'right' }}>${item.unit_price.toFixed(2)}</td>
                     <td style={{ ...r.td, textAlign: 'right', fontWeight: 700 }}>${item.subtotal.toFixed(2)}</td>
                   </tr>
                 ))}
