@@ -445,7 +445,7 @@ function CreateRepairPanel({
             if (!svc.service_id) continue
             await api.post('/cart/', {
               customer_id:     custId,
-              item_type:       'repair',
+              item_type:       'service',
               description:     svc.service_name,
               price:           parseFloat(svc.price) || 0,
               tax_rate:        svc.tax_rate,
