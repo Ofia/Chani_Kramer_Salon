@@ -277,12 +277,13 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] Calendar — Day/Week/Month views, appointments backend
 - [x] All business logic (tithes, sales tax, wig tax deferral, wig_status lifecycle) automated
 - [x] Overview payment tab F1 bug fixed (commit 9569c84)
+- [x] Invoice import (P1) — upload PDF invoice → parse → markup lookup from provider rules → preview table → bulk add to inventory (commit bed8d2a)
+- [ ] Repairs management page (L4) — consult + price + cart; wig travels to repairs; customer pays at Front Desk
 - [ ] Edit sale/receipt (task #8)
 - [ ] Bank statement auto-import (task #14)
 - [ ] Persist unsaved form data on navigation (task #15)
 - [ ] Inventory page → rename to Product Management
 - [ ] Abandoned deposit flow (Mark as Abandoned)
-- [ ] Invoice auto-pricing (P1) — upload invoice → match provider rules → auto-set cost+retail → confirm → land in inventory
 
 ### Phase 2 — Mobile
 - [ ] Hani mobile experience

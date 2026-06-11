@@ -1,5 +1,5 @@
 # The Salon — Open Tasks
-**Last updated:** Session 18 — 2026-06-11
+**Last updated:** Session 19 — 2026-06-11
 
 ---
 
@@ -38,7 +38,6 @@
 | 8  | **Edit sale / receipt** | POS | Tzipora needs to fix mistakes without deleting + re-entering |
 | 14 | **Bank statement auto-import** | Expenses | Upload bank statement → auto-create expense entries |
 | 15 | **Persist unsaved form data** | UX | If user navigates away mid-form, restore on return |
-| P1 | **Invoice auto-pricing** | Providers / Inventory | Upload delivery invoice → parse line items → match provider rules → auto-set cost + retail → preview → confirm → land in inventory |
 
 ---
 
@@ -60,6 +59,17 @@
 | **Inventory → Product Management rename** | Inventory Page | Rename page title + nav item. Sold Items tab already built. |
 | **Super Board redesign** | Owner Dashboard | Currently reads from DailySummary (dead). Rebuild on `reports.py` |
 | **Ella redesign** | AI Chatbot | `get_daily_summary` tool returns empty. Rebuild tools around POS/reports data |
+
+---
+
+## ✅ Done — Session 19 (2026-06-11)
+
+| Task | Commit |
+|------|--------|
+| Unify all sources of truth: memory, TODO, CLAUDE.md aligned to session 18 | `851a8ad` |
+| P1: Invoice PDF import — upload invoice → parse → markup lookup → preview → bulk add to inventory | `bed8d2a` |
+| Invoice parser: append size code to serial (RINA55361 → RINA55361-11M) | `ead3a5c` |
+| Receipt fix: wig table above repair/service table | `971194f` |
 
 ---
 
