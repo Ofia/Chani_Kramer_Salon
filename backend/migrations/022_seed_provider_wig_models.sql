@@ -171,7 +171,7 @@ UPDATE providers SET wig_models = '[
     {"length": "35\"","cost": 6575}, {"length": "40\"","cost": 6845}, {"length": "45\"","cost": 7125}
   ]}
 ]'::jsonb
-WHERE name = 'BK Finest Natural Wigs';
+WHERE name = 'BK Wigs';
 
 -- ── Rochi Lipsker ──────────────────────────────────────────────
 UPDATE providers SET wig_models = '[
