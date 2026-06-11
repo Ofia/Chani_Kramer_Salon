@@ -890,11 +890,20 @@ class WeekHoursSummaryItem(BaseModel):
 
 # ── Providers ─────────────────────────────────────────────────
 
+class WigModel(BaseModel):
+    name: str
+    markup_pct: float = 0.0
+
+
 class ProviderCreate(BaseModel):
     name: str
     provider_type: ProviderType
     notes: Optional[str] = None
     is_active: bool = True
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    wig_models: list[WigModel] = []
 
 
 class ProviderUpdate(BaseModel):
@@ -902,6 +911,10 @@ class ProviderUpdate(BaseModel):
     provider_type: Optional[ProviderType] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    wig_models: Optional[list[WigModel]] = None
 
 
 class ProviderResponse(BaseModel):
@@ -910,6 +923,10 @@ class ProviderResponse(BaseModel):
     provider_type: ProviderType
     notes: Optional[str]
     is_active: bool
+    email: Optional[str]
+    phone: Optional[str]
+    address: Optional[str]
+    wig_models: list[WigModel] = []
     created_at: datetime
     updated_at: datetime
 

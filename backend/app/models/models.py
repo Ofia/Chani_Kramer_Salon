@@ -616,6 +616,11 @@ class Provider(Base):
     provider_type = Column(Enum(ProviderType, name='provider_type'), nullable=False)
     notes         = Column(Text)
     is_active     = Column(Boolean, nullable=False, default=True)
+    email         = Column(String)
+    phone         = Column(String)
+    address       = Column(Text)
+    # List of {name: str, markup_pct: float} — wig model markups per provider
+    wig_models    = Column(JSONB, nullable=False, default=list)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
