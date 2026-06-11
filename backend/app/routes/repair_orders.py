@@ -158,15 +158,15 @@ def delete_repair_order(
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    """Delete a repair order and unlink its cart items."""
+    """Delete a repair order and remove its linked cart items."""
     order = db.get(RepairOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Repair order not found")
 
-    # Unlink cart items (repair_order_id → NULL, items stay in cart)
+    # Delete the linked pending cart items — they belong to this order
     db.query(PendingCartItem).filter(
         PendingCartItem.repair_order_id == order_id
-    ).update({"repair_order_id": None})
+    ).delete()
 
     db.delete(order)
     db.commit()
