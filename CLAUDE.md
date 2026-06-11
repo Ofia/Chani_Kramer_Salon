@@ -11,16 +11,20 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 - **Frontend:** Runs locally via `npm run dev` (deployed on Vercel)
 - **Migrations:** Run SQL files manually in Supabase SQL Editor
 
-### ⚠️ Pending Migrations (must run in Supabase SQL Editor)
+### Migration Status
 | Migration | File | Status |
 |-----------|------|--------|
-| 011 | `backend/migrations/011_consolidate_wig_orders.sql` | ⚠️ Run ASAP |
-| 012 | `backend/migrations/012_pos_enhancements.sql` | ⚠️ Run ASAP |
-| 013 | `backend/migrations/013_expense_categories.sql` | ⚠️ Run ASAP |
-| 015 | `backend/migrations/015_pos_item_tax.sql` | ⚠️ Run ASAP |
+| 011 | `backend/migrations/011_consolidate_wig_orders.sql` | ❓ Verify |
+| 012 | `backend/migrations/012_pos_enhancements.sql` | ❓ Verify |
+| 013 | `backend/migrations/013_expense_categories.sql` | ❓ Verify |
+| 015 | `backend/migrations/015_pos_item_tax.sql` | ❓ Verify |
 | ~~016~~ | ~~`backend/migrations/016_inventory_event_pos_sale.sql`~~ | ✅ Run |
-| 017 | `backend/migrations/017_appointments.sql` | ⚠️ Run ASAP |
-| ~~019~~ | ~~`backend/migrations/019_discount_and_salesrep.sql`~~ | ✅ Run |
+| 017 | `backend/migrations/017_appointments.sql` | ❓ Verify |
+| ~~018~~ | ~~`backend/migrations/018_pending_cart.sql`~~ | ✅ Run |
+| ~~019~~ | ~~`backend/migrations/019_discount_and_salesrep.sql`~~ | ✅ Run (2026-06-09) |
+| ~~020~~ | ~~`backend/migrations/020_seed_sary_provider.sql`~~ | ✅ Run (2026-06-11) |
+| ~~021~~ | ~~`backend/migrations/021_provider_contact_and_wig_models.sql`~~ | ✅ Run (2026-06-11) |
+| ~~022~~ | ~~`backend/migrations/022_seed_provider_wig_models.sql`~~ | ✅ Run (2026-06-11) |
 
 
 ## Color Palette
@@ -261,6 +265,7 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] Auth (3 users, 3 roles)
 - [x] POS — multi-item cart, wig balance payments, per-item tax, discount, delete-reason dialog, receipt logo + deposit agreement page 2
 - [x] Inventory — unified wig + product stock, providers, repair services, Sold Items tab
+- [x] Providers — accordion rows, contact fields, wig model price rules editor (cost + markup + computed retail)
 - [x] Operation Overview — Day/Month/Range, 5 tabs, Recharts charts
 - [x] Expenses — 13 industry-standard categories, add/delete
 - [x] Payroll — weekly accordion, clock-in/out, mark paid
@@ -271,12 +276,13 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] Sales Management — inventory browse, Add to Cart (with service add-on), Active Carts with live editing
 - [x] Calendar — Day/Week/Month views, appointments backend
 - [x] All business logic (tithes, sales tax, wig tax deferral, wig_status lifecycle) automated
+- [x] Overview payment tab F1 bug fixed (commit 9569c84)
 - [ ] Edit sale/receipt (task #8)
 - [ ] Bank statement auto-import (task #14)
 - [ ] Persist unsaved form data on navigation (task #15)
 - [ ] Inventory page → rename to Product Management
 - [ ] Abandoned deposit flow (Mark as Abandoned)
-- [ ] Overview payment tab bug (F1)
+- [ ] Invoice auto-pricing (P1) — upload invoice → match provider rules → auto-set cost+retail → confirm → land in inventory
 
 ### Phase 2 — Mobile
 - [ ] Hani mobile experience
