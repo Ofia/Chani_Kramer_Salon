@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote, History, Trash2 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -431,7 +432,7 @@ type PosSalePayment = { id: string; payment_method: string; amount: number }
 type PosSaleItem    = { id: string; item_type: string; description: string; quantity: number; unit_price: number; subtotal: number; wig_brand?: string; wig_serial?: string }
 type PosSale        = { id: string; sale_date: string; total_amount: number; amount_paid: number; balance_due: number; notes?: string; items: PosSaleItem[]; payments: PosSalePayment[] }
 type WigPayment     = { id: string; payment_date: string; amount: number; payment_method: string; payment_type: string }
-type WigOrder       = { id: string; order_date: string; daysmart_serial?: string; brand?: string; length?: string; color?: string; size?: string; total_price: number; amount_paid: number; balance_due: number; sale_status: string; payments: WigPayment[] }
+type WigOrder       = { id: string; order_date?: string | null; daysmart_serial?: string; brand?: string; length?: string; color?: string; size?: string; notes?: string; total_price: number; amount_paid: number; balance_due: number; sale_status: string; payments: WigPayment[] }
 type CustomerHistory = { pos_sales: PosSale[]; wig_sales: WigOrder[] }
 
 const METHOD_LABEL: Record<string, string> = {
@@ -454,6 +455,11 @@ function safeFmtDate(dateStr: string | null | undefined) {
 }
 
 function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const { profile } = useAuth()
+  const canEdit = profile?.role === 'bookkeeper' || profile?.role === 'owner'
+  const qc = useQueryClient()
+  const [editingWig, setEditingWig] = useState<WigOrder | null>(null)
+
   const { data, isLoading } = useQuery<CustomerHistory>({
     queryKey: ['customer-history', customer.id],
     queryFn: () => api.get(`/customers/${customer.id}/history`).then(r => r.data).catch(() => ({ pos_sales: [], wig_sales: [] })),
@@ -546,7 +552,18 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
                     {wig.sale_status.replace('_', ' ')}
                   </span>
                 </div>
-                <span style={sh.amount}>${Number(wig.total_price).toFixed(2)}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={sh.amount}>${Number(wig.total_price).toFixed(2)}</span>
+                  {canEdit && (
+                    <button
+                      style={sh.editBtn}
+                      onClick={() => setEditingWig(wig)}
+                      title="Edit wig details"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Wig specs */}
@@ -571,6 +588,110 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {editingWig && (
+        <WigEditModal
+          wig={editingWig}
+          onClose={() => setEditingWig(null)}
+          onSaved={() => {
+            setEditingWig(null)
+            qc.invalidateQueries({ queryKey: ['customer-history', customer.id] })
+            qc.invalidateQueries({ queryKey: ['inventory'] })
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Wig Edit Modal ────────────────────────────────────────────
+
+function WigEditModal({ wig, onClose, onSaved }: { wig: WigOrder; onClose: () => void; onSaved: () => void }) {
+  const [serial,    setSerial]    = useState(wig.daysmart_serial ?? '')
+  const [brand,     setBrand]     = useState(wig.brand     ?? '')
+  const [color,     setColor]     = useState(wig.color     ?? '')
+  const [length,    setLength]    = useState(wig.length    ?? '')
+  const [size,      setSize]      = useState(wig.size      ?? '')
+  const [orderDate, setOrderDate] = useState(wig.order_date ? wig.order_date.split('T')[0] : '')
+  const [notes,     setNotes]     = useState(wig.notes     ?? '')
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState<string | null>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      await api.patch(`/inventory/${wig.id}`, {
+        daysmart_serial: serial.trim()    || null,
+        brand:           brand.trim()     || null,
+        color:           color.trim()     || null,
+        length:          length.trim()    || null,
+        size:            size.trim()      || null,
+        order_date:      orderDate        || null,
+        notes:           notes.trim()     || null,
+      })
+      onSaved()
+    } catch {
+      setError('Failed to save. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ ...s.overlay, zIndex: 1001 }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ ...s.modalBox, maxWidth: 420 }}>
+        <div style={s.modalHeader}>
+          <p style={s.modalTitle}>Edit Wig Details</p>
+          <button onClick={onClose} style={s.closeBtn}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={s.fieldLabel}>Serial Number</label>
+            <input style={s.input} value={serial} onChange={e => setSerial(e.target.value)} placeholder="e.g. RINA55361" />
+          </div>
+          <div style={s.grid2}>
+            <div>
+              <label style={s.fieldLabel}>Brand</label>
+              <input style={s.input} value={brand} onChange={e => setBrand(e.target.value)} placeholder="Brand" />
+            </div>
+            <div>
+              <label style={s.fieldLabel}>Color</label>
+              <input style={s.input} value={color} onChange={e => setColor(e.target.value)} placeholder="Color" />
+            </div>
+          </div>
+          <div style={s.grid2}>
+            <div>
+              <label style={s.fieldLabel}>Length</label>
+              <input style={s.input} value={length} onChange={e => setLength(e.target.value)} placeholder="Length" />
+            </div>
+            <div>
+              <label style={s.fieldLabel}>Size</label>
+              <input style={s.input} value={size} onChange={e => setSize(e.target.value)} placeholder="Size" />
+            </div>
+          </div>
+          <div>
+            <label style={s.fieldLabel}>Order Date</label>
+            <input style={s.input} type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
+          </div>
+          <div>
+            <label style={s.fieldLabel}>Notes</label>
+            <textarea
+              style={{ ...s.input, resize: 'vertical', minHeight: 70, fontFamily: 'inherit' }}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Any notes about this wig…"
+            />
+          </div>
+          {error && <p style={s.errorMsg}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button style={s.ghostBtn} onClick={onClose}>Cancel</button>
+            <button style={s.primaryBtn} onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -674,4 +795,5 @@ const sh: Record<string, React.CSSProperties> = {
   payRow:     { display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 14px 12px', borderTop: '1px solid rgba(0,0,0,0.05)' },
   payChip:    { fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#f0fdf4', color: '#15803d' },
   noteChip:   { fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#fefce8', color: '#713f12' },
+  editBtn:    { background: 'none', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, cursor: 'pointer', color: '#71717a', display: 'flex', alignItems: 'center', padding: '4px 6px' },
 }
