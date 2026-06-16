@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
     InventoryItem, InventoryEvent, BrandMarkup,
-    InventoryItemType, WigItemStatus, UserRole, User
+    InventoryItemType, WigItemStatus, WigStatus, UserRole, User
 )
 from app.schemas.schemas import (
     InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse,
@@ -98,10 +98,14 @@ def create_inventory_item(
 ):
     _require_bookkeeper_or_owner(current_user)
 
-    # Default wig_status to in_stock when creating a wig
+    # Default wig_status when creating a wig
     payload = data.model_dump()
     if payload["item_type"] == InventoryItemType.wig and payload.get("wig_status") is None:
-        payload["wig_status"] = WigItemStatus.in_stock
+        # Historical/external wigs (already owned by customer) come in as paid_in_full → mark sold
+        if payload.get("sale_status") == WigStatus.paid_in_full:
+            payload["wig_status"] = WigItemStatus.sold
+        else:
+            payload["wig_status"] = WigItemStatus.in_stock
 
     item = InventoryItem(**payload, created_by=current_user.id)
     db.add(item)

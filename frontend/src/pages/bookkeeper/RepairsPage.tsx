@@ -58,6 +58,7 @@ type InventoryItem = {
   length?: string
   daysmart_serial?: string
   wig_status?: string
+  customer_id?: string | null
 }
 
 type Provider = {
@@ -322,6 +323,8 @@ function CreateRepairPanel({
   onClose: () => void
   onCreated: () => void
 }) {
+  const qc = useQueryClient()
+
   // Customer
   const [customerMode, setCustomerMode] = useState<'existing' | 'walkin'>('existing')
   const [custSearch, setCustSearch]     = useState('')
@@ -330,10 +333,14 @@ function CreateRepairPanel({
   const [walkinPhone, setWalkinPhone]   = useState('')
 
   // Wig
-  const [wigMode, setWigMode]         = useState<'inventory' | 'external'>('inventory')
+  const [wigMode, setWigMode]         = useState<'customer' | 'external'>('customer')
   const [wigSearch, setWigSearch]     = useState('')
   const [selectedWig, setSelectedWig] = useState<InventoryItem | null>(null)
-  const [wigDesc, setWigDesc]         = useState('')
+  // External wig structured fields
+  const [extSerial, setExtSerial] = useState('')
+  const [extBrand,  setExtBrand]  = useState('')
+  const [extColor,  setExtColor]  = useState('')
+  const [extLength, setExtLength] = useState('')
 
   // Services
   const [services, setServices] = useState<ServiceRow[]>([])
@@ -376,15 +383,18 @@ function CreateRepairPanel({
     ).slice(0, 8)
   }, [customers, custSearch])
 
-  // Filtered wig search
+  // Filtered wig search — only this customer's wigs
   const filteredWigs = useMemo(() => {
-    if (!wigSearch) return []
+    if (!selectedCustomer) return []
+    const customerWigs = inventory.filter(i =>
+      i.item_type === 'wig' && i.customer_id === selectedCustomer.id
+    )
+    if (!wigSearch) return customerWigs.slice(0, 8)
     const q = wigSearch.toLowerCase()
-    return inventory.filter(i =>
-      i.item_type === 'wig' &&
+    return customerWigs.filter(i =>
       [i.daysmart_serial, i.brand, i.color, i.length, i.name].join(' ').toLowerCase().includes(q)
     ).slice(0, 8)
-  }, [inventory, wigSearch])
+  }, [inventory, wigSearch, selectedCustomer])
 
   function addService() {
     setServices(prev => [...prev, {
@@ -426,10 +436,29 @@ function CreateRepairPanel({
         orderPayload.customer_phone = walkinPhone || null
       }
 
-      if (wigMode === 'inventory' && selectedWig) {
+      if (wigMode === 'customer' && selectedWig) {
         orderPayload.inventory_item_id = selectedWig.id
-      } else {
-        orderPayload.wig_description = wigDesc || null
+      } else if (wigMode === 'external') {
+        const serial = extSerial.trim()
+        if (customerMode === 'existing' && selectedCustomer && serial) {
+          // Create a new InventoryItem for this customer's wig — adds it to their history
+          const { data: newWig } = await api.post('/inventory/', {
+            item_type:       'wig',
+            name:            serial,
+            daysmart_serial: serial,
+            brand:           extBrand.trim()  || null,
+            color:           extColor.trim()  || null,
+            length:          extLength.trim() || null,
+            customer_id:     selectedCustomer.id,
+            sale_status:     'paid_in_full',
+          })
+          orderPayload.inventory_item_id = newWig.id
+          qc.invalidateQueries({ queryKey: ['inventory'] })
+        } else {
+          // Walk-in or no serial → free-text description only
+          const parts = [extSerial, extBrand, extColor, extLength].map(s => s.trim()).filter(Boolean)
+          orderPayload.wig_description = parts.join(' · ') || null
+        }
       }
 
       // 2. Create repair order
@@ -465,9 +494,14 @@ function CreateRepairPanel({
     }
   }
 
+  const wigReady =
+    wigMode === 'customer'
+      ? !!selectedWig
+      : !!(extSerial.trim() || extBrand.trim() || extColor.trim())  // at least something entered
+
   const canSubmit =
     (customerMode === 'existing' ? !!selectedCustomer : !!walkinName) &&
-    (wigMode === 'inventory' ? !!selectedWig : !!wigDesc) &&
+    wigReady &&
     step === 'form'
 
   return (
@@ -488,7 +522,7 @@ function CreateRepairPanel({
           <Section icon={<User size={13} />} label="Customer">
             <div style={s.modeToggle}>
               <ModeBtn active={customerMode === 'existing'} onClick={() => { setCustomerMode('existing'); setSelectedCustomer(null); setCustSearch('') }}>Existing Customer</ModeBtn>
-              <ModeBtn active={customerMode === 'walkin'}   onClick={() => { setCustomerMode('walkin'); setSelectedCustomer(null) }}>Walk-in</ModeBtn>
+              <ModeBtn active={customerMode === 'walkin'}   onClick={() => { setCustomerMode('walkin'); setSelectedCustomer(null); setWigMode('external'); setSelectedWig(null); setWigSearch('') }}>Walk-in</ModeBtn>
             </div>
 
             {customerMode === 'existing' ? (
@@ -529,11 +563,17 @@ function CreateRepairPanel({
           {/* ── Wig ── */}
           <Section icon={<Package size={13} />} label="Wig">
             <div style={s.modeToggle}>
-              <ModeBtn active={wigMode === 'inventory'} onClick={() => { setWigMode('inventory'); setSelectedWig(null); setWigSearch('') }}>Our Inventory</ModeBtn>
-              <ModeBtn active={wigMode === 'external'}  onClick={() => { setWigMode('external'); setSelectedWig(null) }}>External Wig</ModeBtn>
+              <ModeBtn
+                active={wigMode === 'customer'}
+                onClick={() => { setWigMode('customer'); setSelectedWig(null); setWigSearch('') }}
+                disabled={customerMode === 'walkin'}
+              >
+                Customer's Wigs
+              </ModeBtn>
+              <ModeBtn active={wigMode === 'external'} onClick={() => { setWigMode('external'); setSelectedWig(null) }}>External Wig</ModeBtn>
             </div>
 
-            {wigMode === 'inventory' ? (
+            {wigMode === 'customer' ? (
               selectedWig ? (
                 <SelectedPill
                   label={selectedWig.daysmart_serial ?? selectedWig.name}
@@ -541,22 +581,59 @@ function CreateRepairPanel({
                   onClear={() => setSelectedWig(null)}
                 />
               ) : (
-                <SearchDropdown
-                  placeholder="Search by serial, brand, color…"
-                  value={wigSearch}
-                  onChange={setWigSearch}
-                  results={filteredWigs}
-                  renderItem={w => [w.daysmart_serial, w.brand, w.color, w.length].filter(Boolean).join(' · ')}
-                  onSelect={w => { setSelectedWig(w); setWigSearch('') }}
-                />
+                <>
+                  {!selectedCustomer && (
+                    <p style={s.emptyNote}>Select a customer above to see their wigs.</p>
+                  )}
+                  {selectedCustomer && (
+                    <SearchDropdown
+                      placeholder="Search by serial, brand, color…"
+                      value={wigSearch}
+                      onChange={setWigSearch}
+                      results={filteredWigs}
+                      renderItem={w => [w.daysmart_serial, w.brand, w.color, w.length].filter(Boolean).join(' · ')}
+                      onSelect={w => { setSelectedWig(w); setWigSearch('') }}
+                    />
+                  )}
+                  {selectedCustomer && filteredWigs.length === 0 && !wigSearch && (
+                    <p style={s.emptyNote}>No wigs on file for this customer. Use "External Wig" to enter details manually.</p>
+                  )}
+                </>
               )
             ) : (
-              <input
-                style={s.input}
-                placeholder="Describe the wig (brand, color, length…)"
-                value={wigDesc}
-                onChange={e => setWigDesc(e.target.value)}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  style={{ ...s.input, marginBottom: 0 }}
+                  placeholder="Serial number"
+                  value={extSerial}
+                  onChange={e => setExtSerial(e.target.value)}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    style={{ ...s.input, flex: 1, marginBottom: 0 }}
+                    placeholder="Brand"
+                    value={extBrand}
+                    onChange={e => setExtBrand(e.target.value)}
+                  />
+                  <input
+                    style={{ ...s.input, flex: 1, marginBottom: 0 }}
+                    placeholder="Color"
+                    value={extColor}
+                    onChange={e => setExtColor(e.target.value)}
+                  />
+                </div>
+                <input
+                  style={{ ...s.input, marginBottom: 0 }}
+                  placeholder="Length (optional)"
+                  value={extLength}
+                  onChange={e => setExtLength(e.target.value)}
+                />
+                {customerMode === 'existing' && selectedCustomer && (
+                  <p style={{ fontSize: 11, color: '#71717a', margin: 0 }}>
+                    This wig will be added to {selectedCustomer.first_name}'s history automatically.
+                  </p>
+                )}
+              </div>
             )}
           </Section>
 
@@ -967,11 +1044,12 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   )
 }
 
-function ModeBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function ModeBtn({ active, onClick, disabled, children }: { active: boolean; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      style={{ ...s.modeBtn, ...(active ? s.modeBtnActive : {}) }}
+      disabled={disabled}
+      style={{ ...s.modeBtn, ...(active ? s.modeBtnActive : {}), ...(disabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
     >
       {children}
     </button>

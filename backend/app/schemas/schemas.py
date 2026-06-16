@@ -643,6 +643,9 @@ class InventoryItemCreate(BaseModel):
     supplier: Optional[str] = None
     arrival_date: Optional[date] = None
     provider_id: Optional[UUID] = None
+    # historical wig fields (for external/pre-software wigs added via Repairs)
+    customer_id: Optional[UUID] = None
+    sale_status: Optional[WigStatus] = None
 
 
 class InventoryItemUpdate(BaseModel):
