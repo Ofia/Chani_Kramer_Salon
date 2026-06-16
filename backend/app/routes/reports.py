@@ -125,6 +125,8 @@ def get_report(
     #   - Repair on same ticket as a pending wig (not paid_in_full) → repair_deposits
     #   - Repair on same ticket as a paid wig → deferred; recognized in step 3b below
     wash_set = repairs = product_sales = repair_deposits = 0.0
+    sale_wig_pending: dict = {}   # pos_sale.id → True if its wig is still pending
+
     for sale in pos_sales:
         # Collect inventory_item_ids for any wig items on this sale
         wig_inv_ids = [
@@ -141,6 +143,8 @@ def get_report(
                 InventoryItem.id == wig_inv_ids[0]
             ).first()
             wig_is_pending = bool(wig_inv and wig_inv.sale_status != WigStatus.paid_in_full)
+
+        sale_wig_pending[sale.id] = wig_is_pending
 
         for item in sale.items:
             amt = float(item.subtotal)
@@ -173,6 +177,7 @@ def get_report(
     #
     # When a wig is picked up this period, any repair that was on the original deposit
     # sale (and held as repair_deposits in a prior period) is now recognized as revenue.
+    deferred_repair_tax = 0.0
     wig_ids = [w.id for w in wig_sales_items]
     if wig_ids:
         # Find the POS sale(s) that originally contained each wig item
@@ -195,6 +200,7 @@ def get_report(
                 .all()
             )
             repairs += sum(float(ri.subtotal) for ri in deferred_repair_items)
+            deferred_repair_tax = sum(float(ri.tax_amount or 0) for ri in deferred_repair_items)
 
     # ── 4. Wig deposits held (ordered during range, not yet paid) ──
     wig_deposit_items = (
@@ -244,13 +250,16 @@ def get_report(
         for pmt in sale.payments:
             _add_by_method(pmt.payment_method, float(pmt.amount))
 
-        # Tax: wig item tax is deferred to pickup_date — count only non-wig tax now.
+        # Tax: wig item tax is deferred to pickup_date.
+        # Repair on same ticket as a pending wig: repair tax also deferred.
         has_wig = any(item.item_type == PosItemType.wig for item in sale.items)
         if has_wig:
+            wig_pending = sale_wig_pending.get(sale.id, False)
             non_wig_tax = sum(
-                float(item.tax_amount)
+                float(item.tax_amount or 0)
                 for item in sale.items
                 if item.item_type != PosItemType.wig
+                and not (wig_pending and item.item_type == PosItemType.repair)
             )
             tax_collected += non_wig_tax
         else:
@@ -269,9 +278,9 @@ def get_report(
     for wp in direct_wig_pmts:
         _add_by_method(wp.payment_method, float(wp.amount))
 
-    # C) Wig tax recognized on pickup_date (same wigs already counted for revenue)
+    # C) Tax recognized on pickup_date: wig tax + any deferred repair tax from same sale
     wig_tax = sum(float(w.sale_tax_amount or 0) for w in wig_sales_items)
-    tax_collected += wig_tax
+    tax_collected += wig_tax + deferred_repair_tax
 
     payments_total = cash + cc + quickpay + check + zelle
 
