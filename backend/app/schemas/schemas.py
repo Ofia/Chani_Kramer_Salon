@@ -1106,3 +1106,24 @@ class RepairOrderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ── Deleted Sales ──────────────────────────────────────────────
+
+class DeletedSaleResponse(BaseModel):
+    id:                UUID
+    original_sale_id:  Optional[UUID]
+    sale_date:         date
+    customer_name:     Optional[str]
+    customer_id:       Optional[UUID]
+    total_amount:      float
+    tax_amount:        float
+    discount_amount:   float
+    deletion_reason:   str
+    deleted_by_name:   Optional[str]
+    deleted_at:        datetime
+    items_snapshot:    list
+    payments_snapshot: list
+
+    class Config:
+        from_attributes = True

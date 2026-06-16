@@ -24,10 +24,11 @@ from app.models.models import (
     PosSale, PosSaleItem, PosSalePayment,
     WigPayment, InventoryItem, InventoryItemType, InventoryEvent, InventoryEventType,
     PosItemType, WigStatus, WigItemStatus, WigPaymentType, PaymentMethod, User,
+    DeletedSale,
 )
 from app.schemas.schemas import (
     PosSaleCreate, PosSaleResponse, DailyAutoFillResponse, WigBalancePaymentIn,
-    DeleteSalePayload,
+    DeleteSalePayload, DeletedSaleResponse,
 )
 from app.core.security import get_current_user
 
@@ -368,6 +369,19 @@ def get_pos_sale(
 
 # ── Delete ────────────────────────────────────────────────────
 
+@router.get("/deleted", response_model=List[DeletedSaleResponse])
+def list_deleted_sales(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return all deleted POS sales, newest first."""
+    return (
+        db.query(DeletedSale)
+        .order_by(DeletedSale.deleted_at.desc())
+        .all()
+    )
+
+
 @router.delete("/{sale_id}", status_code=204)
 def delete_pos_sale(
     sale_id: UUID,
@@ -387,6 +401,40 @@ def delete_pos_sale(
     for item in sale.items:
         if item.item_type == PosItemType.wig and item.inventory_item_id:
             affected_wig_ids.add(item.inventory_item_id)
+
+    # Step 1b — snapshot the sale into deleted_sales before anything is destroyed
+    items_snap = [
+        {
+            "item_type":   item.item_type.value if hasattr(item.item_type, "value") else str(item.item_type),
+            "description": item.description or "",
+            "wig_serial":  item.wig_serial or None,
+            "quantity":    item.quantity,
+            "unit_price":  float(item.unit_price or 0),
+            "subtotal":    float(item.subtotal or 0),
+            "tax_amount":  float(item.tax_amount or 0),
+        }
+        for item in sale.items
+    ]
+    payments_snap = [
+        {
+            "payment_method": pmt.payment_method.value if hasattr(pmt.payment_method, "value") else str(pmt.payment_method),
+            "amount":         float(pmt.amount or 0),
+        }
+        for pmt in sale.payments
+    ]
+    db.add(DeletedSale(
+        original_sale_id  = sale.id,
+        sale_date         = sale.sale_date,
+        customer_name     = sale.customer_name,
+        customer_id       = sale.customer_id,
+        total_amount      = sale.total_amount or Decimal("0"),
+        tax_amount        = sale.tax_amount   or Decimal("0"),
+        discount_amount   = sale.discount_amount or Decimal("0"),
+        deletion_reason   = payload.reason,
+        deleted_by_name   = current_user.name,
+        items_snapshot    = items_snap,
+        payments_snapshot = payments_snap,
+    ))
 
     # Step 2 — delete InventoryEvents and WigPayments tied to this sale
     events_for_sale = db.query(InventoryEvent).filter(

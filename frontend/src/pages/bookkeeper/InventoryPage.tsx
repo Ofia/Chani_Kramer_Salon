@@ -10,13 +10,13 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Package, Plus, X, ChevronRight, Upload, Pencil } from 'lucide-react'
+import { Package, Plus, X, ChevronRight, ChevronDown, Upload, Pencil, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type ItemType = 'wig' | 'product'
-type Tab      = 'wig' | 'product' | 'sold'
+type Tab      = 'wig' | 'product' | 'sold' | 'deleted_sales'
 
 type WigStatus =
   | 'in_stock' | 'sold' | 'on_service'
@@ -159,6 +159,7 @@ export default function InventoryPage() {
 
   const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['inventory', tab, statusFilter, brandFilter],
+    enabled: tab !== 'deleted_sales',
     queryFn: () => {
       const params = new URLSearchParams({ item_type: tab === 'sold' ? 'wig' : tab })
       if (tab === 'sold') {
@@ -228,9 +229,9 @@ export default function InventoryPage() {
 
       {/* Tabs */}
       <div style={s.tabBar}>
-        {(['wig', 'product', 'sold'] as Tab[]).map(t => (
+        {(['wig', 'product', 'sold', 'deleted_sales'] as Tab[]).map(t => (
           <button key={t} style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }} onClick={() => setTab(t)}>
-            {t === 'wig' ? 'Wigs' : t === 'product' ? 'Products' : 'Sold Items'}
+            {t === 'wig' ? 'Wigs' : t === 'product' ? 'Products' : t === 'sold' ? 'Sold Items' : 'Deleted Sales'}
           </button>
         ))}
       </div>
@@ -270,7 +271,9 @@ export default function InventoryPage() {
       )}
 
       {/* Table */}
-      {isLoading ? (
+      {tab === 'deleted_sales' ? (
+        <DeletedSalesTab />
+      ) : isLoading ? (
         <div style={s.empty}>Loading…</div>
       ) : tab === 'wig' ? (
         <WigTable
@@ -1296,6 +1299,159 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   )
+}
+
+// ── Deleted Sales Tab ───────────────────────────────────────────────────────
+
+type DeletedSaleItem = { item_type: string; description: string; wig_serial?: string; quantity: number; subtotal: number; tax_amount: number }
+type DeletedSalePayment = { payment_method: string; amount: number }
+type DeletedSale = {
+  id: string
+  original_sale_id?: string
+  sale_date: string
+  customer_name?: string
+  total_amount: number
+  tax_amount: number
+  discount_amount: number
+  deletion_reason: string
+  deleted_by_name?: string
+  deleted_at: string
+  items_snapshot: DeletedSaleItem[]
+  payments_snapshot: DeletedSalePayment[]
+}
+
+const PAYMENT_LABEL: Record<string, string> = {
+  cash: 'Cash', credit_card: 'CC', check: 'Check', zelle: 'Zelle',
+}
+const ITEM_TYPE_LABEL: Record<string, string> = {
+  wash_set: 'Wash & Set', repair: 'Repair', inventory: 'Product', wig: 'Wig', wig_balance: 'Wig Balance',
+}
+
+function DeletedSalesTab() {
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const { data: sales = [], isLoading } = useQuery<DeletedSale[]>({
+    queryKey: ['deleted-sales'],
+    queryFn: () => api.get('/pos-sales/deleted').then(r => r.data),
+    staleTime: 0,
+  })
+
+  if (isLoading) return <div style={s.empty}>Loading…</div>
+  if (sales.length === 0) return <div style={s.empty}>No deleted sales on record.</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {sales.map(sale => {
+        const isOpen = expanded === sale.id
+        const deletedDate = new Date(sale.deleted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        const saleDate    = new Date(sale.sale_date  + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+        return (
+          <div key={sale.id} style={ds.card}>
+            {/* Row header */}
+            <button
+              style={ds.row}
+              onClick={() => setExpanded(isOpen ? null : sale.id)}
+            >
+              <div style={ds.rowLeft}>
+                <span style={ds.deletedDate}>{deletedDate}</span>
+                <span style={ds.divider}>·</span>
+                <span style={ds.saleDate}>Sale {saleDate}</span>
+                {sale.customer_name && (
+                  <>
+                    <span style={ds.divider}>·</span>
+                    <span style={ds.customer}>{sale.customer_name}</span>
+                  </>
+                )}
+              </div>
+              <div style={ds.rowRight}>
+                <span style={ds.total}>${Number(sale.total_amount).toFixed(2)}</span>
+                <span style={ds.reasonChip}>{sale.deletion_reason}</span>
+                {isOpen
+                  ? <ChevronDown size={14} color="rgba(13,13,13,0.35)" />
+                  : <ChevronRight size={14} color="rgba(13,13,13,0.35)" />
+                }
+              </div>
+            </button>
+
+            {/* Expanded detail */}
+            {isOpen && (
+              <div style={ds.detail}>
+                {/* Line items */}
+                <p style={ds.sectionLabel}>Sale Items</p>
+                {sale.items_snapshot.length === 0 ? (
+                  <p style={ds.muted}>No items recorded.</p>
+                ) : (
+                  <div style={ds.itemList}>
+                    {sale.items_snapshot.map((item, i) => (
+                      <div key={i} style={ds.itemRow}>
+                        <span style={ds.itemType}>{ITEM_TYPE_LABEL[item.item_type] ?? item.item_type}</span>
+                        <span style={ds.itemDesc}>
+                          {item.description}
+                          {item.wig_serial ? ` · ${item.wig_serial}` : ''}
+                          {item.quantity > 1 ? ` ×${item.quantity}` : ''}
+                        </span>
+                        <span style={ds.itemAmt}>${Number(item.subtotal).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Payments */}
+                <p style={{ ...ds.sectionLabel, marginTop: 12 }}>Payments</p>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {sale.payments_snapshot.map((p, i) => (
+                    <span key={i} style={ds.payChip}>
+                      {PAYMENT_LABEL[p.payment_method] ?? p.payment_method} ${Number(p.amount).toFixed(2)}
+                    </span>
+                  ))}
+                  {sale.payments_snapshot.length === 0 && <span style={ds.muted}>No payments recorded.</span>}
+                </div>
+
+                {/* Footer meta */}
+                <div style={ds.meta}>
+                  {sale.deleted_by_name && <span>Deleted by {sale.deleted_by_name}</span>}
+                  {sale.discount_amount > 0 && <span>Discount: ${Number(sale.discount_amount).toFixed(2)}</span>}
+                  {sale.tax_amount > 0 && <span>Tax: ${Number(sale.tax_amount).toFixed(2)}</span>}
+                </div>
+
+                {/* Reason highlighted */}
+                <div style={ds.reasonBox}>
+                  <Trash2 size={12} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span style={ds.reasonText}><strong>Reason:</strong> {sale.deletion_reason}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+const ds: Record<string, React.CSSProperties> = {
+  card:         { border: '1px solid rgba(13,13,13,0.08)', borderRadius: 10, background: '#fff', overflow: 'hidden' },
+  row:          { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', gap: 12 },
+  rowLeft:      { display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, flexWrap: 'wrap' },
+  rowRight:     { display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 },
+  deletedDate:  { fontSize: 12, fontWeight: 600, color: '#0d0d0d' },
+  saleDate:     { fontSize: 12, color: 'rgba(13,13,13,0.55)' },
+  divider:      { fontSize: 12, color: 'rgba(13,13,13,0.25)' },
+  customer:     { fontSize: 12, color: 'rgba(13,13,13,0.55)', fontStyle: 'italic' },
+  total:        { fontSize: 13, fontWeight: 700, color: '#0d0d0d' },
+  reasonChip:   { fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.08)', color: '#ef4444', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  detail:       { borderTop: '1px solid rgba(13,13,13,0.06)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 4, background: '#fafaf9' },
+  sectionLabel: { margin: '0 0 6px', fontSize: 11, fontWeight: 600, color: 'rgba(13,13,13,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  itemList:     { display: 'flex', flexDirection: 'column', gap: 4 },
+  itemRow:      { display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 },
+  itemType:     { fontSize: 11, fontWeight: 600, color: '#0d0d0d', minWidth: 80, flexShrink: 0 },
+  itemDesc:     { color: 'rgba(13,13,13,0.55)', flex: 1 },
+  itemAmt:      { fontWeight: 600, color: '#0d0d0d', flexShrink: 0 },
+  payChip:      { fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#f0fdf4', color: '#15803d' },
+  meta:         { display: 'flex', gap: 14, marginTop: 10, fontSize: 11, color: 'rgba(13,13,13,0.4)' },
+  reasonBox:    { display: 'flex', alignItems: 'flex-start', gap: 7, marginTop: 10, padding: '9px 12px', background: 'rgba(239,68,68,0.05)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.12)' },
+  reasonText:   { fontSize: 12, color: '#0d0d0d', lineHeight: 1.5 },
+  muted:        { fontSize: 12, color: 'rgba(13,13,13,0.35)', margin: 0 },
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────

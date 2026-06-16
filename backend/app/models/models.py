@@ -715,6 +715,25 @@ class RepairOrder(Base):
     cart_items        = relationship("PendingCartItem", back_populates="repair_order")
 
 
+class DeletedSale(Base):
+    """Snapshot of a POS sale captured immediately before hard deletion."""
+    __tablename__ = "deleted_sales"
+
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    original_sale_id  = Column(UUID(as_uuid=True), nullable=True)   # reference only; sale is gone
+    sale_date         = Column(Date, nullable=False)
+    customer_name     = Column(Text, nullable=True)
+    customer_id       = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    total_amount      = Column(Numeric(10, 2), nullable=False, default=0)
+    tax_amount        = Column(Numeric(10, 2), nullable=False, default=0)
+    discount_amount   = Column(Numeric(10, 2), nullable=False, default=0)
+    deletion_reason   = Column(Text, nullable=False)
+    deleted_by_name   = Column(Text, nullable=True)
+    deleted_at        = Column(DateTime(timezone=True), server_default=func.now())
+    items_snapshot    = Column(JSONB, nullable=False, default=list)
+    payments_snapshot = Column(JSONB, nullable=False, default=list)
+
+
 class PendingCartItem(Base):
     """
     An item added to a customer's open cart by any department.
