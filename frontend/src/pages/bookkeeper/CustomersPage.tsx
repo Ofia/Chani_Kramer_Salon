@@ -555,13 +555,28 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={sh.amount}>${Number(wig.total_price).toFixed(2)}</span>
                   {canEdit && (
-                    <button
-                      style={sh.editBtn}
-                      onClick={() => setEditingWig(wig)}
-                      title="Edit wig details"
-                    >
-                      <Pencil size={12} />
-                    </button>
+                    <>
+                      <button
+                        style={sh.editBtn}
+                        onClick={() => setEditingWig(wig)}
+                        title="Edit wig details"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        style={{ ...sh.editBtn, color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+                        title="Delete wig from history"
+                        onClick={async () => {
+                          const label = wig.daysmart_serial || wig.brand || 'this wig'
+                          if (!window.confirm(`Delete "${label}" from ${customer.first_name}'s history? This cannot be undone.`)) return
+                          await api.delete(`/inventory/${wig.id}`)
+                          qc.invalidateQueries({ queryKey: ['customer-history', customer.id] })
+                          qc.invalidateQueries({ queryKey: ['inventory'] })
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
