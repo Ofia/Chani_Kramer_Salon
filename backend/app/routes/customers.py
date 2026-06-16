@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.database import get_db
-from app.models.models import Customer, User, PosSale, InventoryItem, InventoryItemType
+from app.models.models import Customer, User, PosSale, PosSaleItem, InventoryItem, InventoryItemType, PosItemType
 from app.schemas.schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerHistoryResponse
 from app.core.security import get_current_user
 
@@ -55,12 +55,25 @@ def get_customer_history(
         .all()
     )
 
+    # Exclude wigs already shown as a line item inside a POS sale above —
+    # otherwise the same transaction appears twice (once as POS Sale, once as Wig Order).
+    pos_wig_ids = (
+        db.query(PosSaleItem.inventory_item_id)
+        .join(PosSale, PosSaleItem.pos_sale_id == PosSale.id)
+        .filter(
+            PosSale.customer_id == customer_id,
+            PosSaleItem.item_type == PosItemType.wig,
+            PosSaleItem.inventory_item_id.isnot(None),
+        )
+    )
+
     wig_sales = (
         db.query(InventoryItem)
         .filter(
             InventoryItem.customer_id == customer_id,
             InventoryItem.item_type == InventoryItemType.wig,
             InventoryItem.sale_status.isnot(None),
+            ~InventoryItem.id.in_(pos_wig_ids),
         )
         .order_by(InventoryItem.order_date.desc())
         .all()
