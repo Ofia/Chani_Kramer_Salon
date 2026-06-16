@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Package, Plus, X, ChevronRight, Upload } from 'lucide-react'
+import { Package, Plus, X, ChevronRight, Upload, Pencil } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -152,6 +152,7 @@ export default function InventoryPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showFileImport, setShowFileImport] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
+  const [editWig, setEditWig]   = useState<InventoryItem | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; label: string } | null>(null)
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ export default function InventoryPage() {
         <WigTable
           wigs={wigs}
           onRowClick={setDrawerWig}
+          onEdit={setEditWig}
           onDelete={(id, label) => setConfirmDelete({ id, label })}
         />
       ) : tab === 'sold' ? (
@@ -382,6 +384,15 @@ export default function InventoryPage() {
       )}
 
       {/* ── Modals ── */}
+      {editWig && (
+        <WigEditModal
+          wig={editWig}
+          markups={markups}
+          onClose={() => setEditWig(null)}
+          onSaved={() => { setEditWig(null); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
+        />
+      )}
+
       {(showAddModal || !!editItem) && (
         <AddModal
           initialTab={editItem ? 'product' : tab === 'sold' ? 'wig' : tab}
@@ -412,9 +423,10 @@ export default function InventoryPage() {
 
 // ── Wig Table ──────────────────────────────────────────────────────────────
 
-function WigTable({ wigs, onRowClick, onDelete }: {
+function WigTable({ wigs, onRowClick, onEdit, onDelete }: {
   wigs: InventoryItem[]
   onRowClick: (w: InventoryItem) => void
+  onEdit: (w: InventoryItem) => void
   onDelete: (id: string, label: string) => void
 }) {
   if (wigs.length === 0) return <div style={s.empty}>No wigs found.</div>
@@ -451,6 +463,9 @@ function WigTable({ wigs, onRowClick, onDelete }: {
               </td>
               <td style={s.td} onClick={e => e.stopPropagation()}>
                 <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                  <button style={s.rowBtn} title="Edit" onClick={() => onEdit(w)}>
+                    <Pencil size={13} />
+                  </button>
                   <button style={s.rowBtn} onClick={() => onRowClick(w)}>
                     <ChevronRight size={14} />
                   </button>
@@ -733,6 +748,126 @@ function WigForm({ markups, onClose, onSaved }: {
       <div style={s.modalFooter}>
         <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
         <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : 'Add Wig'}</button>
+      </div>
+    </form>
+  )
+}
+
+// ── Wig Edit Modal ─────────────────────────────────────────────────────────
+
+function WigEditModal({ wig, markups, onClose, onSaved }: {
+  wig: InventoryItem
+  markups: BrandMarkup[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  return (
+    <div style={s.modalOverlay} onClick={onClose}>
+      <div style={s.modal} onClick={e => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <span style={s.modalTitle}>Edit Wig — {wig.daysmart_serial ?? wigLabel(wig)}</span>
+          <button style={s.iconBtnSm} onClick={onClose}><X size={16} /></button>
+        </div>
+        <WigEditForm wig={wig} markups={markups} onClose={onClose} onSaved={onSaved} />
+      </div>
+    </div>
+  )
+}
+
+function WigEditForm({ wig, markups, onClose, onSaved }: {
+  wig: InventoryItem
+  markups: BrandMarkup[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [form, setFormState] = useState({
+    daysmart_serial: wig.daysmart_serial ?? '',
+    brand:           wig.brand           ?? '',
+    color:           wig.color           ?? '',
+    length:          wig.length          ?? '',
+    size:            wig.size            ?? '',
+    front:           wig.front           ?? '',
+    supplier:        wig.supplier        ?? '',
+    arrival_date:    wig.arrival_date    ?? '',
+    cost_price:      wig.cost_price  != null ? String(wig.cost_price)   : '',
+    retail_price:    wig.retail_price != null ? String(wig.retail_price) : '',
+    notes:           wig.notes           ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState('')
+
+  const { data: providers = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['providers'],
+    queryFn: () => api.get('/providers/?active_only=true').then(r => Array.isArray(r.data) ? r.data : []),
+  })
+
+  function set(k: string, v: string) {
+    setFormState(f => ({ ...f, [k]: v }))
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true); setErr('')
+    try {
+      await api.patch(`/inventory/${wig.id}`, {
+        name:            [form.brand, form.length, form.color].filter(Boolean).join(' ') || wig.name,
+        daysmart_serial: form.daysmart_serial || null,
+        brand:           form.brand           || null,
+        color:           form.color           || null,
+        length:          form.length          || null,
+        size:            form.size            || null,
+        front:           form.front           || null,
+        supplier:        form.supplier        || null,
+        arrival_date:    form.arrival_date    || null,
+        cost_price:      form.cost_price      ? parseFloat(form.cost_price)   : null,
+        retail_price:    form.retail_price    ? parseFloat(form.retail_price) : null,
+        notes:           form.notes           || null,
+      })
+      onSaved()
+    } catch (e: any) {
+      setErr(e.response?.data?.detail ?? e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} style={s.form}>
+      <div style={s.row2}>
+        <Field label="Serial #"><input style={s.fi} value={form.daysmart_serial} onChange={e => set('daysmart_serial', e.target.value)} /></Field>
+        <Field label="Brand">
+          <input style={s.fi} value={form.brand} onChange={e => set('brand', e.target.value)} list="edit-brand-suggestions" />
+          <datalist id="edit-brand-suggestions">{markups.map(m => <option key={m.id} value={m.brand} />)}</datalist>
+        </Field>
+      </div>
+      <div style={s.row3}>
+        <Field label="Color"><input style={s.fi} value={form.color} onChange={e => set('color', e.target.value)} /></Field>
+        <Field label="Length"><input style={s.fi} value={form.length} onChange={e => set('length', e.target.value)} /></Field>
+        <Field label="Size"><input style={s.fi} value={form.size} onChange={e => set('size', e.target.value)} /></Field>
+      </div>
+      <Field label="Front"><input style={s.fi} value={form.front} onChange={e => set('front', e.target.value)} /></Field>
+      <div style={s.row2}>
+        <Field label="Provider / Supplier">
+          <select style={s.fi} value={form.supplier} onChange={e => set('supplier', e.target.value)}>
+            <option value="">— Select provider —</option>
+            {providers.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Arrival Date"><input type="date" style={s.fi} value={form.arrival_date} onChange={e => set('arrival_date', e.target.value)} /></Field>
+      </div>
+      <div style={s.row2}>
+        <Field label="Cost Price ($)">
+          <input type="number" step="0.01" style={s.fi} value={form.cost_price} onChange={e => set('cost_price', e.target.value)} />
+        </Field>
+        <Field label="Retail Price ($)">
+          <input type="number" step="0.01" style={s.fi} value={form.retail_price} onChange={e => set('retail_price', e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Notes"><textarea style={{ ...s.fi, minHeight: 60 }} value={form.notes} onChange={e => set('notes', e.target.value)} /></Field>
+      {err && <div style={s.errMsg}>{err}</div>}
+      <div style={s.modalFooter}>
+        <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+        <button type="submit" style={s.primaryBtn} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
       </div>
     </form>
   )
