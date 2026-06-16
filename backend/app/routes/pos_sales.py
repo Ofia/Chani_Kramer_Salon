@@ -355,6 +355,19 @@ def auto_fill(
 
 # ── Get one ───────────────────────────────────────────────────
 
+@router.get("/deleted", response_model=List[DeletedSaleResponse])
+def list_deleted_sales(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return all deleted POS sales, newest first."""
+    return (
+        db.query(DeletedSale)
+        .order_by(DeletedSale.deleted_at.desc())
+        .all()
+    )
+
+
 @router.get("/{sale_id}", response_model=PosSaleResponse)
 def get_pos_sale(
     sale_id: UUID,
@@ -368,18 +381,6 @@ def get_pos_sale(
 
 
 # ── Delete ────────────────────────────────────────────────────
-
-@router.get("/deleted", response_model=List[DeletedSaleResponse])
-def list_deleted_sales(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Return all deleted POS sales, newest first."""
-    return (
-        db.query(DeletedSale)
-        .order_by(DeletedSale.deleted_at.desc())
-        .all()
-    )
 
 
 @router.delete("/{sale_id}", status_code=204)
