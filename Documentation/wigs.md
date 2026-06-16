@@ -321,9 +321,4 @@ Elite markup also includes Cap Transfer.
 
 ---
 
-## Open Questions for Avi
 
-- [ ] Is the Rina 2025 price list still current for non-Elite models, or has a 2026 list been issued?
-- [ ] Does BK have a contact name / phone number?
-- [ ] Does Rochi Lipsker have a contact email / phone?
-- [ ] Any additional providers not in this folder (e.g. HP wigs — seen in DaySmart serials)?
