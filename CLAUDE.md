@@ -14,18 +14,19 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 ### Migration Status
 | Migration | File | Status |
 |-----------|------|--------|
-| 011 | `backend/migrations/011_consolidate_wig_orders.sql` | ❓ Verify |
-| 012 | `backend/migrations/012_pos_enhancements.sql` | ❓ Verify |
-| 013 | `backend/migrations/013_expense_categories.sql` | ❓ Verify |
-| 015 | `backend/migrations/015_pos_item_tax.sql` | ❓ Verify |
+| ~~011~~ | ~~`backend/migrations/011_consolidate_wig_orders.sql`~~ | ✅ Run |
+| ~~012~~ | ~~`backend/migrations/012_pos_enhancements.sql`~~ | ✅ Run |
+| ~~013~~ | ~~`backend/migrations/013_expense_categories.sql`~~ | ✅ Run |
+| ~~015~~ | ~~`backend/migrations/015_pos_item_tax.sql`~~ | ✅ Run |
 | ~~016~~ | ~~`backend/migrations/016_inventory_event_pos_sale.sql`~~ | ✅ Run |
-| 017 | `backend/migrations/017_appointments.sql` | ❓ Verify |
+| ~~017~~ | ~~`backend/migrations/017_appointments.sql`~~ | ✅ Run |
 | ~~018~~ | ~~`backend/migrations/018_pending_cart.sql`~~ | ✅ Run |
 | ~~019~~ | ~~`backend/migrations/019_discount_and_salesrep.sql`~~ | ✅ Run (2026-06-09) |
 | ~~020~~ | ~~`backend/migrations/020_seed_sary_provider.sql`~~ | ✅ Run (2026-06-11) |
 | ~~021~~ | ~~`backend/migrations/021_provider_contact_and_wig_models.sql`~~ | ✅ Run (2026-06-11) |
 | ~~022~~ | ~~`backend/migrations/022_seed_provider_wig_models.sql`~~ | ✅ Run (2026-06-11) |
 | ~~023~~ | ~~`backend/migrations/023_repair_orders.sql`~~ | ✅ Run (2026-06-11) |
+| ~~024~~ | ~~`backend/migrations/024_role_expansion.sql`~~ | ✅ Run (2026-06-16) |
 
 
 ## Color Palette

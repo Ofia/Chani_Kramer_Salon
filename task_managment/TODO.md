@@ -7,18 +7,19 @@
 
 | Migration | File | Status |
 |-----------|------|--------|
-| 011 | `011_consolidate_wig_orders.sql` | ❓ Verify — needed for inventory-first architecture |
-| 012 | `012_pos_enhancements.sql` | ❓ Verify — repair notes, tax, shipping columns |
-| 013 | `013_expense_categories.sql` | ❓ Verify — 13 industry-standard expense categories |
-| 015 | `015_pos_item_tax.sql` | ❓ Verify — per-item tax fields |
+| ~~011~~ | `011_consolidate_wig_orders.sql` | ✅ Run |
+| ~~012~~ | `012_pos_enhancements.sql` | ✅ Run |
+| ~~013~~ | `013_expense_categories.sql` | ✅ Run |
+| ~~015~~ | `015_pos_item_tax.sql` | ✅ Run |
 | ~~016~~ | `016_inventory_event_pos_sale.sql` | ✅ Run |
-| 017 | `017_appointments.sql` | ❓ Verify — appointments table + enums |
+| ~~017~~ | `017_appointments.sql` | ✅ Run |
 | ~~018~~ | `018_pending_cart.sql` | ✅ Run |
 | ~~019~~ | `019_discount_and_salesrep.sql` | ✅ Run (2026-06-09) |
 | ~~020~~ | `020_seed_sary_provider.sql` | ✅ Run (2026-06-11) |
 | ~~021~~ | `021_provider_contact_and_wig_models.sql` | ✅ Run (2026-06-11) |
 | ~~022~~ | `022_seed_provider_wig_models.sql` | ✅ Run (2026-06-11) |
 | ~~023~~ | `023_repair_orders.sql` | ✅ Run (2026-06-11) |
+| ~~024~~ | `024_role_expansion.sql` | ✅ Run (2026-06-16) |
 
 ---
 

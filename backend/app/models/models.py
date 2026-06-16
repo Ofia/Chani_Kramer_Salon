@@ -31,7 +31,10 @@ import enum
 
 class UserRole(str, enum.Enum):
     bookkeeper = "bookkeeper"
-    owner = "owner"
+    owner      = "owner"
+    sales      = "sales"
+    front_desk = "front_desk"
+    repairs    = "repairs"
 
 class PayType(str, enum.Enum):
     weekly_flat = "weekly_flat"

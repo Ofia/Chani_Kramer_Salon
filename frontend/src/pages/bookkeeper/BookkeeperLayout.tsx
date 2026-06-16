@@ -6,27 +6,27 @@ import {
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 
-type Role = 'owner' | 'bookkeeper' | 'front_desk' | 'sales'
+type Role = 'owner' | 'bookkeeper' | 'front_desk' | 'sales' | 'repairs'
 
 type NavItem =
   | { to: string; label: string; icon: React.ElementType; end: boolean; roles: Role[]; divider?: never }
   | { divider: true; roles: Role[]; to?: never; label?: never; icon?: never; end?: never }
 
 const BOOKKEEPING_TABS: NavItem[] = [
-  { to: '/bookkeeper/hello',     label: 'Hello Board',       icon: Home,            end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/calendar',  label: 'Calendar',          icon: CalendarDays,    end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/pos',       label: 'Point of Sale',     icon: ShoppingCart,    end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/sales',     label: 'Sales Management',  icon: Sparkles,        end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/repairs',   label: 'Repairs',           icon: Wrench,          end: false, roles: ['sales','front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/overview',   label: 'Overview',          icon: Activity,        end: false, roles: ['front_desk','bookkeeper','owner'] },
-  { to: '/bookkeeper/payroll',   label: 'Payroll',           icon: Users,           end: false, roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/expenses',  label: 'Expenses',      icon: Receipt,         end: false, roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/main-board',label: 'Super Board',   icon: BarChart2,       end: false, roles: ['owner'] },
-  { divider: true, roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/providers', label: 'Providers',     icon: Building2,       end: false, roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/inventory', label: 'Inventory',     icon: Package,         end: false, roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/employees', label: 'Employees',     icon: UserCog,         end: false, roles: ['bookkeeper','owner'] },
-  { to: '/bookkeeper/customers', label: 'Customers',     icon: Contact,         end: false, roles: ['bookkeeper','owner'] },
+  { to: '/bookkeeper/hello',      label: 'Hello Board',       icon: Home,         end: false, roles: ['owner','bookkeeper','sales','front_desk','repairs'] },
+  { to: '/bookkeeper/calendar',   label: 'Calendar',          icon: CalendarDays, end: false, roles: ['owner','bookkeeper','sales','front_desk','repairs'] },
+  { to: '/bookkeeper/pos',        label: 'Point of Sale',     icon: ShoppingCart, end: false, roles: ['owner','bookkeeper','front_desk'] },
+  { to: '/bookkeeper/sales',      label: 'Sales Management',  icon: Sparkles,     end: false, roles: ['owner','bookkeeper','sales'] },
+  { to: '/bookkeeper/repairs',    label: 'Repairs',           icon: Wrench,       end: false, roles: ['owner','bookkeeper','repairs'] },
+  { to: '/bookkeeper/overview',   label: 'Overview',          icon: Activity,     end: false, roles: ['owner','bookkeeper'] },
+  { to: '/bookkeeper/payroll',    label: 'Payroll',           icon: Users,        end: false, roles: ['owner','bookkeeper'] },
+  { to: '/bookkeeper/expenses',   label: 'Expenses',          icon: Receipt,      end: false, roles: ['owner','bookkeeper'] },
+  { to: '/bookkeeper/main-board', label: 'Super Board',       icon: BarChart2,    end: false, roles: ['owner'] },
+  { divider: true, roles: ['owner','bookkeeper','sales'] },
+  { to: '/bookkeeper/providers',  label: 'Providers',         icon: Building2,    end: false, roles: ['owner','bookkeeper'] },
+  { to: '/bookkeeper/inventory',  label: 'Product Management',icon: Package,      end: false, roles: ['owner','bookkeeper','sales'] },
+  { to: '/bookkeeper/employees',  label: 'Employees',         icon: UserCog,      end: false, roles: ['owner','bookkeeper'] },
+  { to: '/bookkeeper/customers',  label: 'Customers',         icon: Contact,      end: false, roles: ['owner','bookkeeper','sales','front_desk','repairs'] },
 ]
 
 export default function BookkeeperLayout() {

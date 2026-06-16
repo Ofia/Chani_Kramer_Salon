@@ -211,7 +211,7 @@ export default function InventoryPage() {
       <div style={s.header}>
         <div style={s.headerLeft}>
           <Package size={20} strokeWidth={1.6} color="#212121" />
-          <h1 style={s.title}>Inventory</h1>
+          <h1 style={s.title}>Product Management</h1>
         </div>
         <div style={s.headerRight}>
           <button style={s.iconBtn} onClick={() => setShowFileImport(true)} title="Add from file">
