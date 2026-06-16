@@ -27,6 +27,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~022~~ | ~~`backend/migrations/022_seed_provider_wig_models.sql`~~ | ✅ Run (2026-06-11) |
 | ~~023~~ | ~~`backend/migrations/023_repair_orders.sql`~~ | ✅ Run (2026-06-11) |
 | ~~024~~ | ~~`backend/migrations/024_role_expansion.sql`~~ | ✅ Run (2026-06-16) |
+| ~~025~~ | ~~`backend/migrations/025_deleted_sales.sql`~~ | ✅ Run (2026-06-16) |
 
 
 ## Color Palette

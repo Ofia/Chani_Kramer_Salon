@@ -398,7 +398,7 @@ export default function InventoryPage() {
 
       {(showAddModal || !!editItem) && (
         <AddModal
-          initialTab={editItem ? 'product' : tab === 'sold' ? 'wig' : tab}
+          initialTab={editItem ? 'product' : (tab === 'sold' || tab === 'deleted_sales') ? 'wig' : tab}
           editProduct={editItem}
           markups={markups}
           onClose={() => { setShowAddModal(false); setEditItem(null) }}
