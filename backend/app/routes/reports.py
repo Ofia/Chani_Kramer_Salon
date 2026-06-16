@@ -37,12 +37,13 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 # ── Response shapes ───────────────────────────────────────────
 
 class ReportRevenue(BaseModel):
-    wash_set:      float = 0
-    repairs:       float = 0
-    product_sales: float = 0
-    wig_sales:     float = 0   # paid_in_full only
-    wig_deposits:  float = 0   # cash held, NOT revenue
-    total:         float = 0
+    wash_set:        float = 0
+    repairs:         float = 0
+    product_sales:   float = 0
+    wig_sales:       float = 0   # paid_in_full only
+    wig_deposits:    float = 0   # cash held, NOT revenue
+    repair_deposits: float = 0   # repairs on pending wig sales — cash held, NOT revenue
+    total:           float = 0
 
 
 class ReportPayments(BaseModel):
@@ -118,14 +119,39 @@ def get_report(
     )
 
     # ── 2. Revenue from POS line items ────────────────────
-    wash_set = repairs = product_sales = 0.0
+    #
+    # Repair revenue recognition rule:
+    #   - Standalone repair (no wig on same sale) → immediate repairs revenue
+    #   - Repair on same ticket as a pending wig (not paid_in_full) → repair_deposits
+    #   - Repair on same ticket as a paid wig → deferred; recognized in step 3b below
+    wash_set = repairs = product_sales = repair_deposits = 0.0
     for sale in pos_sales:
+        # Collect inventory_item_ids for any wig items on this sale
+        wig_inv_ids = [
+            item.inventory_item_id
+            for item in sale.items
+            if item.item_type == PosItemType.wig and item.inventory_item_id
+        ]
+        has_wig = bool(wig_inv_ids)
+
+        # If there's a wig, check whether it's still pending payment
+        wig_is_pending = False
+        if has_wig:
+            wig_inv = db.query(InventoryItem).filter(
+                InventoryItem.id == wig_inv_ids[0]
+            ).first()
+            wig_is_pending = bool(wig_inv and wig_inv.sale_status != WigStatus.paid_in_full)
+
         for item in sale.items:
             amt = float(item.subtotal)
             if item.item_type == PosItemType.wash_set:
                 wash_set += amt
             elif item.item_type == PosItemType.repair:
-                repairs += amt
+                if not has_wig:
+                    repairs += amt           # standalone repair → immediate revenue
+                elif wig_is_pending:
+                    repair_deposits += amt   # deferred until wig is picked up
+                # wig is paid_in_full → handled in step 3b below
             elif item.item_type == PosItemType.inventory:
                 product_sales += amt
             # wig items excluded here — counted via paid_in_full below
@@ -142,6 +168,33 @@ def get_report(
         .all()
     )
     wig_sales = sum(float(w.total_price or 0) for w in wig_sales_items)
+
+    # ── 3b. Deferred repair revenue — repairs on wig-deposit sales now paid_in_full ──
+    #
+    # When a wig is picked up this period, any repair that was on the original deposit
+    # sale (and held as repair_deposits in a prior period) is now recognized as revenue.
+    wig_ids = [w.id for w in wig_sales_items]
+    if wig_ids:
+        # Find the POS sale(s) that originally contained each wig item
+        original_wig_sale_items = (
+            db.query(PosSaleItem)
+            .filter(
+                PosSaleItem.item_type == PosItemType.wig,
+                PosSaleItem.inventory_item_id.in_(wig_ids),
+            )
+            .all()
+        )
+        original_sale_ids = {si.pos_sale_id for si in original_wig_sale_items}
+        if original_sale_ids:
+            deferred_repair_items = (
+                db.query(PosSaleItem)
+                .filter(
+                    PosSaleItem.pos_sale_id.in_(original_sale_ids),
+                    PosSaleItem.item_type == PosItemType.repair,
+                )
+                .all()
+            )
+            repairs += sum(float(ri.subtotal) for ri in deferred_repair_items)
 
     # ── 4. Wig deposits held (ordered during range, not yet paid) ──
     wig_deposit_items = (
@@ -287,6 +340,7 @@ def get_report(
             product_sales=product_sales,
             wig_sales=wig_sales,
             wig_deposits=wig_deposits,
+            repair_deposits=repair_deposits,
             total=total_revenue,
         ),
         payments=ReportPayments(

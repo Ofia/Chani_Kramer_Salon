@@ -21,7 +21,7 @@ type PeriodMode = 'day' | 'month' | 'range'
 
 type ReportRevenue = {
   wash_set: number; repairs: number; product_sales: number
-  wig_sales: number; wig_deposits: number; total: number
+  wig_sales: number; wig_deposits: number; repair_deposits: number; total: number
 }
 type ReportPayments = {
   cash: number; credit_card: number; quickpay: number
@@ -241,11 +241,25 @@ function RevenueTab({ data }: { data: ReportData }) {
           <StatRow label="Wig Sales"    value={revenue.wig_sales}     color={NAVY}  />
           <div style={s.divider} />
           <StatRow label="Total Revenue" value={revenue.total} bold />
-          <div style={{ marginTop: 16, padding: '12px 16px', background: '#fafaf9', border: '1px solid #e5e5e5', borderRadius: 10 }}>
-            <p style={{ margin: 0, fontSize: 11, color: '#71717a', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Wig Deposits Held</p>
-            <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#18181b' }}>{fmt(revenue.wig_deposits)}</p>
-            <p style={{ margin: '4px 0 0', fontSize: 11, color: '#71717a' }}>Cash received, not yet recognized as revenue</p>
-          </div>
+          {(revenue.wig_deposits > 0 || revenue.repair_deposits > 0) && (
+            <div style={{ marginTop: 16, padding: '12px 16px', background: '#fafaf9', border: '1px solid #e5e5e5', borderRadius: 10 }}>
+              <p style={{ margin: 0, fontSize: 11, color: '#71717a', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Deposits Held</p>
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#18181b' }}>{fmt(revenue.wig_deposits + revenue.repair_deposits)}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: '#71717a' }}>Cash received, not yet recognized as revenue</p>
+              {revenue.wig_deposits > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                  <span style={{ fontSize: 12, color: '#71717a' }}>Wig deposits</span>
+                  <span style={{ fontSize: 12, color: '#18181b', fontWeight: 600 }}>{fmt(revenue.wig_deposits)}</span>
+                </div>
+              )}
+              {revenue.repair_deposits > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span style={{ fontSize: 12, color: '#71717a' }}>Repairs (pending wig)</span>
+                  <span style={{ fontSize: 12, color: '#18181b', fontWeight: 600 }}>{fmt(revenue.repair_deposits)}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -453,9 +467,21 @@ function SummaryTab({ data }: { data: ReportData }) {
           <p style={{ ...s.infoNote, color: '#b45309' }}>NY Sales Tax collected via POS</p>
         </div>
         <div style={{ ...s.infoBox, flex: 1, minWidth: 200, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-          <p style={{ ...s.infoLabel, color: '#166534' }}>Wig Deposits Held</p>
-          <p style={{ ...s.infoValue, color: '#166534' }}>{fmt(data.revenue.wig_deposits)}</p>
+          <p style={{ ...s.infoLabel, color: '#166534' }}>Deposits Held</p>
+          <p style={{ ...s.infoValue, color: '#166534' }}>{fmt(data.revenue.wig_deposits + data.revenue.repair_deposits)}</p>
           <p style={{ ...s.infoNote, color: '#15803d' }}>Not revenue — awaiting pickup</p>
+          {data.revenue.wig_deposits > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+              <span style={{ fontSize: 12, color: '#15803d' }}>Wig deposits</span>
+              <span style={{ fontSize: 12, color: '#166534', fontWeight: 600 }}>{fmt(data.revenue.wig_deposits)}</span>
+            </div>
+          )}
+          {data.revenue.repair_deposits > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+              <span style={{ fontSize: 12, color: '#15803d' }}>Repairs (pending wig)</span>
+              <span style={{ fontSize: 12, color: '#166534', fontWeight: 600 }}>{fmt(data.revenue.repair_deposits)}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
