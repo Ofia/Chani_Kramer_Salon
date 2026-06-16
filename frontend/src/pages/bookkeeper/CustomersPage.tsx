@@ -447,7 +447,8 @@ const STATUS_COLOR: Record<string, string> = {
   ordered: '#E3CD94', ready: '#97BBE9', paid_in_full: '#10b981',
 }
 
-function safeFmtDate(dateStr: string) {
+function safeFmtDate(dateStr: string | null | undefined) {
+  if (!dateStr) return '—'
   const [y, m, d] = dateStr.split('T')[0].split('-')
   return `${m}/${d}/${y.slice(2)}`
 }
