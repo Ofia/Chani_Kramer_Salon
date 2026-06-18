@@ -65,7 +65,10 @@ def create_pos_sale(
         tax_amount = Decimal("0")
 
     total = items_subtotal_for_tax + wig_balance_total + pos_balance_total + tax_amount + data.shipping_amount - data.discount_amount
-    paid  = sum(p.amount for p in data.payments) + wig_balance_total + pos_balance_total  # balance payments are both in total and paid so balance_due = cart items only
+    # paid = only what data.payments contains. The frontend auto-fill already sets the
+    # payment to the full cart total (including wig/pos balance items), so we must NOT
+    # add wig_balance_total or pos_balance_total here — that would double-count them.
+    paid  = sum(p.amount for p in data.payments)
 
     # 2. Create the sale header
     sale = PosSale(
