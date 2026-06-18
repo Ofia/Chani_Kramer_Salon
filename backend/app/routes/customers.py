@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.database import get_db
-from app.models.models import Customer, User, PosSale, PosSaleItem, InventoryItem, InventoryItemType, PosItemType
+from sqlalchemy import func
+from app.models.models import Customer, User, PosSale, PosSaleItem, InventoryItem, InventoryItemType, PosItemType, WigPayment
 from app.schemas.schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerHistoryResponse
 from app.core.security import get_current_user
 
@@ -79,9 +80,22 @@ def get_customer_history(
         .all()
     )
 
+    # For wigs in wig_sales, some payments may have been made via a POS sale
+    # (wig_balance_payments). Those amounts already appear in pos_sales.amount_paid,
+    # so the frontend needs to subtract them to avoid double-counting.
+    wig_sale_ids = [w.id for w in wig_sales]
+    wig_pos_payments_total = 0.0
+    if wig_sale_ids:
+        result = db.query(func.sum(WigPayment.amount)).filter(
+            WigPayment.inventory_item_id.in_(wig_sale_ids),
+            WigPayment.pos_sale_id.isnot(None),
+        ).scalar()
+        wig_pos_payments_total = float(result or 0)
+
     return CustomerHistoryResponse(
         pos_sales=pos_sales,
         wig_sales=wig_sales,
+        wig_pos_payments_total=wig_pos_payments_total,
     )
 
 

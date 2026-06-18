@@ -433,7 +433,7 @@ type PosSaleItem    = { id: string; item_type: string; description: string; quan
 type PosSale        = { id: string; sale_date: string; total_amount: number; amount_paid: number; balance_due: number; notes?: string; items: PosSaleItem[]; payments: PosSalePayment[] }
 type WigPayment     = { id: string; payment_date: string; amount: number; payment_method: string; payment_type: string }
 type WigOrder       = { id: string; order_date?: string | null; daysmart_serial?: string; brand?: string; length?: string; color?: string; size?: string; notes?: string; total_price: number; amount_paid: number; balance_due: number; sale_status: string; payments: WigPayment[] }
-type CustomerHistory = { pos_sales: PosSale[]; wig_sales: WigOrder[] }
+type CustomerHistory = { pos_sales: PosSale[]; wig_sales: WigOrder[]; wig_pos_payments_total: number }
 
 const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash', credit_card: 'CC', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
@@ -462,11 +462,14 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
 
   const { data, isLoading } = useQuery<CustomerHistory>({
     queryKey: ['customer-history', customer.id],
-    queryFn: () => api.get(`/customers/${customer.id}/history`).then(r => r.data).catch(() => ({ pos_sales: [], wig_sales: [] })),
+    queryFn: () => api.get(`/customers/${customer.id}/history`).then(r => r.data).catch(() => ({ pos_sales: [], wig_sales: [], wig_pos_payments_total: 0 })),
   })
 
+  // wig_pos_payments_total = wig balance payments made via POS that already appear in
+  // pos_sales.amount_paid — subtract to avoid counting them twice.
   const totalSpent = (data?.pos_sales.reduce((s, p) => s + Number(p.amount_paid), 0) ?? 0)
     + (data?.wig_sales.reduce((s, w) => s + Number(w.amount_paid), 0) ?? 0)
+    - (data?.wig_pos_payments_total ?? 0)
 
   const totalVisits = (data?.pos_sales.length ?? 0) + (data?.wig_sales.length ?? 0)
 

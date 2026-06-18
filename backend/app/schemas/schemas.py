@@ -832,10 +832,14 @@ class CustomerHistoryResponse(BaseModel):
     """
     All purchases for a single customer.
     pos_sales: visits recorded via the POS (may include wigs, services, products).
-    wig_sales: wig inventory items sold directly to this customer.
+    wig_sales: wig inventory items sold directly to this customer (not via a POS wig line item).
+    wig_pos_payments_total: sum of WigPayments made via POS for wigs in wig_sales — already
+      counted inside pos_sales.amount_paid, so the frontend must subtract this to avoid
+      double-counting.
     """
     pos_sales: List[PosSaleResponse]
     wig_sales: List[InventoryItemResponse]
+    wig_pos_payments_total: float = 0.0
 
 
 # ── Employee Time Logs ────────────────────────────────────────
