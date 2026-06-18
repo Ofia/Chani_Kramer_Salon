@@ -561,6 +561,13 @@ class WigBalancePaymentIn(BaseModel):
     payment_method: PaymentMethod
 
 
+class PosBalancePaymentIn(BaseModel):
+    """Pay off an open balance on an existing POS sale (product / service)."""
+    pos_sale_id: UUID
+    amount: Decimal
+    payment_method: PaymentMethod
+
+
 class DeleteSalePayload(BaseModel):
     reason: str
 
@@ -579,6 +586,7 @@ class PosSaleCreate(BaseModel):
     items: List[PosSaleItemCreate] = []
     payments: List[PosSalePaymentCreate] = []
     wig_balance_payments: List[WigBalancePaymentIn] = []
+    pos_balance_payments: List[PosBalancePaymentIn] = []
 
 
 class PosSaleResponse(BaseModel):
@@ -713,6 +721,7 @@ class InventoryItemResponse(BaseModel):
     customer_phone: Optional[str]
     total_price: Optional[float]
     amount_paid: float
+    sale_tax_amount: float = 0.0
     balance_due: Optional[float]
     sale_status: Optional[WigStatus]
     order_date: Optional[date]
@@ -840,6 +849,7 @@ class CustomerHistoryResponse(BaseModel):
     pos_sales: List[PosSaleResponse]
     wig_sales: List[InventoryItemResponse]
     wig_pos_payments_total: float = 0.0
+    pos_balance_payments_total: float = 0.0
 
 
 # ── Employee Time Logs ────────────────────────────────────────

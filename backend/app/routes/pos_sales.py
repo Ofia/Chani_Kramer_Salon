@@ -26,10 +26,15 @@ from app.models.models import (
     PosItemType, WigStatus, WigItemStatus, WigPaymentType, PaymentMethod, User,
     DeletedSale,
 )
+import json
+import re as _re
+
 from app.schemas.schemas import (
     PosSaleCreate, PosSaleResponse, DailyAutoFillResponse, WigBalancePaymentIn,
-    DeleteSalePayload, DeletedSaleResponse,
+    PosBalancePaymentIn, DeleteSalePayload, DeletedSaleResponse,
 )
+
+_POS_BAL_RE = _re.compile(r'__pos_bal__:(\[.*?\])(?:\n|$)', _re.DOTALL)
 from app.core.security import get_current_user
 
 router = APIRouter(prefix="/pos-sales", tags=["pos sales"])
@@ -49,6 +54,7 @@ def create_pos_sale(
     #    tax_rate = 0.045      → flat 4.5% on entire cart subtotal
     #    tax_rate = 0.08875    → flat 8.875% on entire cart subtotal
     wig_balance_total = sum(wbp.amount for wbp in data.wig_balance_payments)
+    pos_balance_total = sum(pbp.amount for pbp in data.pos_balance_payments)
     items_subtotal_for_tax = sum(item.subtotal for item in data.items)
 
     if data.tax_amount_override is not None:
@@ -58,8 +64,8 @@ def create_pos_sale(
     else:
         tax_amount = Decimal("0")
 
-    total = items_subtotal_for_tax + wig_balance_total + tax_amount + data.shipping_amount - data.discount_amount
-    paid  = sum(p.amount for p in data.payments) + wig_balance_total  # wig balance is both in total and paid so balance_due = cart − cart_payments
+    total = items_subtotal_for_tax + wig_balance_total + pos_balance_total + tax_amount + data.shipping_amount - data.discount_amount
+    paid  = sum(p.amount for p in data.payments) + wig_balance_total + pos_balance_total  # balance payments are both in total and paid so balance_due = cart items only
 
     # 2. Create the sale header
     sale = PosSale(
@@ -79,6 +85,15 @@ def create_pos_sale(
     )
     db.add(sale)
     db.flush()  # gives us sale.id
+
+    # If this checkout includes POS balance payments, embed a machine-readable
+    # cross-reference in the sale's notes so the delete handler and customer
+    # history endpoint can find and reverse/de-duplicate them later.
+    if data.pos_balance_payments:
+        refs = [{"sale_id": str(pbp.pos_sale_id), "amount": float(pbp.amount)}
+                for pbp in data.pos_balance_payments]
+        marker = f"__pos_bal__:{json.dumps(refs)}"
+        sale.notes = marker + ("\n" + data.notes if data.notes else "")
 
     # 3. Process each line item
     for item_data in data.items:
@@ -121,8 +136,8 @@ def create_pos_sale(
             ).first()
 
             if wig:
-                # Determine sale status — paid in full if deposit covers the price
-                if deposit_amt >= item_data.subtotal and item_data.subtotal > 0:
+                # Determine sale status — paid in full if deposit covers price + tax
+                if deposit_amt >= (item_data.subtotal + item_tax) and item_data.subtotal > 0:
                     new_sale_status = WigStatus.paid_in_full
                     pickup_date     = data.sale_date
                 else:
@@ -211,7 +226,7 @@ def create_pos_sale(
         if not wig:
             continue
 
-        balance  = (wig.total_price or Decimal(0)) - (wig.amount_paid or Decimal(0))
+        balance  = (wig.total_price or Decimal(0)) + (wig.sale_tax_amount or Decimal(0)) - (wig.amount_paid or Decimal(0))
         pay_type = WigPaymentType.final if wbp.amount >= balance else WigPaymentType.partial
 
         db.add(WigPayment(
@@ -224,7 +239,7 @@ def create_pos_sale(
         ))
 
         wig.amount_paid = (wig.amount_paid or Decimal(0)) + wbp.amount
-        if wig.total_price and wig.amount_paid >= wig.total_price:
+        if wig.total_price and wig.amount_paid >= (wig.total_price + (wig.sale_tax_amount or Decimal(0))):
             wig.sale_status = WigStatus.paid_in_full
             wig.pickup_date = data.sale_date
 
@@ -232,7 +247,7 @@ def create_pos_sale(
         if pay_type == WigPaymentType.final:
             pmt_desc = f"Paid in full — ${wbp.amount:.2f} received"
         else:
-            remaining = max(Decimal(0), (wig.total_price or Decimal(0)) - wig.amount_paid)
+            remaining = max(Decimal(0), (wig.total_price or Decimal(0)) + (wig.sale_tax_amount or Decimal(0)) - wig.amount_paid)
             pmt_desc = f"Partial payment — ${wbp.amount:.2f} received, ${remaining:.2f} remaining"
         db.add(InventoryEvent(
             inventory_item_id = wig.id,
@@ -244,9 +259,58 @@ def create_pos_sale(
             created_by        = current_user.id,
         ))
 
+    # 6. Process POS sale balance payments (customer paying off an old product/service sale).
+    #    Strategy: increment the original sale's amount_paid + add a PosSalePayment audit
+    #    record to the original sale. The cross-reference is already stored in sale.notes above.
+    for pbp in data.pos_balance_payments:
+        original = db.query(PosSale).filter(PosSale.id == pbp.pos_sale_id).first()
+        if not original:
+            continue
+        remaining = max(Decimal(0), (original.total_amount or Decimal(0)) - (original.amount_paid or Decimal(0)))
+        pay_amount = min(pbp.amount, remaining)
+        if pay_amount <= 0:
+            continue
+        original.amount_paid = (original.amount_paid or Decimal(0)) + pay_amount
+        db.add(PosSalePayment(
+            pos_sale_id    = original.id,
+            payment_method = pbp.payment_method,
+            amount         = pay_amount,
+        ))
+
     db.commit()
     db.refresh(sale)
     return sale
+
+
+# ── Open balances by customer ─────────────────────────────────
+
+@router.get("/open-balances/customer/{customer_id}", response_model=List[PosSaleResponse])
+def list_open_pos_balances(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return POS sales for a customer where balance_due > 0
+    (amount_paid < total_amount). Excludes wig sales — those are tracked
+    separately in the Open Wig Balances panel via /wig-orders/.
+    """
+    # Subquery: sales that contain a wig item (tracked via wig-orders, not here)
+    wig_sale_ids = db.query(PosSaleItem.pos_sale_id).filter(
+        PosSaleItem.item_type == PosItemType.wig
+    ).subquery()
+
+    sales = (
+        db.query(PosSale)
+        .filter(
+            PosSale.customer_id == customer_id,
+            PosSale.amount_paid < PosSale.total_amount,
+            ~PosSale.id.in_(wig_sale_ids),
+        )
+        .order_by(PosSale.sale_date.desc())
+        .all()
+    )
+    return sales
 
 
 # ── List by date ──────────────────────────────────────────────
@@ -493,11 +557,31 @@ def delete_pos_sale(
             # Payments from other sales remain — recompute amount_paid from source of truth
             wig.amount_paid = sum(p.amount for p in remaining)
             if wig.total_price:
-                if wig.amount_paid >= wig.total_price:
+                full_price = wig.total_price + (wig.sale_tax_amount or Decimal(0))
+                if wig.amount_paid >= full_price:
                     wig.sale_status = WigStatus.paid_in_full
                     # pickup_date stays as-is (set by the final payment sale)
                 else:
                     wig.sale_status = WigStatus.ordered
                     wig.pickup_date = None
+
+    # Step 5 — reverse any POS sale balance payments this sale triggered.
+    #   The cross-reference is stored as __pos_bal__:[...] in sale.notes.
+    if sale.notes:
+        m = _POS_BAL_RE.search(sale.notes)
+        if m:
+            try:
+                refs = json.loads(m.group(1))
+                for ref in refs:
+                    orig = db.query(PosSale).filter(
+                        PosSale.id == ref["sale_id"]
+                    ).first()
+                    if orig:
+                        orig.amount_paid = max(
+                            Decimal(0),
+                            (orig.amount_paid or Decimal(0)) - Decimal(str(ref["amount"]))
+                        )
+            except Exception:
+                pass  # malformed marker — skip reversal silently
 
     db.commit()

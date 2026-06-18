@@ -565,7 +565,12 @@ class InventoryItem(Base):
 
     @property
     def balance_due(self) -> Decimal:
-        return (self.total_price or Decimal(0)) - (self.amount_paid or Decimal(0))
+        # Customer owes: selling price + tax - what they've already paid
+        return (
+            (self.total_price or Decimal(0))
+            + (self.sale_tax_amount or Decimal(0))
+            - (self.amount_paid or Decimal(0))
+        )
 
     events   = relationship("InventoryEvent", back_populates="inventory_item", cascade="all, delete-orphan")
     payments = relationship("WigPayment",     back_populates="inventory_item", cascade="all, delete-orphan")

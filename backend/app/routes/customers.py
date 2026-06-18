@@ -1,15 +1,18 @@
+import json
+import re as _re
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app.database import get_db
-from sqlalchemy import func
 from app.models.models import Customer, User, PosSale, PosSaleItem, InventoryItem, InventoryItemType, PosItemType, WigPayment
 from app.schemas.schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerHistoryResponse
 from app.core.security import get_current_user
+
+_POS_BAL_RE = _re.compile(r'__pos_bal__:(\[.*?\])(?:\n|$)', _re.DOTALL)
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -92,10 +95,26 @@ def get_customer_history(
         ).scalar()
         wig_pos_payments_total = float(result or 0)
 
+    # Compute pos_balance_payments_total: the sum of POS-balance payment amounts
+    # embedded in any checkout sale's notes (__pos_bal__:[...] marker).
+    # These amounts already appear in the original sale's amount_paid AND in the
+    # checkout sale's amount_paid — subtract once to avoid double-counting.
+    pos_balance_payments_total = 0.0
+    for sale in pos_sales:
+        if sale.notes:
+            m = _POS_BAL_RE.search(sale.notes)
+            if m:
+                try:
+                    refs = json.loads(m.group(1))
+                    pos_balance_payments_total += sum(float(r["amount"]) for r in refs)
+                except Exception:
+                    pass
+
     return CustomerHistoryResponse(
         pos_sales=pos_sales,
         wig_sales=wig_sales,
         wig_pos_payments_total=wig_pos_payments_total,
+        pos_balance_payments_total=pos_balance_payments_total,
     )
 
 

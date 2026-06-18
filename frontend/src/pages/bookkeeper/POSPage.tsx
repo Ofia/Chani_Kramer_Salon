@@ -32,7 +32,7 @@ type Customer = {
 }
 
 
-type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig' | 'wig_balance'
+type CartItemType = 'wash_set' | 'repair' | 'inventory' | 'wig' | 'wig_balance' | 'pos_balance'
 
 // Default tax rate per item type
 const DEFAULT_TAX_RATE: Record<CartItemType, number> = {
@@ -41,6 +41,7 @@ const DEFAULT_TAX_RATE: Record<CartItemType, number> = {
   inventory:   0.08875,  // products: 8.875%
   wig:         0.08875,  // products: 8.875%
   wig_balance: 0,        // no tax on balance payments
+  pos_balance: 0,        // no tax on POS sale balance payments
 }
 
 type CartItem = {
@@ -141,6 +142,9 @@ type PosSale = {
   payments: PosSalePayment[]
 }
 
+// PosOpenBalance = a PosSale with balance_due > 0 (product/service deposit)
+type PosOpenBalance = PosSale
+
 // ── Constants ────────────────────────────────────────────────
 
 const METHODS = ['cash', 'credit_card', 'check', 'zelle']
@@ -148,10 +152,10 @@ const METHOD_LABEL: Record<string, string> = {
   cash: 'Cash', credit_card: 'Credit Card', quickpay: 'QuickPay', check: 'Check', zelle: 'Zelle',
 }
 const ITEM_TYPE_LABEL: Record<CartItemType, string> = {
-  wash_set: 'Wash & Set', repair: 'Repair', inventory: 'Product', wig: 'Wig', wig_balance: 'Wig Balance',
+  wash_set: 'Wash & Set', repair: 'Repair', inventory: 'Product', wig: 'Wig', wig_balance: 'Wig Balance', pos_balance: 'Balance Payment',
 }
 const ITEM_TYPE_COLOR: Record<CartItemType, string> = {
-  wash_set: '#DF5198', repair: '#E3CD94', inventory: '#97BBE9', wig: '#5581B1', wig_balance: '#5581B1',
+  wash_set: '#DF5198', repair: '#E3CD94', inventory: '#97BBE9', wig: '#5581B1', wig_balance: '#5581B1', pos_balance: '#97BBE9',
 }
 
 let keyCounter = 0
@@ -218,6 +222,7 @@ export default function POSPage() {
       qc.invalidateQueries({ queryKey: ['wig-orders-all'] })
       qc.invalidateQueries({ queryKey: ['inventory'] })
       qc.invalidateQueries({ queryKey: ['pending-wigs'] })
+      qc.invalidateQueries({ queryKey: ['pos-open-balances'] })
       qc.invalidateQueries({ queryKey: ['operation-overview'] })
       qc.invalidateQueries({ queryKey: ['cart-active'] })
       // Mark loaded pending cart items as checked_out
@@ -225,7 +230,7 @@ export default function POSPage() {
         api.patch(`/cart/${id}`, { status: 'checked_out' }).catch(() => {})
       )
       // Capture balance items before reset so receipt can display them
-      setReceiptBalanceItems(cart.filter(i => i.item_type === 'wig_balance'))
+      setReceiptBalanceItems(cart.filter(i => i.item_type === 'wig_balance' || i.item_type === 'pos_balance'))
       // Auto-open receipt
       setReceiptSale(res.data)
       // Reset form — keep saleDate so the right panel stays on the same date
@@ -239,6 +244,21 @@ export default function POSPage() {
   })
 
   // ── Cart helpers ──────────────────────────────────────────
+
+  function addPosBalanceToCart(sale: PosOpenBalance) {
+    const balanceDue = Number(sale.balance_due)
+    const label = sale.items.map((i: { description: string }) => i.description).join(', ') || `Sale ${sale.sale_date}`
+    setCart(c => [...c, {
+      _key: nextKey(),
+      item_type: 'pos_balance' as CartItemType,
+      description: `Balance — ${label}`,
+      quantity: 1,
+      unit_price: balanceDue.toFixed(2),
+      tax_rate: 0,
+      inventory_item_id: sale.id,   // stores the original pos_sale_id
+      wig_balance_due: balanceDue,
+    }])
+  }
 
   function addWigBalanceToCart(wig: WigOrder) {
     const balanceDue = Number(wig.balance_due)
@@ -343,8 +363,9 @@ export default function POSPage() {
     if (!customer.name.trim()) return
     if (cart.length === 0) return
 
-    const regularItems = cart.filter(i => i.item_type !== 'wig_balance')
-    const balanceItems = cart.filter(i => i.item_type === 'wig_balance')
+    const regularItems  = cart.filter(i => i.item_type !== 'wig_balance' && i.item_type !== 'pos_balance')
+    const balanceItems  = cart.filter(i => i.item_type === 'wig_balance')
+    const posBalItems   = cart.filter(i => i.item_type === 'pos_balance')
 
     const pmts = payments
       .filter(p => parseFloat(p.amount) > 0)
@@ -407,6 +428,11 @@ export default function POSPage() {
         amount: parseFloat(i.unit_price) || 0,
         payment_method: primaryMethod,
       })),
+      pos_balance_payments: posBalItems.map(i => ({
+        pos_sale_id: i.inventory_item_id,
+        amount: parseFloat(i.unit_price) || 0,
+        payment_method: primaryMethod,
+      })),
     })
   }
 
@@ -465,6 +491,15 @@ export default function POSPage() {
             customerId={customer.id}
             cart={cart}
             onAdd={addWigBalanceToCart}
+          />
+        )}
+
+        {/* ── Open product/service balances for this customer ── */}
+        {customer.id && (
+          <OpenPosSaleBalancePanel
+            customerId={customer.id}
+            cart={cart}
+            onAdd={addPosBalanceToCart}
           />
         )}
 
@@ -1023,6 +1058,61 @@ function OpenBalancePanel({ customerId, cart, onAdd }: {
                 <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>In cart ✓</span>
               ) : (
                 <button onClick={() => onAdd(wig)} style={s.payBalanceBtn}>Add to Cart</button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Open POS Sale Balance Panel ───────────────────────────────
+// Shows open balances on product/service sales (balance_due > 0).
+// Same UX as OpenBalancePanel but for regular POS sales.
+
+function OpenPosSaleBalancePanel({ customerId, cart, onAdd }: {
+  customerId: string
+  cart: CartItem[]
+  onAdd: (sale: PosOpenBalance) => void
+}) {
+  const { data: openSales = [], isLoading } = useQuery<PosOpenBalance[]>({
+    queryKey: ['pos-open-balances', customerId],
+    queryFn: () =>
+      api.get(`/pos-sales/open-balances/customer/${customerId}`)
+        .then(r => Array.isArray(r.data) ? r.data : [])
+        .catch(() => []),
+    enabled: !!customerId,
+    staleTime: 0,
+  })
+
+  if (isLoading || openSales.length === 0) return null
+
+  return (
+    <div style={s.pendingPanel}>
+      <p style={s.pendingTitle}>
+        <CreditCard size={13} style={{ marginRight: 6 }} />
+        Open Sale Balances — {openSales.length}
+      </p>
+      {openSales.map(sale => {
+        const balance  = Number(sale.balance_due)
+        const label    = sale.items.map(i => i.description).join(', ') || `Sale ${sale.sale_date}`
+        const inCart   = cart.some(i => i.item_type === 'pos_balance' && i.inventory_item_id === sale.id)
+
+        return (
+          <div key={sale.id} style={s.pendingRow}>
+            <div style={{ flex: 1 }}>
+              <div style={s.pendingWigName}>{label}</div>
+              <div style={s.pendingWigMeta}>
+                {sale.sale_date} · Total ${Number(sale.total_amount).toFixed(2)} · Paid ${Number(sale.amount_paid).toFixed(2)}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={s.pendingBalance}>Due ${balance.toFixed(2)}</span>
+              {inCart ? (
+                <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>In cart ✓</span>
+              ) : (
+                <button onClick={() => onAdd(sale)} style={s.payBalanceBtn}>Add to Cart</button>
               )}
             </div>
           </div>

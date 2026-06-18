@@ -177,7 +177,7 @@ def create_wig_order(
         )
         db.add(payment)
         wig.amount_paid = data.initial_payment.amount
-        if wig.amount_paid >= wig.total_price and wig.total_price > 0:
+        if wig.amount_paid >= (wig.total_price + (wig.sale_tax_amount or Decimal(0))) and wig.total_price > 0:
             wig.sale_status = WigStatus.paid_in_full
             wig.pickup_date = data.initial_payment.payment_date
             payment.payment_type = WigPaymentType.final
@@ -240,7 +240,7 @@ def add_payment(
 
     wig.amount_paid = (wig.amount_paid or Decimal(0)) + data.amount
 
-    if wig.amount_paid >= wig.total_price and wig.total_price > 0:
+    if wig.amount_paid >= (wig.total_price + (wig.sale_tax_amount or Decimal(0))) and wig.total_price > 0:
         wig.sale_status = WigStatus.paid_in_full
         wig.pickup_date = data.payment_date
         payment.payment_type = WigPaymentType.final
