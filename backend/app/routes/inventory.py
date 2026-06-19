@@ -18,6 +18,7 @@ Routes:
 """
 
 from datetime import date
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -100,6 +101,8 @@ def create_inventory_item(
 
     # Default wig_status when creating a wig
     payload = data.model_dump()
+    is_external = payload.pop("is_external", False)  # not a DB column — handle separately
+
     if payload["item_type"] == InventoryItemType.wig and payload.get("wig_status") is None:
         # Historical/external wigs (already owned by customer) come in as paid_in_full → mark sold
         if payload.get("sale_status") == WigStatus.paid_in_full:
@@ -107,19 +110,32 @@ def create_inventory_item(
         else:
             payload["wig_status"] = WigItemStatus.in_stock
 
+    if is_external:
+        payload["retail_price"] = Decimal(0)
+        payload["cost_price"]   = Decimal(0)
+
     item = InventoryItem(**payload, created_by=current_user.id)
     db.add(item)
     db.flush()
 
-    # Auto-log an "arrived" event when a wig is created
+    # Auto-log history event when a wig is created
     if item.item_type == InventoryItemType.wig:
-        event = InventoryEvent(
-            inventory_item_id=item.id,
-            event_type="arrived",
-            description=f"Wig added to inventory. Supplier: {item.supplier or '—'}",
-            event_date=item.arrival_date or date.today(),
-            created_by=current_user.id,
-        )
+        if is_external:
+            event = InventoryEvent(
+                inventory_item_id=item.id,
+                event_type="note",
+                description=f"Added from external on {date.today().strftime('%m/%d/%Y')}",
+                event_date=date.today(),
+                created_by=current_user.id,
+            )
+        else:
+            event = InventoryEvent(
+                inventory_item_id=item.id,
+                event_type="arrived",
+                description=f"Wig added to inventory. Supplier: {item.supplier or '—'}",
+                event_date=item.arrival_date or date.today(),
+                created_by=current_user.id,
+            )
         db.add(event)
 
     db.commit()

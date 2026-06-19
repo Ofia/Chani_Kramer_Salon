@@ -654,6 +654,7 @@ class InventoryItemCreate(BaseModel):
     # historical wig fields (for external/pre-software wigs added via Repairs)
     customer_id: Optional[UUID] = None
     sale_status: Optional[WigStatus] = None
+    is_external: bool = False  # True → $0 price + "Added from external" history note
 
 
 class InventoryItemUpdate(BaseModel):

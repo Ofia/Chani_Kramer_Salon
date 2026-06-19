@@ -1291,7 +1291,12 @@ function ReceiptModal({ sale, balanceItems = [], onClose }: { sale: PosSale; bal
                 {sale.items.filter(i => i.item_type !== 'wig').map(item => (
                   <tr key={item.id}>
                     <td style={r.td}>{ITEM_TYPE_LABEL[item.item_type]}</td>
-                    <td style={r.td}>{item.description}</td>
+                    <td style={r.td}>
+                      {item.description}
+                      {item.wig_serial && (
+                        <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>Wig: {item.wig_serial}</div>
+                      )}
+                    </td>
                     <td style={{ ...r.td, textAlign: 'center' }}>{item.quantity}</td>
                     <td style={{ ...r.td, textAlign: 'right' }}>${item.unit_price.toFixed(2)}</td>
                     <td style={{ ...r.td, textAlign: 'right', fontWeight: 700 }}>${item.subtotal.toFixed(2)}</td>

@@ -451,6 +451,7 @@ function CreateRepairPanel({
             length:          extLength.trim() || null,
             customer_id:     selectedCustomer.id,
             sale_status:     'paid_in_full',
+            is_external:     true,
           })
           orderPayload.inventory_item_id = newWig.id
           qc.invalidateQueries({ queryKey: ['inventory'] })
