@@ -122,13 +122,39 @@ Each employee has commission rules — different rates for different products or
 
 | # | Item | Status | Action |
 |---|------|--------|--------|
-| 1 | Scroll-on-number-field bug | Ready to fix | Quick fix, do first |
-| 5 | Customer history total bug | Ready to fix | Investigate & fix |
-| 3 | Phone search in customer lookup | Ready to build | Straightforward |
-| 6 | External wig → invoice + history | Ready to build | Discuss scope |
-| 2 | Sales History tab in Overview | Needs discussion | Large feature, plan first |
-| 4 | Repairs → Task management + Drive | Needs discussion | Major, plan carefully |
-| 8 | Invoice upload to Product Mgmt | Ready to build | Port from session 19 |
-| 7 | Bank statement reconciliation | Needs Tzipora input | Wait |
-| 9 | Clock-in / payroll integration | Needs Tzipora input | Wait |
-| 10 | Commission rules per employee | Needs Tzipora data | Wait |
+| 1 | Scroll-on-number-field bug | ✅ Done (Session 23) | `main.tsx` passive wheel listener |
+| 5 | Customer history total bug | ✅ Done (Session 23) | `42de759` — removed `+ wig_balance_total` double-count |
+| 3 | Phone search in customer lookup | ✅ Done (Session 24) | POS `cell→phone` fix; Repairs pill shows `phone \|\| cell` |
+| 6 | External wig → invoice + history | ✅ Done (Session 24) | Sold Items $0, "Added from external" note, receipt serial, dynamic dept banner |
+| 2 | Sales History tab in Overview | ✅ Done (Session 24) | 6th tab, range endpoint, edit items, print receipt + daily list — commit `c78759c` |
+| 4 | Repairs → Task management + Drive | ⬜ Next | Needs planning — ClickUp board + Google Drive OAuth |
+| 8 | Invoice upload to Product Mgmt | ⬜ Ready to build | Port from session 19 wig invoice importer |
+| 7 | Bank statement reconciliation | ⬜ Needs Tzipora input | Wait |
+| 9 | Clock-in / payroll integration | ⬜ Needs Tzipora input | Wait |
+| 10 | Commission rules per employee | ⬜ Needs Tzipora data | Wait |
+
+---
+
+## Session 24 — 2026-06-19
+
+### Completed
+
+**Task #3 — Phone search audit**
+- Backend already searched `phone` field; bug was in POS `createCustomerMutation`: was sending `cell: newPhone` instead of `phone: newPhone` — 1-line fix
+- Repairs pill: `renderItem` now shows `c.phone || c.cell`; `sub` prop uses same fallback
+- All other search fields (Sales Management, Customers CRM, POS) were already correct
+
+**Task #6 — External wig tracking**
+- `is_external: bool = False` added to `InventoryItemCreate` schema
+- Inventory POST: when `is_external=True` → sets `retail_price=0`, `cost_price=0`; creates `"Added from external on {date}"` note event instead of "arrived" event; wig_status=sold
+- `_build_response` in `cart.py`: derives `wig_serial` from `repair_order.inventory_item.daysmart_serial` relationship when not already set
+- POSPage receipt: "Wig: {serial}" sub-line under repair item descriptions
+- POSPage banner: "waiting from Repairs" (dynamic from `p.department`, not hardcoded "Sales")
+- TypeScript fix: `department: string` added to `PendingCartItem` local type in POSPage
+
+**Task #2 — Sales History tab**
+- `GET /pos-sales/?start=&end=` range endpoint (newest first)
+- `PUT /pos-sales/{sale_id}/items` bulk-edit endpoint: edit/add/remove non-wig items, wig items price-only, recalculates totals, audit logs on linked wigs — bookkeeper/owner only
+- `PosSaleItemEdit` + `PosSaleBulkEdit` schemas added
+- `SalesHistoryTab` as 6th tab in `OperationOverviewPage.tsx`: sales grouped by date, expandable rows, editable items table (non-wig: description/price/tax/notes/delete; wig: price + badge), add item row, discount field, live totals preview, Save Changes / Print Receipt / Delete Sale actions, Print Daily List button (condensed monospaced format)
+- Commit: `c78759c`

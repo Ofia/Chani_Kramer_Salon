@@ -1,5 +1,5 @@
 # The Salon — Open Tasks
-**Last updated:** Session 19 — 2026-06-11
+**Last updated:** Session 24 — 2026-06-19
 
 ---
 
@@ -20,6 +20,7 @@
 | ~~022~~ | `022_seed_provider_wig_models.sql` | ✅ Run (2026-06-11) |
 | ~~023~~ | `023_repair_orders.sql` | ✅ Run (2026-06-11) |
 | ~~024~~ | `024_role_expansion.sql` | ✅ Run (2026-06-16) |
+| ~~025~~ | `025_deleted_sales.sql` | ✅ Run (2026-06-16) |
 
 ---
 
@@ -37,8 +38,9 @@
 |---|------|------|-------|
 | M2 | **Abandoned deposit flow** | Wig Orders | "Mark as Abandoned" → return wig to inventory + deposit → misc revenue. Owner + Bookkeeper only |
 | M3 | **Backend role system** | Backend | Add `sales`, `repairs`, `front_desk` roles to `UserRole` enum + update route guards |
-| 8  | **Edit sale / receipt** | POS | Tzipora needs to fix mistakes without deleting + re-entering |
-| 14 | **Bank statement auto-import** | Expenses | Upload bank statement → auto-create expense entries |
+| ~~8~~ | ~~**Edit sale / receipt**~~ | ~~POS~~ | ✅ Done — Sales History tab (Session 24). Edit items, prices, tax, add/remove rows, delete. Commit `c78759c` |
+| 8b | **Invoice upload to Product Mgmt** | Product Mgmt | Port wig invoice importer (session 19) to product/supply invoices on Product Management page |
+| 14 | **Bank statement auto-import** | Expenses | Upload bank statement → auto-create expense entries (needs Tzipora input first) |
 | 15 | **Persist unsaved form data** | UX | If user navigates away mid-form, restore on return |
 
 ---
@@ -61,6 +63,60 @@
 | **Inventory → Product Management rename** | Inventory Page | Rename page title + nav item. Sold Items tab already built. |
 | **Super Board redesign** | Owner Dashboard | Currently reads from DailySummary (dead). Rebuild on `reports.py` |
 | **Ella redesign** | AI Chatbot | `get_daily_summary` tool returns empty. Rebuild tools around POS/reports data |
+
+---
+
+## ✅ Done — Session 24 (2026-06-19)
+
+| Task | Commit | Notes |
+|------|--------|-------|
+| Task #3: Phone search audit — POS `cell→phone` fix | session commits | `createCustomerMutation` was sending `cell: newPhone` instead of `phone: newPhone`. All other search fields were already correct. |
+| Task #3: Repairs pill phone fallback | session commits | `renderItem` now shows `c.phone \|\| c.cell`; `sub` uses same fallback. Covers Avi's cell-only number. |
+| Task #6: External wig → Sold Items $0 + history note | session commits | `is_external=True` on inventory POST: sets price=$0, wig_status=sold, creates "Added from external on {date}" note event |
+| Task #6: Receipt shows wig serial for repair items | session commits | POSPage receipt: "Wig: {serial}" sub-line under repair item description |
+| Task #6: Cart `wig_serial` from repair relationship | session commits | `_build_response` in cart.py: derives wig_serial from `repair_order.inventory_item.daysmart_serial` |
+| Task #6: Dynamic dept banner ("from Repairs") | `1b9d417` | Banner dynamically reads `p.department` → "waiting from Repairs" not hardcoded "from Sales" |
+| Task #2: `GET /pos-sales/?start=&end=` range endpoint | `c78759c` | Returns all sales in date range, newest first |
+| Task #2: `PUT /pos-sales/{id}/items` edit endpoint | `c78759c` | Bulk edit: edit/add/remove line items, recalculate totals, audit log. Bookkeeper/owner only. Wig items: price-edit only. |
+| Task #2: `PosSaleItemEdit` + `PosSaleBulkEdit` schemas | `c78759c` | Added to `schemas.py` after `PosSaleResponse` |
+| Task #2: Sales History 6th tab in OperationOverviewPage | `c78759c` | Expandable rows, inline item editing, add item, delete with reason, print receipt, print daily list |
+
+---
+
+## ✅ Done — Session 23 (2026-06-17)
+
+| Task | Commit | Notes |
+|------|--------|-------|
+| Task #1: Global scroll-on-number-field bug | session commits | `main.tsx` passive wheel listener blurs focused `<input type="number">` |
+| Task #5: Customer history total double-counting | `42de759` | Removed `+ wig_balance_total + pos_balance_total` from paid formula |
+| wig balance_due missing sale_tax_amount | session commits | `InventoryItem.balance_due` now adds `sale_tax_amount` |
+| paid_in_full threshold not including tax | session commits | 5 places in pos_sales.py + 2 in wig_orders.py updated |
+| `pos_balance` cart item type (open POS sale balances) | session commits | Full OpenPosSaleBalancePanel + `GET /pos-sales/open-balances/customer/{id}` endpoint |
+| `Documentation/june_17_meeting_Avi.md` | session commits | 10-point meeting notes with priority table |
+
+---
+
+## ✅ Done — Session 22 (2026-06-16)
+
+| Task | Commit | Notes |
+|------|--------|-------|
+| Repairs wig picker → "Customer's Wigs" | session commits | Filters by customer_id; walk-in auto-switches to External Wig mode |
+| External Wig → auto-creates linked InventoryItem | session commits | `customer_id` + `sale_status: paid_in_full` on inventory create |
+| Customer history: edit wig (pencil icon) | `e106381`+ | WigEditModal: serial/brand/color/length/size/order_date/notes |
+| Customer history: delete wig (trash icon) | session commits | `window.confirm` + `DELETE /inventory/{id}` |
+| Migration 025: deleted_sales audit table | session commits | JSONB snapshot of every POS sale before hard-delete — RUN |
+| Product Management: Deleted Sales tab | session commits | Expandable rows, reason chip, line items + payments detail |
+
+---
+
+## ✅ Done — Session 21 (2026-06-16)
+
+| Task | Commit | Notes |
+|------|--------|-------|
+| Migration 024: role expansion | `7e1883d` | `sales`, `front_desk`, `repairs` added to `user_role` enum |
+| BookkeeperLayout: per-role nav visibility | `7e1883d` | 14 nav items with `roles[]` arrays |
+| Inventory → "Product Management" rename | `7e1883d` | Nav label + page header only; route unchanged |
+| Repair revenue/tax deferral | `16fa0f3`, `38bcd61` | Repairs on pending-wig ticket deferred to pickup_date |
 
 ---
 
