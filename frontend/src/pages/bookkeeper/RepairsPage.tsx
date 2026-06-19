@@ -1208,9 +1208,9 @@ const s: Record<string, React.CSSProperties> = {
   fieldRow:     { display: 'flex', gap: 8 },
 
   selectedPill: { display: 'flex', alignItems: 'center', background: 'rgba(13,13,13,0.05)', border: BORDER, borderRadius: 8, padding: '8px 12px', gap: 10 },
-  pillContent:  { flex: 1, display: 'flex', flexDirection: 'column' },
+  pillContent:  { flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pillLabel:    { fontSize: 13, fontWeight: 500, color: '#0d0d0d' },
-  pillSub:      { fontSize: 11, color: 'rgba(13,13,13,0.45)', marginTop: 2 },
+  pillSub:      { fontSize: 11, color: 'rgba(13,13,13,0.4)' },
   pillClear:    { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.4)', display: 'flex', padding: 2 },
 
   dropdown:     { position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: BORDER, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 10, maxHeight: 220, overflowY: 'auto' as const, marginTop: 4 },
