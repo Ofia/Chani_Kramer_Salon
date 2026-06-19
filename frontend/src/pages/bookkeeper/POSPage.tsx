@@ -876,7 +876,7 @@ function CustomerSearchField({ customer, onSelect, onClear, onType }: {
                     createCustomerMutation.mutate({
                       first_name: newFirst.trim() || query,
                       last_name: newLast.trim(),
-                      cell: newPhone || undefined,
+                      phone: newPhone || undefined,
                     })
                   }}
                   disabled={createCustomerMutation.isPending || !newLast.trim()}
