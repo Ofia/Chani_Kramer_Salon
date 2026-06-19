@@ -203,6 +203,7 @@ export default function POSPage() {
     id: string; item_type: 'wig' | 'product' | 'service'
     inventory_item_id?: string; description: string
     price: number; tax_rate: number; discount_amount: number; notes?: string
+    department: string
     wig_serial?: string; wig_brand?: string; wig_length?: string
     wig_color?: string; wig_size?: string; wig_front?: string
   }
