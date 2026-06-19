@@ -529,7 +529,7 @@ function CreateRepairPanel({
               selectedCustomer ? (
                 <SelectedPill
                   label={`${selectedCustomer.first_name} ${selectedCustomer.last_name}`}
-                  sub={selectedCustomer.phone || selectedCustomer.cell}
+                  sub={selectedCustomer.phone || selectedCustomer.cell || undefined}
                   onClear={() => setSelectedCustomer(null)}
                 />
               ) : (
@@ -538,7 +538,7 @@ function CreateRepairPanel({
                   value={custSearch}
                   onChange={setCustSearch}
                   results={filteredCustomers}
-                  renderItem={c => `${c.first_name} ${c.last_name}${c.phone ? ` · ${c.phone}` : ''}`}
+                  renderItem={c => `${c.first_name} ${c.last_name}${(c.phone || c.cell) ? ` · ${c.phone || c.cell}` : ''}`}
                   onSelect={c => { setSelectedCustomer(c); setCustSearch('') }}
                 />
               )
