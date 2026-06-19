@@ -294,7 +294,7 @@ export default function POSPage() {
         wig_color:  p.wig_color,
         wig_size:   p.wig_size,
         wig_front:  p.wig_front,
-      } : {}),
+      } : { wig_serial: p.wig_serial || undefined }),
     }))
     setCart(c => [...c, ...newItems])
     setLoadedPendingIds(ids => [...ids, ...unloadedPending.map(p => p.id)])
@@ -473,7 +473,7 @@ export default function POSPage() {
             <div style={s.pendingBannerLeft}>
               <CreditCard size={14} color="#5581B1" />
               <span style={s.pendingBannerText}>
-                <strong>{unloadedPending.length} item{unloadedPending.length !== 1 ? 's' : ''}</strong> waiting from Sales
+                <strong>{unloadedPending.length} item{unloadedPending.length !== 1 ? 's' : ''}</strong> waiting from {[...new Set(unloadedPending.map(p => p.department))].map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' & ')}
               </span>
               <span style={s.pendingBannerItems}>
                 {unloadedPending.map(p => p.description).join(' · ')}
