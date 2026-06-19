@@ -6,13 +6,13 @@
  */
 
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 import { Link } from 'react-router-dom'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, ChevronDown, Printer, Plus, Trash2, X } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ─────────────────────────────────────────────────────
@@ -40,6 +40,34 @@ type ReportData = {
   total_expenses: number; total_payroll: number
   net_profit: number; tithes: number
 }
+
+type SalePayment = { id: string; payment_method: string; amount: number }
+type SaleItem    = {
+  id: string; item_type: string; description: string
+  quantity: number; unit_price: number; subtotal: number
+  tax_amount: number; notes?: string; inventory_item_id?: string
+  wig_serial?: string; wig_brand?: string; wig_color?: string
+}
+type Sale = {
+  id: string; customer_name: string; customer_phone?: string
+  sale_date: string; notes?: string
+  total_amount: number; amount_paid: number; balance_due: number
+  tax_amount: number; discount_amount: number
+  items: SaleItem[]; payments: SalePayment[]
+  created_at: string
+}
+type EditItem = {
+  id?: string          // undefined = new item not yet saved
+  item_type: string
+  description: string
+  unit_price: string
+  quantity: number
+  tax_rate: string     // '0' | '0.045' | '0.08875'
+  notes: string
+  isWig: boolean
+  delete: boolean
+}
+type SaleEditState = { items: EditItem[]; discount: string; dirty: boolean }
 
 // ── Brand colors ──────────────────────────────────────────────
 
@@ -82,7 +110,7 @@ function firstOfMonth(y: number, m: number) {
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const YEARS  = [2024, 2025, 2026]
-const TABS   = ['Revenue', 'Payments', 'Expenses', 'Payroll', 'Summary'] as const
+const TABS   = ['Revenue', 'Payments', 'Expenses', 'Payroll', 'Summary', 'Sales History'] as const
 type Tab = typeof TABS[number]
 
 // ── Custom tooltip for pie/bar ────────────────────────────────
@@ -182,19 +210,25 @@ export default function OperationOverviewPage() {
 
       {/* ── Content ── */}
       <div style={s.content}>
-        {isLoading && <div style={s.state}>Loading…</div>}
-        {isError   && <div style={{ ...s.state, color: '#ef4444' }}>Failed to load report.</div>}
-        {!isLoading && !isError && data && (
+        {activeTab === 'Sales History' ? (
+          <SalesHistoryTab start={start} end={end} />
+        ) : (
           <>
-            {activeTab === 'Revenue'  && <RevenueTab  data={data} />}
-            {activeTab === 'Payments' && <PaymentsTab data={data} />}
-            {activeTab === 'Expenses' && <ExpensesTab data={data} />}
-            {activeTab === 'Payroll'  && <PayrollTab  data={data} />}
-            {activeTab === 'Summary'  && <SummaryTab  data={data} />}
+            {isLoading && <div style={s.state}>Loading…</div>}
+            {isError   && <div style={{ ...s.state, color: '#ef4444' }}>Failed to load report.</div>}
+            {!isLoading && !isError && data && (
+              <>
+                {activeTab === 'Revenue'  && <RevenueTab  data={data} />}
+                {activeTab === 'Payments' && <PaymentsTab data={data} />}
+                {activeTab === 'Expenses' && <ExpensesTab data={data} />}
+                {activeTab === 'Payroll'  && <PayrollTab  data={data} />}
+                {activeTab === 'Summary'  && <SummaryTab  data={data} />}
+              </>
+            )}
+            {!isLoading && !isError && !data && (
+              <div style={s.state}>No data for this period.</div>
+            )}
           </>
-        )}
-        {!isLoading && !isError && !data && (
-          <div style={s.state}>No data for this period.</div>
         )}
       </div>
     </div>
@@ -484,6 +518,496 @@ function SummaryTab({ data }: { data: ReportData }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Sales History Tab ─────────────────────────────────────────
+
+const TAX_OPTIONS = [
+  { label: '0% (Exempt)',    value: '0'       },
+  { label: '4.5% (Service)', value: '0.045'   },
+  { label: '8.875% (Prod)',  value: '0.08875' },
+]
+const ADD_ITEM_TYPES = [
+  { label: 'Wash & Set', value: 'wash_set'  },
+  { label: 'Repair',     value: 'repair'    },
+  { label: 'Product',    value: 'inventory' },
+]
+
+function inferTaxRate(tax_amount: number, subtotal: number): string {
+  if (!subtotal || tax_amount === 0) return '0'
+  const raw = tax_amount / subtotal
+  if (raw < 0.02) return '0'
+  if (raw < 0.07) return '0.045'
+  return '0.08875'
+}
+
+function SalesHistoryTab({ start, end }: { start: string; end: string }) {
+  const queryClient = useQueryClient()
+
+  const { data: sales = [], isLoading, isError } = useQuery<Sale[]>({
+    queryKey: ['sales-range', start, end],
+    queryFn: () => api.get(`/pos-sales/?start=${start}&end=${end}`).then(r => r.data),
+    enabled: !!start && !!end && start <= end,
+    staleTime: 0,
+  })
+
+  const [expandedId,   setExpandedId]   = useState<string | null>(null)
+  const [editMap,      setEditMap]      = useState<Record<string, SaleEditState>>({})
+  const [saving,       setSaving]       = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleting,     setDeleting]     = useState(false)
+
+  const byDate: [string, Sale[]][] = useMemo(() => {
+    const groups: Record<string, Sale[]> = {}
+    for (const sale of sales) {
+      if (!groups[sale.sale_date]) groups[sale.sale_date] = []
+      groups[sale.sale_date].push(sale)
+    }
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
+  }, [sales])
+
+  function openSale(sale: Sale) {
+    if (expandedId === sale.id) { setExpandedId(null); return }
+    setExpandedId(sale.id)
+    if (!editMap[sale.id]) {
+      setEditMap(m => ({
+        ...m,
+        [sale.id]: {
+          items: sale.items.map(i => ({
+            id: i.id,
+            item_type: i.item_type,
+            description: i.description,
+            unit_price: String(i.unit_price),
+            quantity: i.quantity,
+            tax_rate: inferTaxRate(i.tax_amount, i.subtotal),
+            notes: i.notes || '',
+            isWig: i.item_type === 'wig',
+            delete: false,
+          })),
+          discount: String(sale.discount_amount),
+          dirty: false,
+        },
+      }))
+    }
+  }
+
+  function updateItem(saleId: string, idx: number, patch: Partial<EditItem>) {
+    setEditMap(m => {
+      const es = m[saleId]
+      if (!es) return m
+      const items = [...es.items]
+      items[idx] = { ...items[idx], ...patch }
+      return { ...m, [saleId]: { ...es, items, dirty: true } }
+    })
+  }
+
+  function removeItem(saleId: string, idx: number) {
+    setEditMap(m => {
+      const es = m[saleId]
+      if (!es) return m
+      const item = es.items[idx]
+      if (!item.id) {
+        // New unsaved item — remove from array directly
+        const items = es.items.filter((_, i) => i !== idx)
+        return { ...m, [saleId]: { ...es, items, dirty: true } }
+      }
+      // Existing item — mark for server-side deletion
+      const items = [...es.items]
+      items[idx] = { ...items[idx], delete: true }
+      return { ...m, [saleId]: { ...es, items, dirty: true } }
+    })
+  }
+
+  function addItem(saleId: string) {
+    setEditMap(m => {
+      const es = m[saleId]
+      if (!es) return m
+      return {
+        ...m,
+        [saleId]: {
+          ...es,
+          items: [...es.items, {
+            id: undefined, item_type: 'wash_set', description: '',
+            unit_price: '', quantity: 1, tax_rate: '0.045',
+            notes: '', isWig: false, delete: false,
+          }],
+          dirty: true,
+        },
+      }
+    })
+  }
+
+  function previewTotals(es: SaleEditState) {
+    const active = es.items.filter(i => !i.delete)
+    const subtotal = active.reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * i.quantity, 0)
+    const tax      = active.reduce((s, i) => {
+      const price = (parseFloat(i.unit_price) || 0) * i.quantity
+      return s + price * (parseFloat(i.tax_rate) || 0)
+    }, 0)
+    const disc = parseFloat(es.discount) || 0
+    return { subtotal, tax, total: subtotal + tax - disc }
+  }
+
+  async function saveSale(saleId: string) {
+    const es = editMap[saleId]
+    if (!es) return
+    setSaving(saleId)
+    try {
+      await api.put(`/pos-sales/${saleId}/items`, {
+        items: es.items.map(i => ({
+          id:          i.id ?? null,
+          item_type:   i.item_type,
+          description: i.description,
+          unit_price:  parseFloat(i.unit_price) || 0,
+          quantity:    i.quantity,
+          tax_rate:    parseFloat(i.tax_rate) || 0,
+          notes:       i.notes || null,
+          delete:      i.delete,
+        })),
+        discount_amount: parseFloat(es.discount) || 0,
+      })
+      setEditMap(m => ({ ...m, [saleId]: { ...m[saleId], dirty: false } }))
+      queryClient.invalidateQueries({ queryKey: ['sales-range'] })
+      queryClient.invalidateQueries({ queryKey: ['operation-overview'] })
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Save failed')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  async function doDelete() {
+    if (!deleteTarget || !deleteReason.trim()) return
+    setDeleting(true)
+    try {
+      await api.delete(`/pos-sales/${deleteTarget}`, { data: { reason: deleteReason.trim() } })
+      setDeleteTarget(null)
+      setDeleteReason('')
+      if (expandedId === deleteTarget) setExpandedId(null)
+      queryClient.invalidateQueries({ queryKey: ['sales-range'] })
+      queryClient.invalidateQueries({ queryKey: ['operation-overview'] })
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  function printDailyList() {
+    const win = window.open('', '_blank', 'width=640,height=800')
+    if (!win) return
+    const dateLabel = start === end
+      ? new Date(start + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      : `${start} — ${end}`
+    const saleBlocks = sales.map(sale => {
+      const itemLines = sale.items.map(i =>
+        `  ${i.description.padEnd(32, '.')} ${fmt(i.unit_price)}`
+      ).join('\n')
+      const pmtLine = sale.payments.map(p => `${p.payment_method.replace(/_/g,' ')}: ${fmt(p.amount)}`).join('  |  ')
+      return [
+        sale.customer_name + (sale.customer_phone ? `   ${sale.customer_phone}` : ''),
+        itemLines,
+        `  ${'─'.repeat(42)}`,
+        `  Tax: ${fmt(sale.tax_amount)}   Disc: -${fmt(sale.discount_amount)}   TOTAL: ${fmt(sale.total_amount)}`,
+        `  ${pmtLine}`,
+      ].join('\n')
+    }).join('\n\n' + '═'.repeat(50) + '\n\n')
+    const grandTotal = sales.reduce((s, x) => s + x.total_amount, 0)
+    win.document.write(`<pre style="font-family:monospace;font-size:12px;padding:24px;white-space:pre-wrap">THE SALON — Daily Sales Report\n${dateLabel}\n${'═'.repeat(50)}\n\n${saleBlocks}\n\n${'═'.repeat(50)}\nTotal: ${sales.length} sale${sales.length !== 1 ? 's' : ''}   Grand Total: ${fmt(grandTotal)}</pre>`)
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 300)
+  }
+
+  function printReceipt(sale: Sale) {
+    const win = window.open('', '_blank', 'width=420,height=680')
+    if (!win) return
+    const dateLabel = new Date(sale.sale_date + 'T00:00:00').toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    })
+    const itemRows = sale.items.map(i => `
+      <tr>
+        <td style="padding:5px 8px;font-size:12px">${i.description}${i.wig_serial ? `<br/><span style="font-size:10px;color:#888">Wig: ${i.wig_serial}</span>` : ''}</td>
+        <td style="padding:5px 8px;font-size:12px;text-align:right">${fmt(i.unit_price)}</td>
+        <td style="padding:5px 8px;font-size:12px;text-align:right">${fmt(i.tax_amount)}</td>
+      </tr>`).join('')
+    const pmtRows = sale.payments.map(p => `
+      <tr>
+        <td style="padding:3px 8px;font-size:11px;color:#555">${p.payment_method.replace(/_/g,' ')}</td>
+        <td colspan="2" style="padding:3px 8px;font-size:11px;text-align:right;color:#555">${fmt(p.amount)}</td>
+      </tr>`).join('')
+    win.document.write(`<html><head><title>Receipt — ${sale.customer_name}</title>
+      <style>body{font-family:Arial,sans-serif;max-width:320px;margin:0 auto;padding:16px}
+      h2{text-align:center;font-size:15px;margin:0 0 3px}
+      p{text-align:center;font-size:11px;color:#666;margin:2px 0}
+      table{width:100%;border-collapse:collapse}
+      hr{border:none;border-top:1px solid #ccc;margin:8px 0}
+      @media print{body{padding:0}}</style></head><body>
+      <h2>THE SALON</h2>
+      <p>${dateLabel}</p><p style="font-weight:600;color:#18181b">${sale.customer_name}</p>
+      <hr/>
+      <table><thead><tr>
+        <th style="padding:4px 8px;font-size:10px;text-align:left;color:#888">ITEM</th>
+        <th style="padding:4px 8px;font-size:10px;text-align:right;color:#888">PRICE</th>
+        <th style="padding:4px 8px;font-size:10px;text-align:right;color:#888">TAX</th>
+      </tr></thead><tbody>${itemRows}</tbody></table>
+      <hr/>
+      ${sale.discount_amount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 8px"><span style="color:#555">Discount</span><span>-${fmt(sale.discount_amount)}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;padding:5px 8px"><span>TOTAL</span><span>${fmt(sale.total_amount)}</span></div>
+      <hr/>
+      <table><tbody>${pmtRows}</tbody></table>
+      ${sale.balance_due > 0 ? `<p style="color:#ef4444;font-weight:bold;margin-top:8px">Balance Due: ${fmt(sale.balance_due)}</p>` : ''}
+      <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
+      </body></html>`)
+    win.document.close()
+  }
+
+  if (isLoading) return <div style={s.state}>Loading sales…</div>
+  if (isError)   return <div style={{ ...s.state, color: '#ef4444' }}>Failed to load sales.</div>
+
+  return (
+    <div style={s.tabContent}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <p style={{ ...s.listTitle, margin: 0 }}>{sales.length} sale{sales.length !== 1 ? 's' : ''} in period</p>
+        {sales.length > 0 && (
+          <button onClick={printDailyList} style={{ ...s.linkBtn, gap: 6 }}>
+            <Printer size={13} />Print Daily List
+          </button>
+        )}
+      </div>
+
+      {sales.length === 0 && (
+        <div style={s.emptyState}>
+          <p style={{ color: '#a1a1aa', fontSize: 14 }}>No sales in this period.</p>
+        </div>
+      )}
+
+      {byDate.map(([dateStr, dateSales]) => {
+        const dayTotal = dateSales.reduce((sum, x) => sum + x.total_amount, 0)
+        const dayLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric',
+        })
+        return (
+          <div key={dateStr} style={{ marginBottom: 28 }}>
+            {/* Date group header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#71717a', letterSpacing: '0.07em', textTransform: 'uppercase' }}>{dayLabel}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#71717a' }}>{fmt(dayTotal)}</span>
+            </div>
+
+            {/* Sale rows */}
+            <div style={{ border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden' }}>
+              {dateSales.map((sale, si) => {
+                const isExpanded = expandedId === sale.id
+                const es = editMap[sale.id]
+                const pmtLabel = sale.payments.map(p => p.payment_method.replace(/_/g, ' ')).join(' · ')
+                const isLast = si === dateSales.length - 1
+
+                return (
+                  <div key={sale.id} style={{ borderBottom: isLast ? 'none' : '1px solid #f4f4f5' }}>
+                    {/* Row header */}
+                    <div
+                      onClick={() => openSale(sale)}
+                      style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', background: isExpanded ? '#f9f9f9' : '#fff', gap: 12, userSelect: 'none' }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#18181b' }}>{sale.customer_name}</span>
+                        {sale.customer_phone && <span style={{ fontSize: 12, color: '#a1a1aa', marginLeft: 8 }}>{sale.customer_phone}</span>}
+                      </div>
+                      <span style={{ fontSize: 12, color: '#a1a1aa', flexShrink: 0 }}>{sale.items.length} item{sale.items.length !== 1 ? 's' : ''}</span>
+                      <span style={{ fontSize: 12, color: '#71717a', flexShrink: 0 }}>{pmtLabel}</span>
+                      {sale.balance_due > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444', background: '#fef2f2', padding: '2px 6px', borderRadius: 4, flexShrink: 0 }}>
+                          Owes {fmt(sale.balance_due)}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#18181b', flexShrink: 0 }}>{fmt(sale.total_amount)}</span>
+                      <ChevronDown size={15} style={{ color: '#71717a', flexShrink: 0, transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isExpanded && es && (
+                      <div style={{ background: '#fafaf9', borderTop: '1px solid #f0f0f0', padding: '16px 20px' }}>
+
+                        {/* Items table */}
+                        <table style={{ ...s.table, marginBottom: 12 }}>
+                          <thead>
+                            <tr>
+                              <th style={s.th}>Item</th>
+                              <th style={{ ...s.th, width: 100 }}>Price</th>
+                              <th style={{ ...s.th, width: 140 }}>Tax Rate</th>
+                              <th style={{ ...s.th, width: 32 }} />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {es.items.map((item, idx) => item.delete ? null : (
+                              <tr key={idx}>
+                                {/* Description cell */}
+                                <td style={s.td}>
+                                  {/* Type selector for new items */}
+                                  {!item.id && (
+                                    <select
+                                      value={item.item_type}
+                                      onChange={e => updateItem(sale.id, idx, { item_type: e.target.value })}
+                                      style={{ marginBottom: 4, width: '100%', border: '1px solid #e5e5e5', borderRadius: 6, padding: '4px 8px', fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', cursor: 'pointer' }}
+                                    >
+                                      {ADD_ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                    </select>
+                                  )}
+                                  {/* Description: read-only for wigs, editable for all else */}
+                                  {item.isWig ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ fontSize: 13, color: '#18181b' }}>{item.description}</span>
+                                      <span style={{ fontSize: 10, background: '#f4f4f5', color: '#71717a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Wig</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <input
+                                        value={item.description}
+                                        placeholder="Description…"
+                                        onChange={e => updateItem(sale.id, idx, { description: e.target.value })}
+                                        style={{ width: '100%', border: '1px solid #e5e5e5', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                                      />
+                                      <input
+                                        value={item.notes}
+                                        placeholder="Notes…"
+                                        onChange={e => updateItem(sale.id, idx, { notes: e.target.value })}
+                                        style={{ marginTop: 4, width: '100%', border: '1px solid #f0f0f0', borderRadius: 6, padding: '3px 8px', fontSize: 11, fontFamily: 'inherit', outline: 'none', background: '#fff', color: '#71717a', boxSizing: 'border-box' }}
+                                      />
+                                    </>
+                                  )}
+                                </td>
+                                {/* Price */}
+                                <td style={s.td}>
+                                  <input
+                                    type="number"
+                                    value={item.unit_price}
+                                    onChange={e => updateItem(sale.id, idx, { unit_price: e.target.value })}
+                                    style={{ width: 84, border: '1px solid #e5e5e5', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                                  />
+                                </td>
+                                {/* Tax rate */}
+                                <td style={s.td}>
+                                  {item.isWig ? (
+                                    <span style={{ fontSize: 12, color: '#a1a1aa' }}>—</span>
+                                  ) : (
+                                    <select
+                                      value={item.tax_rate}
+                                      onChange={e => updateItem(sale.id, idx, { tax_rate: e.target.value })}
+                                      style={{ border: '1px solid #e5e5e5', borderRadius: 6, padding: '4px 8px', fontSize: 12, fontFamily: 'inherit', outline: 'none', background: '#fff', cursor: 'pointer' }}
+                                    >
+                                      {TAX_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                    </select>
+                                  )}
+                                </td>
+                                {/* Delete */}
+                                <td style={{ ...s.td, textAlign: 'center', paddingLeft: 0 }}>
+                                  {!item.isWig && (
+                                    <button onClick={() => removeItem(sale.id, idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db', padding: 4, lineHeight: 1 }}>
+                                      <X size={14} />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Add item row */}
+                            <tr>
+                              <td colSpan={4} style={{ padding: '8px 12px' }}>
+                                <button onClick={() => addItem(sale.id)} style={{ background: 'none', border: '1px dashed #d1d5db', borderRadius: 6, padding: '4px 12px', fontSize: 12, color: '#71717a', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}>
+                                  <Plus size={12} />Add item
+                                </button>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        {/* Sale-level discount */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                          <span style={{ fontSize: 12, color: '#71717a', minWidth: 70 }}>Discount:</span>
+                          <input
+                            type="number"
+                            value={es.discount}
+                            onChange={e => setEditMap(m => ({ ...m, [sale.id]: { ...m[sale.id], discount: e.target.value, dirty: true } }))}
+                            style={{ width: 84, border: '1px solid #e5e5e5', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit', outline: 'none', background: '#fff' }}
+                          />
+                        </div>
+
+                        {/* Totals preview (only when edits are pending) */}
+                        {es.dirty && (() => {
+                          const p = previewTotals(es)
+                          return (
+                            <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 8, padding: '9px 14px', marginBottom: 12, display: 'flex', gap: 20, fontSize: 12, flexWrap: 'wrap' }}>
+                              <span style={{ color: '#71717a' }}>Subtotal: <b style={{ color: '#18181b' }}>{fmt(p.subtotal)}</b></span>
+                              <span style={{ color: '#71717a' }}>Tax: <b style={{ color: '#18181b' }}>{fmt(p.tax)}</b></span>
+                              <span style={{ color: '#71717a' }}>Total: <b style={{ color: '#18181b', fontSize: 13 }}>{fmt(p.total)}</b></span>
+                            </div>
+                          )
+                        })()}
+
+                        {/* Action bar */}
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <button
+                            onClick={() => saveSale(sale.id)}
+                            disabled={!es.dirty || saving === sale.id}
+                            style={{ padding: '7px 16px', background: es.dirty ? '#18181b' : '#e5e5e5', color: es.dirty ? '#fff' : '#a1a1aa', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: es.dirty ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+                          >
+                            {saving === sale.id ? 'Saving…' : 'Save Changes'}
+                          </button>
+                          <button
+                            onClick={() => printReceipt(sale)}
+                            style={{ padding: '7px 14px', background: 'none', border: '1px solid #e5e5e5', borderRadius: 8, fontSize: 13, color: '#71717a', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}
+                          >
+                            <Printer size={13} />Receipt
+                          </button>
+                          <div style={{ flex: 1 }} />
+                          <button
+                            onClick={() => { setDeleteTarget(sale.id); setDeleteReason('') }}
+                            style={{ padding: '7px 14px', background: 'none', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#ef4444', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}
+                          >
+                            <Trash2 size={13} />Delete Sale
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: '28px 32px', maxWidth: 400, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: '#18181b' }}>Delete Sale</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#71717a' }}>This cannot be undone. Provide a reason for the deletion.</p>
+            <textarea
+              value={deleteReason}
+              onChange={e => setDeleteReason(e.target.value)}
+              placeholder="Reason for deletion…"
+              style={{ width: '100%', border: '1px solid #e5e5e5', borderRadius: 8, padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical', minHeight: 72, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button onClick={() => { setDeleteTarget(null); setDeleteReason('') }} style={{ flex: 1, padding: '9px 0', background: '#f4f4f5', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#71717a', fontFamily: 'inherit' }}>
+                Cancel
+              </button>
+              <button
+                onClick={doDelete}
+                disabled={!deleteReason.trim() || deleting}
+                style={{ flex: 1, padding: '9px 0', background: deleteReason.trim() ? '#ef4444' : '#fecaca', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: deleteReason.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

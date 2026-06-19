@@ -612,6 +612,25 @@ class PosSaleResponse(BaseModel):
         from_attributes = True
 
 
+class PosSaleItemEdit(BaseModel):
+    """One item in a bulk-edit request for an existing POS sale."""
+    id: Optional[UUID] = None          # existing item; None = new item to create
+    item_type: str
+    description: str
+    unit_price: Decimal
+    quantity: int = 1
+    tax_rate: Decimal = Decimal("0")   # 0 | 0.045 | 0.08875
+    notes: Optional[str] = None
+    inventory_item_id: Optional[UUID] = None
+    delete: bool = False               # True = remove this item from the sale
+
+
+class PosSaleBulkEdit(BaseModel):
+    """Payload for PUT /pos-sales/{id}/items."""
+    items: List[PosSaleItemEdit]
+    discount_amount: Optional[Decimal] = None  # None = keep existing
+
+
 class DailyAutoFillResponse(BaseModel):
     """Pre-filled totals for Daily Entry, aggregated from POS sales on a given date."""
     total_wash_set: float = 0

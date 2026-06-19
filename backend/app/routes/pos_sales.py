@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,7 +24,7 @@ from app.models.models import (
     PosSale, PosSaleItem, PosSalePayment,
     WigPayment, InventoryItem, InventoryItemType, InventoryEvent, InventoryEventType,
     PosItemType, WigStatus, WigItemStatus, WigPaymentType, PaymentMethod, User,
-    DeletedSale,
+    DeletedSale, UserRole,
 )
 import json
 import re as _re
@@ -32,6 +32,7 @@ import re as _re
 from app.schemas.schemas import (
     PosSaleCreate, PosSaleResponse, DailyAutoFillResponse, WigBalancePaymentIn,
     PosBalancePaymentIn, DeleteSalePayload, DeletedSaleResponse,
+    PosSaleItemEdit, PosSaleBulkEdit,
 )
 
 _POS_BAL_RE = _re.compile(r'__pos_bal__:(\[.*?\])(?:\n|$)', _re.DOTALL)
@@ -314,6 +315,116 @@ def list_open_pos_balances(
         .all()
     )
     return sales
+
+
+# ── List by date range ────────────────────────────────────────
+
+@router.get("/", response_model=List[PosSaleResponse])
+def list_sales_range(
+    start: date = Query(...),
+    end:   date = Query(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Return all sales between start and end dates (inclusive), newest first."""
+    return (
+        db.query(PosSale)
+        .filter(PosSale.sale_date >= start, PosSale.sale_date <= end)
+        .order_by(PosSale.sale_date.desc(), PosSale.created_at.desc())
+        .all()
+    )
+
+
+# ── Edit sale items ───────────────────────────────────────────
+
+@router.put("/{sale_id}/items", response_model=PosSaleResponse)
+def edit_sale_items(
+    sale_id: UUID,
+    payload: PosSaleBulkEdit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Edit, add, or remove line items on an existing sale.
+    - Wig items: unit_price editable only; cannot be removed (delete the sale instead)
+    - Non-wig: all fields editable; can be removed or added
+    - Recalculates sale-level totals (tax_amount, total_amount) after changes
+    - Bookkeeper / owner only
+    """
+    if current_user.role not in (UserRole.bookkeeper, UserRole.owner):
+        raise HTTPException(status_code=403, detail="Bookkeeper or owner role required")
+
+    sale = db.get(PosSale, sale_id)
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+
+    for item_edit in payload.items:
+        if item_edit.id:
+            # Existing item — must belong to this sale
+            item = db.get(PosSaleItem, item_edit.id)
+            if not item or item.pos_sale_id != sale_id:
+                raise HTTPException(status_code=404, detail=f"Item {item_edit.id} not found on this sale")
+            if item_edit.delete:
+                if item.item_type == PosItemType.wig:
+                    raise HTTPException(status_code=400, detail="Wig items cannot be removed — delete the entire sale instead")
+                db.delete(item)
+            else:
+                if item.item_type == PosItemType.wig:
+                    # Wig: unit_price only (tax captured in inventory_items.sale_tax_amount at original sale time)
+                    item.unit_price = item_edit.unit_price
+                    item.subtotal   = (item_edit.unit_price * item.quantity).quantize(Decimal("0.01"))
+                else:
+                    item.description = item_edit.description
+                    item.unit_price  = item_edit.unit_price
+                    item.quantity    = item_edit.quantity
+                    item.subtotal    = (item_edit.unit_price * item_edit.quantity).quantize(Decimal("0.01"))
+                    item.notes       = item_edit.notes
+                    item.tax_amount  = (item.subtotal * item_edit.tax_rate).quantize(Decimal("0.01"))
+        else:
+            # New item
+            if item_edit.delete:
+                continue  # phantom delete from frontend — skip
+            if item_edit.item_type == "wig":
+                raise HTTPException(status_code=400, detail="Cannot add wig items via edit")
+            subtotal   = (item_edit.unit_price * item_edit.quantity).quantize(Decimal("0.01"))
+            tax_amount = (subtotal * item_edit.tax_rate).quantize(Decimal("0.01"))
+            db.add(PosSaleItem(
+                pos_sale_id       = sale_id,
+                item_type         = PosItemType(item_edit.item_type),
+                description       = item_edit.description,
+                unit_price        = item_edit.unit_price,
+                quantity          = item_edit.quantity,
+                subtotal          = subtotal,
+                notes             = item_edit.notes,
+                inventory_item_id = item_edit.inventory_item_id,
+                tax_amount        = tax_amount,
+            ))
+
+    db.flush()
+    db.refresh(sale)
+
+    # Recompute sale totals from live items
+    new_subtotal  = sum(i.subtotal              for i in sale.items)
+    new_tax       = sum((i.tax_amount or Decimal(0)) for i in sale.items)
+    new_discount  = payload.discount_amount if payload.discount_amount is not None else sale.discount_amount
+    sale.discount_amount = new_discount
+    sale.tax_amount      = new_tax.quantize(Decimal("0.01"))
+    sale.total_amount    = (new_subtotal + new_tax - new_discount).quantize(Decimal("0.01"))
+
+    # Audit note on any linked wig inventory items
+    for item in sale.items:
+        if item.inventory_item_id:
+            db.add(InventoryEvent(
+                inventory_item_id = item.inventory_item_id,
+                event_type        = InventoryEventType.note,
+                description       = f"Sale edited by {current_user.name or current_user.email}",
+                event_date        = sale.sale_date,
+                created_by        = current_user.id,
+            ))
+
+    db.commit()
+    db.refresh(sale)
+    return sale
 
 
 # ── List by date ──────────────────────────────────────────────
