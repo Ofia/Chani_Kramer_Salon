@@ -356,7 +356,7 @@ function OrderRow({ order, expanded, onToggle }: {
           {/* Global status row */}
           <div style={s.globalStatusRow}>
             <span style={s.globalStatusLabel}>Order status:</span>
-            {(['pending', 'in_progress', 'with_external', 'ready', 'completed'] as RepairOrderStatus[]).map(st => {
+            {(['pending', 'in_progress', 'with_external', 'ready'] as RepairOrderStatus[]).map(st => {
               const c = ORDER_STATUS_COLOR[st]
               const active = order.status === st
               return (
@@ -862,13 +862,6 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
                   onChange={e => updateTask(t.key, { notes: e.target.value })}
                 />
 
-                <input
-                  style={{ ...s.field, flex: '0 0 150px' }}
-                  placeholder="Drive / video link"
-                  value={t.video_url}
-                  onChange={e => updateTask(t.key, { video_url: e.target.value })}
-                />
-
                 <button style={s.iconBtn} onClick={() => removeTask(t.key)}>
                   <X size={13} color="rgba(13,13,13,0.3)" />
                 </button>
@@ -1005,8 +998,7 @@ function printSlip(task: RepairTask) {
   </body></html>`)
   w.document.close()
   w.focus()
-  w.print()
-  w.close()
+  setTimeout(() => w.print(), 250)
 }
 
 // ── Small helpers ─────────────────────────────────────────────
