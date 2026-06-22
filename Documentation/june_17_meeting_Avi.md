@@ -127,7 +127,7 @@ Each employee has commission rules — different rates for different products or
 | 3 | Phone search in customer lookup | ✅ Done (Session 24) | POS `cell→phone` fix; Repairs pill shows `phone \|\| cell` |
 | 6 | External wig → invoice + history | ✅ Done (Session 24) | Sold Items $0, "Added from external" note, receipt serial, dynamic dept banner |
 | 2 | Sales History tab in Overview | ✅ Done (Session 24) | 6th tab, range endpoint, edit items, print receipt + daily list — commit `c78759c` |
-| 4 | Repairs → Task management + Drive | ⬜ Next | Needs planning — ClickUp board + Google Drive OAuth |
+| 4 | Repairs → Task management + Drive | ✅ Done (Session 25) | repair_tasks table, per-task status/provider/print, expandable rows, centered create modal — commits `5a98acd`–`b6b3bac` |
 | 8 | Invoice upload to Product Mgmt | ⬜ Ready to build | Port from session 19 wig invoice importer |
 | 7 | Bank statement reconciliation | ⬜ Needs Tzipora input | Wait |
 | 9 | Clock-in / payroll integration | ⬜ Needs Tzipora input | Wait |
@@ -158,3 +158,26 @@ Each employee has commission rules — different rates for different products or
 - `PosSaleItemEdit` + `PosSaleBulkEdit` schemas added
 - `SalesHistoryTab` as 6th tab in `OperationOverviewPage.tsx`: sales grouped by date, expandable rows, editable items table (non-wig: description/price/tax/notes/delete; wig: price + badge), add item row, discount field, live totals preview, Save Changes / Print Receipt / Delete Sale actions, Print Daily List button (condensed monospaced format)
 - Commit: `c78759c`
+
+---
+
+## Session 25 — 2026-06-22
+
+### Completed
+
+**Task #4 — Repairs → Task Management System**
+- Google Drive integration deferred (Haya will share Drive folder links manually — video URL field used instead)
+- `repair_tasks` table (migration 026): per-task status enum (`pending | in_progress | with_external | done`), `assigned_provider_id`, `notes`, `video_url`, `created_by`; `repair_task_id` FK added to `pending_cart_items` for clean cart linkage
+- `RepairTask` model + `RepairTaskStatus` enum added to `models.py`; `RepairOrder.tasks` relationship; `PendingCartItem.repair_task_id` column
+- New `repair_tasks.py` route: `POST /repair-tasks/` auto-creates linked `pending_cart_item` so POS sees it immediately; `PATCH` syncs price/description to cart item; `DELETE` removes cart item too
+- `repair_orders.py` `_build_response` now includes full tasks array
+- `cart.py` + `CartItemResponse`: added `repair_order_status` field — front desk can see global repair status (In Progress / Ready for Pickup) on any cart view
+- `RepairsPage.tsx` fully rebuilt:
+  - "New Order" button → centered popup modal (not slide-in panel): customer + wig + task list (service · provider · price on row 1; notes · drive link on row 2)
+  - Repair orders list: expandable cards, tasks shown inline
+  - Per task: colored status chip (click to cycle through statuses), description, price, video link icon, print slip, expand arrow → editable section (provider dropdown, notes, drive link, Save/Cancel)
+  - Global order status buttons at bottom of expanded card (`Pending → In Progress → With External → Ready for Pickup`)
+  - Print task slip: opens new window with service, provider, instructions, video link — no price
+  - Active Carts tab: repair order status chip shown next to customer name
+- `BookkeeperLayout.tsx`: `repairs` role can now see Product Management (read-only)
+- Haya user: `repairs` role already in DB (migration 024) — create via Supabase Auth + set role in `users` table
