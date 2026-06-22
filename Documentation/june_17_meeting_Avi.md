@@ -128,6 +128,7 @@ Each employee has commission rules — different rates for different products or
 | 6 | External wig → invoice + history | ✅ Done (Session 24) | Sold Items $0, "Added from external" note, receipt serial, dynamic dept banner |
 | 2 | Sales History tab in Overview | ✅ Done (Session 24) | 6th tab, range endpoint, edit items, print receipt + daily list — commit `c78759c` |
 | 4 | Repairs → Task management + Drive | ✅ Done (Session 25) | repair_tasks table, per-task status/provider/print, expandable rows, centered create modal — commits `5a98acd`–`b6b3bac` |
+| — | POS repair UX polish | ✅ Done (Session 26) | Status chip in pending banner, wig serial in cart row, full-screen print preview — commits `112e05d`–`11a1328` |
 | 8 | Invoice upload to Product Mgmt | ⬜ Ready to build | Port from session 19 wig invoice importer |
 | 7 | Bank statement reconciliation | ⬜ Needs Tzipora input | Wait |
 | 9 | Clock-in / payroll integration | ⬜ Needs Tzipora input | Wait |
@@ -181,3 +182,15 @@ Each employee has commission rules — different rates for different products or
   - Active Carts tab: repair order status chip shown next to customer name
 - `BookkeeperLayout.tsx`: `repairs` role can now see Product Management (read-only)
 - Haya user: `repairs` role already in DB (migration 024) — create via Supabase Auth + set role in `users` table
+
+---
+
+## Session 26 — 2026-06-22
+
+### Completed
+
+**POS Repairs UX Polish (3 fixes)**
+
+- **Repair order status chip in pending banner** (`POSPage.tsx`): `repair_order_status` was already populated in `CartItemResponse` from `cart.py`; added `repair_order_status?: string` to local `PendingCartItem` type + inline colored chip in the pending banner JSX using `STATUS_STYLES`/`STATUS_LABELS` maps — commit `112e05d`
+- **Wig serial in repair cart row** (`POSPage.tsx`): `wig_serial` was already mapped in `loadPendingCart` for all item types; added `Wig: {serial}` sub-line below description for `item_type === 'repair'` rows using `s.cartRowNotes` style — commit `0420374`
+- **Print slip full-screen popup** (`RepairsPage.tsx`): popup was opened at `width=400,height=600` — too small for Chrome's side-by-side print preview UI; changed to `width=${screen.width},height=${screen.height},left=0,top=0` — commit `11a1328`
