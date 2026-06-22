@@ -1082,6 +1082,7 @@ class CartItemResponse(BaseModel):
     customer_name: Optional[str] = None
     inventory_item_name: Optional[str] = None
     sales_rep_name: Optional[str] = None
+    repair_order_status: Optional[str] = None   # global status of the linked repair order
     # wig spec fields — populated for wig items only
     wig_serial: Optional[str] = None
     wig_brand: Optional[str] = None

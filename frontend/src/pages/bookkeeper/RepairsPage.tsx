@@ -385,7 +385,6 @@ function OrderRow({ order, expanded, onToggle }: {
 
 function TaskRow({ task, providers }: { task: RepairTask; providers: Provider[] }) {
   const qc = useQueryClient()
-  const [editProvider, setEditProvider] = useState(false)
 
   const updateTask = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -423,31 +422,17 @@ function TaskRow({ task, providers }: { task: RepairTask; providers: Provider[] 
       {/* Price */}
       <span style={s.taskPrice}>${Number(task.price).toFixed(2)}</span>
 
-      {/* Provider */}
-      {editProvider ? (
-        <select
-          style={s.providerSelect}
-          defaultValue={task.assigned_provider_id ?? ''}
-          autoFocus
-          onBlur={e => {
-            updateTask.mutate({ assigned_provider_id: e.target.value || null })
-            setEditProvider(false)
-          }}
-          onChange={e => {
-            updateTask.mutate({ assigned_provider_id: e.target.value || null })
-            setEditProvider(false)
-          }}
-        >
-          <option value="">— In house</option>
-          {providers.filter(p => p.is_active).map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      ) : (
-        <button style={s.providerChip} onClick={() => setEditProvider(true)}>
-          {task.assigned_provider_name ?? '— In house'}
-        </button>
-      )}
+      {/* Provider — always-visible select */}
+      <select
+        style={s.providerSelect}
+        value={task.assigned_provider_id ?? ''}
+        onChange={e => updateTask.mutate({ assigned_provider_id: e.target.value || null })}
+      >
+        <option value="">— In house</option>
+        {providers.filter(p => p.is_active).map(p => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
 
       {/* Video link */}
       {task.video_url && (
@@ -906,6 +891,7 @@ type CartItem = {
   department: string
   status: string
   repair_order_id?: string
+  repair_order_status?: string
   created_at: string
 }
 
@@ -933,15 +919,22 @@ function ActiveCartsTab() {
   return (
     <div style={s.list}>
       {grouped.map(([custId, items]) => {
-        const name  = items[0].customer_name ?? 'Unknown'
-        const total = items.reduce((sum, i) => sum + Number(i.price), 0)
-        const open  = expanded === custId
+        const name        = items[0].customer_name ?? 'Unknown'
+        const total       = items.reduce((sum, i) => sum + Number(i.price), 0)
+        const open        = expanded === custId
+        const orderStatus = items[0].repair_order_status as RepairOrderStatus | undefined
+        const osc         = orderStatus ? ORDER_STATUS_COLOR[orderStatus] : null
 
         return (
           <div key={custId} style={s.cartGroup}>
             <button style={s.cartHeader} onClick={() => setExpanded(open ? null : custId)}>
               <User size={13} color="rgba(13,13,13,0.35)" />
               <span style={s.cartName}>{name}</span>
+              {osc && orderStatus && (
+                <span style={{ ...s.statusChip, background: osc.bg, color: osc.color, fontSize: 10 }}>
+                  {ORDER_STATUS_LABEL[orderStatus]}
+                </span>
+              )}
               <span style={s.cartBadge}>{items.length} item{items.length !== 1 ? 's' : ''}</span>
               <span style={{ flex: 1 }} />
               <span style={s.cartTotal}>${total.toFixed(2)}</span>
@@ -982,15 +975,13 @@ function printSlip(task: RepairTask) {
     .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 2px; }
     .value { font-size: 13px; margin-bottom: 10px; }
     .status { font-weight: bold; }
-    .price { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
   </style>
   </head><body>
   <h2>Repair Task Slip</h2>
   <div class="label">Date</div><div class="value">${date}</div>
   <div class="divider"></div>
   <div class="label">Service</div><div class="value">${task.description}</div>
-  <div class="label">Price</div><div class="price">$${Number(task.price).toFixed(2)}</div>
-  ${task.assigned_provider_name ? `<div class="label">Assigned To</div><div class="value">${task.assigned_provider_name}</div>` : ''}
+  <div class="label">Provider</div><div class="value">${task.assigned_provider_name ?? '— In house'}</div>
   ${task.notes ? `<div class="label">Instructions</div><div class="value">${task.notes}</div>` : ''}
   ${task.video_url ? `<div class="label">Reference Video</div><div class="value">${task.video_url}</div>` : ''}
   <div class="divider"></div>

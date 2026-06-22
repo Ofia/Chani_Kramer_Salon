@@ -33,9 +33,11 @@ def _build_response(item: PendingCartItem) -> CartItemResponse:
             data.wig_color  = item.inventory_item.color
             data.wig_size   = item.inventory_item.size
             data.wig_front  = item.inventory_item.front
-    # For repair/service items linked to a repair order that has a wig — surface the serial
-    if not data.wig_serial and item.repair_order and item.repair_order.inventory_item:
-        data.wig_serial = item.repair_order.inventory_item.daysmart_serial
+    # For repair/service items linked to a repair order — surface wig serial + global status
+    if item.repair_order:
+        if not data.wig_serial and item.repair_order.inventory_item:
+            data.wig_serial = item.repair_order.inventory_item.daysmart_serial
+        data.repair_order_status = item.repair_order.status.value
     if item.sales_rep:
         data.sales_rep_name = f"{item.sales_rep.first_name} {item.sales_rep.last_name}"
     return data
