@@ -564,6 +564,7 @@ type TaskDraft = {
   service_id: string
   service_name: string
   price: string
+  provider_id: string
   notes: string
   video_url: string
 }
@@ -606,6 +607,10 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
     queryKey: ['repair-services'],
     queryFn: () => api.get('/repair-services/').then(r => r.data),
   })
+  const { data: providers = [] } = useQuery<Provider[]>({
+    queryKey: ['providers'],
+    queryFn: () => api.get('/providers/').then(r => r.data),
+  })
 
   const filteredCustomers = useMemo(() => {
     if (!custSearch) return []
@@ -626,7 +631,7 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }, [inventory, wigSearch, selectedCustomer, wigMode])
 
   function addTask() {
-    setTasks(prev => [...prev, { key: crypto.randomUUID(), service_id: '', service_name: '', price: '', notes: '', video_url: '' }])
+    setTasks(prev => [...prev, { key: crypto.randomUUID(), service_id: '', service_name: '', price: '', provider_id: '', notes: '', video_url: '' }])
   }
 
   function updateTask(key: string, patch: Partial<TaskDraft>) {
@@ -693,12 +698,13 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
         if (!t.service_name.trim()) continue
         await api.post('/repair-tasks/', {
           repair_order_id:  order.id,
-          repair_service_id: t.service_id || null,
-          description:      t.service_name.trim(),
-          price:            parseFloat(t.price) || 0,
-          tax_rate:         0.045,
-          notes:            t.notes.trim() || null,
-          video_url:        t.video_url.trim() || null,
+          repair_service_id:    t.service_id || null,
+          description:          t.service_name.trim(),
+          price:                parseFloat(t.price) || 0,
+          tax_rate:             0.045,
+          assigned_provider_id: t.provider_id || null,
+          notes:                t.notes.trim() || null,
+          video_url:            t.video_url.trim() || null,
         })
       }
 
@@ -819,37 +825,60 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <FieldGroup label="Tasks">
             {tasks.map(t => (
               <div key={t.key} style={s.taskDraftRow}>
-                <select
-                  style={{ ...s.field, flex: '0 0 190px' }}
-                  value={t.service_id}
-                  onChange={e => handleServiceSelect(t.key, e.target.value)}
-                >
-                  <option value="">Select service…</option>
-                  {repairServices.filter(s => s.is_active).map(svc => (
-                    <option key={svc.id} value={svc.id}>{svc.name}</option>
-                  ))}
-                </select>
+                {/* Row 1: service + provider + price + delete */}
+                <div style={s.taskDraftRow1}>
+                  <select
+                    style={{ ...s.field, flex: 1 }}
+                    value={t.service_id}
+                    onChange={e => handleServiceSelect(t.key, e.target.value)}
+                  >
+                    <option value="">Select service…</option>
+                    {repairServices.filter(s => s.is_active).map(svc => (
+                      <option key={svc.id} value={svc.id}>{svc.name}</option>
+                    ))}
+                  </select>
 
-                <div style={s.priceWrap}>
-                  <span style={s.pricePre}>$</span>
-                  <input
-                    style={s.priceField}
-                    placeholder="0.00"
-                    value={t.price}
-                    onChange={e => updateTask(t.key, { price: e.target.value })}
-                  />
+                  <select
+                    style={{ ...s.field, flex: '0 0 160px' }}
+                    value={t.provider_id}
+                    onChange={e => updateTask(t.key, { provider_id: e.target.value })}
+                  >
+                    <option value="">— In house</option>
+                    {providers.filter(p => p.is_active).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+
+                  <div style={s.priceWrap}>
+                    <span style={s.pricePre}>$</span>
+                    <input
+                      style={s.priceField}
+                      placeholder="0.00"
+                      value={t.price}
+                      onChange={e => updateTask(t.key, { price: e.target.value })}
+                    />
+                  </div>
+
+                  <button style={s.iconBtn} onClick={() => removeTask(t.key)}>
+                    <X size={13} color="rgba(13,13,13,0.3)" />
+                  </button>
                 </div>
 
-                <input
-                  style={{ ...s.field, flex: 1 }}
-                  placeholder="Notes (optional)"
-                  value={t.notes}
-                  onChange={e => updateTask(t.key, { notes: e.target.value })}
-                />
-
-                <button style={s.iconBtn} onClick={() => removeTask(t.key)}>
-                  <X size={13} color="rgba(13,13,13,0.3)" />
-                </button>
+                {/* Row 2: notes + drive link */}
+                <div style={s.taskDraftRow2}>
+                  <input
+                    style={{ ...s.field, flex: 1 }}
+                    placeholder="Notes (optional)"
+                    value={t.notes}
+                    onChange={e => updateTask(t.key, { notes: e.target.value })}
+                  />
+                  <input
+                    style={{ ...s.field, flex: '0 0 180px' }}
+                    placeholder="Drive / video link"
+                    value={t.video_url}
+                    onChange={e => updateTask(t.key, { video_url: e.target.value })}
+                  />
+                </div>
               </div>
             ))}
 
@@ -1162,7 +1191,9 @@ const s: Record<string, React.CSSProperties> = {
   errorMsg:     { fontSize: 12, color: '#c0392b', background: 'rgba(192,57,43,0.06)', borderRadius: 6, padding: '8px 12px' },
 
   // Task draft rows (inside modal)
-  taskDraftRow:    { display: 'flex', alignItems: 'center', gap: 8, background: '#fafaf9', border: BORDER, borderRadius: 8, padding: '8px 10px' },
+  taskDraftRow:    { display: 'flex', flexDirection: 'column', gap: 6, background: '#fafaf9', border: BORDER, borderRadius: 8, padding: '10px 12px' },
+  taskDraftRow1:   { display: 'flex', alignItems: 'center', gap: 8 },
+  taskDraftRow2:   { display: 'flex', alignItems: 'center', gap: 8 },
   addTaskDraftBtn: { display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed rgba(13,13,13,0.18)', borderRadius: 8, padding: '7px 14px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.5)' },
 
   // Pill
