@@ -203,7 +203,7 @@ export default function POSPage() {
     id: string; item_type: 'wig' | 'product' | 'service'
     inventory_item_id?: string; description: string
     price: number; tax_rate: number; discount_amount: number; notes?: string
-    department: string
+    department: string; repair_order_status?: string
     wig_serial?: string; wig_brand?: string; wig_length?: string
     wig_color?: string; wig_size?: string; wig_front?: string
   }
@@ -479,6 +479,26 @@ export default function POSPage() {
               <span style={s.pendingBannerItems}>
                 {unloadedPending.map(p => p.description).join(' · ')}
               </span>
+              {unloadedPending.some(p => p.repair_order_status) && (() => {
+                const status = unloadedPending.find(p => p.repair_order_status)?.repair_order_status
+                const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
+                  pending:       { bg: 'rgba(13,13,13,0.07)',    color: 'rgba(13,13,13,0.5)' },
+                  in_progress:   { bg: 'rgba(151,187,233,0.3)',  color: '#2f6499' },
+                  with_external: { bg: 'rgba(227,205,148,0.4)',  color: '#7a5a00' },
+                  ready:         { bg: 'rgba(80,180,120,0.2)',   color: '#1a6e40' },
+                  completed:     { bg: 'rgba(13,13,13,0.1)',     color: '#212121' },
+                }
+                const STATUS_LABELS: Record<string, string> = {
+                  pending: 'Pending', in_progress: 'In Progress',
+                  with_external: 'With External', ready: 'Ready for Pickup', completed: 'Completed',
+                }
+                const sc = status ? STATUS_STYLES[status] : null
+                return sc && status ? (
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: sc.bg, color: sc.color, whiteSpace: 'nowrap' as const }}>
+                    {STATUS_LABELS[status]}
+                  </span>
+                ) : null
+              })()}
             </div>
             <button style={s.pendingBannerBtn} onClick={loadPendingCart}>
               Load to Cart
