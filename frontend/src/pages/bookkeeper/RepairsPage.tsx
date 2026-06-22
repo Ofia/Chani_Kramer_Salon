@@ -14,8 +14,8 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Wrench, Plus, Search, X, ChevronDown, ChevronRight,
-  Trash2, ExternalLink, User, Package, Link, Printer,
+  Plus, Search, X, ChevronDown, ChevronRight,
+  Trash2, User, Package, Link, Printer,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
