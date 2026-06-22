@@ -750,6 +750,9 @@ function CartRow({ item, onChange, onRemove }: {
           </span>
           <div>
             <div style={s.cartRowName}>{item.description}</div>
+            {item.wig_serial && item.item_type === 'repair' && (
+              <div style={s.cartRowNotes}>Wig: {item.wig_serial}</div>
+            )}
             {item.notes && <div style={s.cartRowNotes}>{item.notes}</div>}
           </div>
         </div>
