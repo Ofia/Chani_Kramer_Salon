@@ -1,44 +1,60 @@
 /**
- * Repairs Department Page — /bookkeeper/repairs
+ * Repairs Page — /bookkeeper/repairs
  *
- * Tab 1: Repair Orders — create and manage repair jobs
- * Tab 2: Active Carts  — customers with pending repair services waiting at POS
+ * Haya's workspace for managing repair orders.
+ * Each order = one wig. Each task = one service on that wig.
  *
- * Flow: repairs staff creates an order (customer + wig + metadata), adds
- * one or more services, optionally assigns to external provider → status
- * moves through pending → in_progress → with_external → ready.
- * Front desk checks out the cart at POS.
+ * Tab 1: Repair Orders — expandable list; tasks managed inline
+ * Tab 2: Active Carts  — customers with repair services pending at POS
+ *
+ * Create order: centered popup modal (not a slide-in panel).
+ * Tasks are expandable sub-rows with per-task status, provider, print slip.
  */
 
 import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Wrench, Plus, Search, X, ChevronRight, Trash2, ExternalLink,
-  User, Package, ClipboardList, Video, Building2, Check,
+  Wrench, Plus, Search, X, ChevronDown, ChevronRight,
+  Trash2, ExternalLink, User, Package, Link, Printer,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
 // ── Types ────────────────────────────────────────────────────
 
+type RepairTaskStatus  = 'pending' | 'in_progress' | 'with_external' | 'done'
 type RepairOrderStatus = 'pending' | 'in_progress' | 'with_external' | 'ready' | 'completed'
+
+type RepairTask = {
+  id: string
+  repair_order_id: string
+  repair_service_id?: string
+  description: string
+  price: number
+  tax_rate: number
+  status: RepairTaskStatus
+  assigned_provider_id?: string
+  assigned_provider_name?: string
+  notes?: string
+  video_url?: string
+  created_at: string
+}
 
 type RepairOrder = {
   id: string
   customer_id?: string
+  customer_full_name?: string
   customer_name?: string
   customer_phone?: string
-  customer_full_name?: string
   inventory_item_id?: string
   wig_serial?: string
   wig_description?: string
   notes?: string
-  video_url?: string
   external_provider_id?: string
   external_provider_name?: string
   status: RepairOrderStatus
+  tasks: RepairTask[]
   cart_item_count: number
   created_at: string
-  updated_at: string
 }
 
 type Customer = {
@@ -51,86 +67,85 @@ type Customer = {
 
 type InventoryItem = {
   id: string
-  item_type: 'wig' | 'product'
+  item_type: string
   name: string
+  daysmart_serial?: string
   brand?: string
   color?: string
   length?: string
-  daysmart_serial?: string
-  wig_status?: string
   customer_id?: string | null
 }
 
 type Provider = {
   id: string
   name: string
-  provider_type: string
+  is_active: boolean
 }
 
 type RepairService = {
   id: string
   name: string
-  default_price: number | null
-  category: string | null
+  default_price?: number | null
   is_active: boolean
-}
-
-type CartItem = {
-  id: string
-  customer_id: string
-  customer_name?: string
-  item_type: string
-  description: string
-  price: number
-  tax_rate: number
-  notes?: string
-  department: string
-  status: string
-  repair_order_id?: string
-  created_at: string
-}
-
-type ServiceRow = {
-  key: string
-  service_id: string
-  service_name: string
-  price: string       // string for controlled input
-  tax_rate: number
-  notes: string
 }
 
 // ── Constants ────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<RepairOrderStatus, string> = {
+const TASK_STATUS_LABEL: Record<RepairTaskStatus, string> = {
+  pending:       'Pending',
+  in_progress:   'In Progress',
+  with_external: 'External',
+  done:          'Done',
+}
+
+const TASK_STATUS_COLOR: Record<RepairTaskStatus, { bg: string; color: string }> = {
+  pending:       { bg: 'rgba(13,13,13,0.07)',    color: 'rgba(13,13,13,0.45)' },
+  in_progress:   { bg: 'rgba(151,187,233,0.28)', color: '#2f6499' },
+  with_external: { bg: 'rgba(227,205,148,0.4)',  color: '#7a5a00' },
+  done:          { bg: 'rgba(80,180,120,0.18)',  color: '#1a6e40' },
+}
+
+const ORDER_STATUS_LABEL: Record<RepairOrderStatus, string> = {
   pending:       'Pending',
   in_progress:   'In Progress',
   with_external: 'With External',
-  ready:         'Ready',
+  ready:         'Ready for Pickup',
   completed:     'Completed',
 }
 
-const STATUS_COLOR: Record<RepairOrderStatus, { bg: string; color: string }> = {
-  pending:       { bg: 'rgba(13,13,13,0.07)',  color: 'rgba(13,13,13,0.5)' },
-  in_progress:   { bg: 'rgba(151,187,233,0.25)', color: '#3d6fa0' },
-  with_external: { bg: 'rgba(227,205,148,0.35)', color: '#8a6500' },
-  ready:         { bg: 'rgba(80,180,120,0.18)', color: '#1f7a4a' },
-  completed:     { bg: 'rgba(13,13,13,0.12)',  color: '#212121' },
+const ORDER_STATUS_COLOR: Record<RepairOrderStatus, { bg: string; color: string }> = {
+  pending:       { bg: 'rgba(13,13,13,0.07)',    color: 'rgba(13,13,13,0.45)' },
+  in_progress:   { bg: 'rgba(151,187,233,0.28)', color: '#2f6499' },
+  with_external: { bg: 'rgba(227,205,148,0.4)',  color: '#7a5a00' },
+  ready:         { bg: 'rgba(80,180,120,0.18)',  color: '#1a6e40' },
+  completed:     { bg: 'rgba(13,13,13,0.1)',     color: '#212121' },
 }
 
-const TAX_RATE_SERVICE = 0.045
+const TASK_STATUS_CYCLE: RepairTaskStatus[] = ['pending', 'in_progress', 'with_external', 'done']
+
+function nextTaskStatus(s: RepairTaskStatus): RepairTaskStatus {
+  const i = TASK_STATUS_CYCLE.indexOf(s)
+  return TASK_STATUS_CYCLE[(i + 1) % TASK_STATUS_CYCLE.length]
+}
 
 // ── Page ─────────────────────────────────────────────────────
 
 export default function RepairsPage() {
   const [tab, setTab] = useState<'orders' | 'carts'>('orders')
+  const [creating, setCreating] = useState(false)
+  const qc = useQueryClient()
 
   return (
     <div>
       <header style={s.header}>
         <div>
           <h1 style={s.title}>Repairs</h1>
-          <p style={s.subtitle}>Create repair orders and add services to a customer's cart</p>
+          <p style={s.subtitle}>Manage repair orders and track task progress</p>
         </div>
+        <button style={s.newBtn} onClick={() => setCreating(true)}>
+          <Plus size={14} strokeWidth={2} />
+          New Order
+        </button>
       </header>
 
       <div style={s.tabRow}>
@@ -140,18 +155,27 @@ export default function RepairsPage() {
 
       {tab === 'orders' && <RepairOrdersTab />}
       {tab === 'carts'  && <ActiveCartsTab />}
+
+      {creating && (
+        <CreateOrderModal
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false)
+            qc.invalidateQueries({ queryKey: ['repair-orders'] })
+            qc.invalidateQueries({ queryKey: ['cart-active'] })
+          }}
+        />
+      )}
     </div>
   )
 }
 
-// ── Repair Orders Tab ─────────────────────────────────────────
+// ── Repair Orders Tab ────────────────────────────────────────
 
 function RepairOrdersTab() {
-  const qc = useQueryClient()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<RepairOrderStatus | 'all'>('all')
   const [search, setSearch] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [selectedOrder, setSelectedOrder] = useState<RepairOrder | null>(null)
 
   const { data: orders = [], isLoading } = useQuery<RepairOrder[]>({
     queryKey: ['repair-orders'],
@@ -168,577 +192,340 @@ function RepairOrdersTab() {
     })
   }, [orders, statusFilter, search])
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/repair-orders/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['repair-orders'] }),
-  })
-
-  if (isLoading) return <div style={s.empty}>Loading repair orders…</div>
+  if (isLoading) return <div style={s.empty}>Loading…</div>
 
   return (
     <>
       <div style={s.toolbar}>
         <div style={s.searchWrap}>
-          <Search size={14} color="rgba(13,13,13,0.35)" />
+          <Search size={13} color="rgba(13,13,13,0.35)" />
           <input
             style={s.searchInput}
-            placeholder="Search by customer, wig serial…"
+            placeholder="Search customer, wig serial…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          {search && <button style={s.clearBtn} onClick={() => setSearch('')}><X size={12} /></button>}
         </div>
-
-        {/* Status filters */}
-        <div style={s.filterGroup}>
+        <div style={s.filters}>
           {(['all', 'pending', 'in_progress', 'with_external', 'ready'] as const).map(st => (
             <button
               key={st}
-              style={{ ...s.filterBtn, ...(statusFilter === st ? s.filterBtnActive : {}) }}
+              style={{ ...s.filterBtn, ...(statusFilter === st ? s.filterBtnOn : {}) }}
               onClick={() => setStatusFilter(st)}
             >
-              {st === 'all' ? 'All' : STATUS_LABEL[st as RepairOrderStatus]}
+              {st === 'all' ? 'All' : ORDER_STATUS_LABEL[st as RepairOrderStatus]}
             </button>
           ))}
         </div>
-
-        <button style={s.addBtn} onClick={() => setCreating(true)}>
-          <Plus size={14} strokeWidth={2} />
-          New Order
-        </button>
       </div>
 
       {filtered.length === 0 ? (
         <div style={s.empty}>
-          {orders.length === 0
-            ? 'No repair orders yet. Click "New Order" to get started.'
-            : 'No orders match your filters.'}
+          {orders.length === 0 ? 'No repair orders yet. Click "New Order" to start.' : 'No orders match your filters.'}
         </div>
       ) : (
-        <div style={s.orderList}>
+        <div style={s.list}>
           {filtered.map(order => (
             <OrderRow
               key={order.id}
               order={order}
-              onOpen={() => setSelectedOrder(order)}
-              onDelete={() => {
-                if (window.confirm('Delete this repair order?')) deleteMutation.mutate(order.id)
-              }}
+              expanded={expandedId === order.id}
+              onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
             />
           ))}
         </div>
-      )}
-
-      {/* Create panel */}
-      {creating && (
-        <CreateRepairPanel
-          onClose={() => setCreating(false)}
-          onCreated={() => {
-            setCreating(false)
-            qc.invalidateQueries({ queryKey: ['repair-orders'] })
-            qc.invalidateQueries({ queryKey: ['cart-active'] })
-          }}
-        />
-      )}
-
-      {/* Detail / edit panel */}
-      {selectedOrder && (
-        <RepairDetailPanel
-          order={selectedOrder}
-          onClose={() => setSelectedOrder(null)}
-          onUpdated={() => {
-            setSelectedOrder(null)
-            qc.invalidateQueries({ queryKey: ['repair-orders'] })
-            qc.invalidateQueries({ queryKey: ['cart-active'] })
-          }}
-        />
       )}
     </>
   )
 }
 
-// ── Order Row ─────────────────────────────────────────────────
+// ── Order Row (collapsed + expanded) ─────────────────────────
 
-function OrderRow({
-  order,
-  onOpen,
-  onDelete,
-}: {
+function OrderRow({ order, expanded, onToggle }: {
   order: RepairOrder
-  onOpen: () => void
-  onDelete: () => void
+  expanded: boolean
+  onToggle: () => void
 }) {
-  const sc = STATUS_COLOR[order.status]
+  const qc = useQueryClient()
+  const [addingTask, setAddingTask] = useState(false)
+
+  const { data: providers = [] } = useQuery<Provider[]>({
+    queryKey: ['providers'],
+    queryFn: () => api.get('/providers/').then(r => r.data),
+    enabled: expanded,
+  })
+
+  const deleteOrder = useMutation({
+    mutationFn: () => api.delete(`/repair-orders/${order.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['repair-orders'] })
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+    },
+  })
+
+  const updateStatus = useMutation({
+    mutationFn: (status: RepairOrderStatus) =>
+      api.patch(`/repair-orders/${order.id}`, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['repair-orders'] }),
+  })
+
   const name = order.customer_full_name || order.customer_name || 'Walk-in'
   const wig  = order.wig_serial || order.wig_description || '—'
   const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const sc   = ORDER_STATUS_COLOR[order.status]
 
   return (
-    <div style={s.orderRow}>
-      <div style={{ ...s.statusChip, background: sc.bg, color: sc.color }}>
-        {STATUS_LABEL[order.status]}
-      </div>
+    <div style={s.orderCard}>
+      {/* ── Collapsed header ── */}
+      <button style={s.orderHeader} onClick={onToggle}>
+        <span style={{ ...s.statusChip, background: sc.bg, color: sc.color }}>
+          {ORDER_STATUS_LABEL[order.status]}
+        </span>
 
-      <div style={s.orderMeta}>
-        <span style={s.orderCustomer}>{name}</span>
-        {order.customer_phone && (
+        <span style={s.orderName}>{name}</span>
+        {(order.customer_phone) && (
           <span style={s.orderPhone}>{order.customer_phone}</span>
         )}
-      </div>
 
-      <div style={s.orderWig}>
-        <Package size={12} color="rgba(13,13,13,0.3)" />
-        <span style={s.orderWigLabel}>{wig}</span>
-      </div>
+        <span style={s.orderDivider}>·</span>
 
-      <div style={s.orderServices}>
-        <span style={s.orderServiceCount}>{order.cart_item_count} service{order.cart_item_count !== 1 ? 's' : ''}</span>
-      </div>
+        <Package size={12} color="rgba(13,13,13,0.3)" style={{ flexShrink: 0 }} />
+        <span style={s.orderWig}>{wig}</span>
 
-      {order.external_provider_name && (
-        <div style={s.orderProvider}>
-          <ExternalLink size={11} color="rgba(13,13,13,0.3)" />
-          <span style={s.orderProviderName}>{order.external_provider_name}</span>
+        <span style={s.orderDivider}>·</span>
+        <span style={s.orderCount}>{order.tasks.length} task{order.tasks.length !== 1 ? 's' : ''}</span>
+
+        <span style={{ flex: 1 }} />
+        <span style={s.orderDate}>{date}</span>
+
+        <button
+          style={s.iconBtn}
+          onClick={e => {
+            e.stopPropagation()
+            if (window.confirm('Delete this repair order and all its tasks?')) deleteOrder.mutate()
+          }}
+        >
+          <Trash2 size={13} color="rgba(13,13,13,0.25)" />
+        </button>
+
+        {expanded
+          ? <ChevronDown size={15} color="rgba(13,13,13,0.35)" />
+          : <ChevronRight size={15} color="rgba(13,13,13,0.35)" />
+        }
+      </button>
+
+      {/* ── Expanded body ── */}
+      {expanded && (
+        <div style={s.orderBody}>
+          {order.notes && (
+            <p style={s.orderNotes}>{order.notes}</p>
+          )}
+
+          {/* Task list */}
+          {order.tasks.length === 0 && !addingTask && (
+            <p style={s.emptyTasks}>No tasks yet — add one below.</p>
+          )}
+
+          {order.tasks.map(task => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              providers={providers}
+            />
+          ))}
+
+          {/* Add task inline form */}
+          {addingTask ? (
+            <AddTaskForm
+              orderId={order.id}
+              onDone={() => {
+                setAddingTask(false)
+                qc.invalidateQueries({ queryKey: ['repair-orders'] })
+                qc.invalidateQueries({ queryKey: ['cart-active'] })
+              }}
+              onCancel={() => setAddingTask(false)}
+            />
+          ) : (
+            <button style={s.addTaskBtn} onClick={() => setAddingTask(true)}>
+              <Plus size={12} />
+              Add task
+            </button>
+          )}
+
+          {/* Global status row */}
+          <div style={s.globalStatusRow}>
+            <span style={s.globalStatusLabel}>Order status:</span>
+            {(['pending', 'in_progress', 'with_external', 'ready', 'completed'] as RepairOrderStatus[]).map(st => {
+              const c = ORDER_STATUS_COLOR[st]
+              const active = order.status === st
+              return (
+                <button
+                  key={st}
+                  style={{
+                    ...s.statusOptionBtn,
+                    background: active ? c.bg : 'transparent',
+                    color: active ? c.color : 'rgba(13,13,13,0.4)',
+                    border: active ? `1px solid ${c.color}33` : '1px solid rgba(13,13,13,0.1)',
+                  }}
+                  onClick={() => updateStatus.mutate(st)}
+                >
+                  {ORDER_STATUS_LABEL[st]}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
+    </div>
+  )
+}
 
-      <div style={{ flex: 1 }} />
-      <span style={s.orderDate}>{date}</span>
+// ── Task Row ─────────────────────────────────────────────────
 
-      <button style={s.iconBtn} onClick={onDelete} title="Delete">
-        <Trash2 size={14} color="rgba(13,13,13,0.3)" />
+function TaskRow({ task, providers }: { task: RepairTask; providers: Provider[] }) {
+  const qc = useQueryClient()
+  const [editProvider, setEditProvider] = useState(false)
+
+  const updateTask = useMutation({
+    mutationFn: (patch: Record<string, unknown>) =>
+      api.patch(`/repair-tasks/${task.id}`, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['repair-orders'] }),
+  })
+
+  const deleteTask = useMutation({
+    mutationFn: () => api.delete(`/repair-tasks/${task.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['repair-orders'] })
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+    },
+  })
+
+  const tc = TASK_STATUS_COLOR[task.status]
+
+  return (
+    <div style={s.taskRow}>
+      {/* Status chip — click to advance */}
+      <button
+        style={{ ...s.taskStatusChip, background: tc.bg, color: tc.color }}
+        onClick={() => updateTask.mutate({ status: nextTaskStatus(task.status) })}
+        title="Click to advance status"
+      >
+        {TASK_STATUS_LABEL[task.status]}
       </button>
-      <button style={s.openBtn} onClick={onOpen}>
-        <ChevronRight size={15} />
+
+      {/* Description + notes */}
+      <div style={s.taskInfo}>
+        <span style={s.taskDesc}>{task.description}</span>
+        {task.notes && <span style={s.taskNotes}>{task.notes}</span>}
+      </div>
+
+      {/* Price */}
+      <span style={s.taskPrice}>${Number(task.price).toFixed(2)}</span>
+
+      {/* Provider */}
+      {editProvider ? (
+        <select
+          style={s.providerSelect}
+          defaultValue={task.assigned_provider_id ?? ''}
+          autoFocus
+          onBlur={e => {
+            updateTask.mutate({ assigned_provider_id: e.target.value || null })
+            setEditProvider(false)
+          }}
+          onChange={e => {
+            updateTask.mutate({ assigned_provider_id: e.target.value || null })
+            setEditProvider(false)
+          }}
+        >
+          <option value="">— In house</option>
+          {providers.filter(p => p.is_active).map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      ) : (
+        <button style={s.providerChip} onClick={() => setEditProvider(true)}>
+          {task.assigned_provider_name ?? '— In house'}
+        </button>
+      )}
+
+      {/* Video link */}
+      {task.video_url && (
+        <a href={task.video_url} target="_blank" rel="noreferrer" style={s.linkIcon} title="Open video">
+          <Link size={13} color="rgba(13,13,13,0.35)" />
+        </a>
+      )}
+
+      {/* Print slip */}
+      <button style={s.iconBtn} title="Print task slip" onClick={() => printSlip(task)}>
+        <Printer size={13} color="rgba(13,13,13,0.3)" />
+      </button>
+
+      {/* Delete */}
+      <button
+        style={s.iconBtn}
+        title="Delete task"
+        onClick={() => {
+          if (window.confirm('Delete this task?')) deleteTask.mutate()
+        }}
+      >
+        <Trash2 size={13} color="rgba(13,13,13,0.25)" />
       </button>
     </div>
   )
 }
 
-// ── Create Repair Panel ───────────────────────────────────────
+// ── Add Task Form (inline) ────────────────────────────────────
 
-function CreateRepairPanel({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void
-  onCreated: () => void
+function AddTaskForm({ orderId, onDone, onCancel }: {
+  orderId: string
+  onDone: () => void
+  onCancel: () => void
 }) {
-  const qc = useQueryClient()
-
-  // Customer
-  const [customerMode, setCustomerMode] = useState<'existing' | 'walkin'>('existing')
-  const [custSearch, setCustSearch]     = useState('')
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [walkinName, setWalkinName]     = useState('')
-  const [walkinPhone, setWalkinPhone]   = useState('')
-
-  // Wig
-  const [wigMode, setWigMode]         = useState<'customer' | 'external'>('customer')
-  const [wigSearch, setWigSearch]     = useState('')
-  const [selectedWig, setSelectedWig] = useState<InventoryItem | null>(null)
-  // External wig structured fields
-  const [extSerial, setExtSerial] = useState('')
-  const [extBrand,  setExtBrand]  = useState('')
-  const [extColor,  setExtColor]  = useState('')
-  const [extLength, setExtLength] = useState('')
-
-  // Services
-  const [services, setServices] = useState<ServiceRow[]>([])
-
-  // Metadata
-  const [notes, setNotes]             = useState('')
-  const [videoUrl, setVideoUrl]       = useState('')
-  const [providerId, setProviderId]   = useState('')
-
-  const [step, setStep]   = useState<'form' | 'submitting'>('form')
-  const [error, setError] = useState<string | null>(null)
-
-  // Data
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ['customers'],
-    queryFn: () => api.get('/customers/').then(r => r.data),
-  })
-
-  const { data: inventory = [] } = useQuery<InventoryItem[]>({
-    queryKey: ['inventory'],
-    queryFn: () => api.get('/inventory/').then(r => r.data),
-  })
+  const [serviceId, setServiceId]   = useState('')
+  const [serviceName, setServiceName] = useState('')
+  const [price, setPrice]           = useState('')
+  const [notes, setNotes]           = useState('')
+  const [videoUrl, setVideoUrl]     = useState('')
+  const [saving, setSaving]         = useState(false)
 
   const { data: repairServices = [] } = useQuery<RepairService[]>({
     queryKey: ['repair-services'],
     queryFn: () => api.get('/repair-services/').then(r => r.data),
   })
 
-  const { data: providers = [] } = useQuery<Provider[]>({
-    queryKey: ['providers'],
-    queryFn: () => api.get('/providers/').then(r => r.data),
-  })
-
-  // Filtered customer search
-  const filteredCustomers = useMemo(() => {
-    if (!custSearch) return []
-    const q = custSearch.toLowerCase()
-    return customers.filter(c =>
-      `${c.first_name} ${c.last_name} ${c.phone ?? ''} ${c.cell ?? ''}`.toLowerCase().includes(q)
-    ).slice(0, 8)
-  }, [customers, custSearch])
-
-  // Filtered wig search — only this customer's wigs
-  const filteredWigs = useMemo(() => {
-    if (!selectedCustomer) return []
-    const customerWigs = inventory.filter(i =>
-      i.item_type === 'wig' && i.customer_id === selectedCustomer.id
-    )
-    if (!wigSearch) return customerWigs.slice(0, 8)
-    const q = wigSearch.toLowerCase()
-    return customerWigs.filter(i =>
-      [i.daysmart_serial, i.brand, i.color, i.length, i.name].join(' ').toLowerCase().includes(q)
-    ).slice(0, 8)
-  }, [inventory, wigSearch, selectedCustomer])
-
-  function addService() {
-    setServices(prev => [...prev, {
-      key: crypto.randomUUID(),
-      service_id: '',
-      service_name: '',
-      price: '',
-      tax_rate: TAX_RATE_SERVICE,
-      notes: '',
-    }])
-  }
-
-  function removeService(key: string) {
-    setServices(prev => prev.filter(s => s.key !== key))
-  }
-
-  function updateService(key: string, patch: Partial<ServiceRow>) {
-    setServices(prev => prev.map(s => s.key === key ? { ...s, ...patch } : s))
-  }
-
-  async function handleSubmit() {
-    setError(null)
-    setStep('submitting')
-
-    try {
-      // 1. Determine customer payload
-      const orderPayload: Record<string, unknown> = {
-        notes,
-        video_url: videoUrl || null,
-        external_provider_id: providerId || null,
-      }
-
-      if (customerMode === 'existing' && selectedCustomer) {
-        orderPayload.customer_id   = selectedCustomer.id
-        orderPayload.customer_name = `${selectedCustomer.first_name} ${selectedCustomer.last_name}`
-        orderPayload.customer_phone = selectedCustomer.phone || selectedCustomer.cell || null
-      } else {
-        orderPayload.customer_name  = walkinName || null
-        orderPayload.customer_phone = walkinPhone || null
-      }
-
-      if (wigMode === 'customer' && selectedWig) {
-        orderPayload.inventory_item_id = selectedWig.id
-      } else if (wigMode === 'external') {
-        const serial = extSerial.trim()
-        if (customerMode === 'existing' && selectedCustomer && serial) {
-          // Create a new InventoryItem for this customer's wig — adds it to their history
-          const { data: newWig } = await api.post('/inventory/', {
-            item_type:       'wig',
-            name:            serial,
-            daysmart_serial: serial,
-            brand:           extBrand.trim()  || null,
-            color:           extColor.trim()  || null,
-            length:          extLength.trim() || null,
-            customer_id:     selectedCustomer.id,
-            sale_status:     'paid_in_full',
-            is_external:     true,
-          })
-          orderPayload.inventory_item_id = newWig.id
-          qc.invalidateQueries({ queryKey: ['inventory'] })
-        } else {
-          // Walk-in or no serial → free-text description only
-          const parts = [extSerial, extBrand, extColor, extLength].map(s => s.trim()).filter(Boolean)
-          orderPayload.wig_description = parts.join(' · ') || null
-        }
-      }
-
-      // 2. Create repair order
-      const { data: order } = await api.post('/repair-orders/', orderPayload)
-
-      // 3. Add services to cart
-      const custId = orderPayload.customer_id as string | undefined
-      if (custId || orderPayload.customer_name) {
-        // We need a customer_id for cart items — if walk-in, use a placeholder approach.
-        // Cart items require customer_id FK — only add services if we have an existing customer.
-        if (custId) {
-          for (const svc of services) {
-            if (!svc.service_id) continue
-            await api.post('/cart/', {
-              customer_id:     custId,
-              item_type:       'service',
-              description:     svc.service_name,
-              price:           parseFloat(svc.price) || 0,
-              tax_rate:        svc.tax_rate,
-              notes:           svc.notes || null,
-              department:      'repairs',
-              repair_order_id: order.id,
-            })
-          }
-        }
-      }
-
-      onCreated()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'An error occurred'
-      setError(msg)
-      setStep('form')
-    }
-  }
-
-  const wigReady =
-    wigMode === 'customer'
-      ? !!selectedWig
-      : !!(extSerial.trim() || extBrand.trim() || extColor.trim())  // at least something entered
-
-  const canSubmit =
-    (customerMode === 'existing' ? !!selectedCustomer : !!walkinName) &&
-    wigReady &&
-    step === 'form'
-
-  return (
-    <>
-      <div style={s.overlay} onClick={onClose} />
-      <div style={s.panel}>
-        <div style={s.panelHeader}>
-          <div>
-            <div style={s.panelTitle}>New Repair Order</div>
-            <div style={s.panelSubtitle}>Fill in the details and add services</div>
-          </div>
-          <button style={s.closeBtn} onClick={onClose}><X size={16} /></button>
-        </div>
-
-        <div style={s.panelBody}>
-
-          {/* ── Customer ── */}
-          <Section icon={<User size={13} />} label="Customer">
-            <div style={s.modeToggle}>
-              <ModeBtn active={customerMode === 'existing'} onClick={() => { setCustomerMode('existing'); setSelectedCustomer(null); setCustSearch('') }}>Existing Customer</ModeBtn>
-              <ModeBtn active={customerMode === 'walkin'}   onClick={() => { setCustomerMode('walkin'); setSelectedCustomer(null); setWigMode('external'); setSelectedWig(null); setWigSearch('') }}>Walk-in</ModeBtn>
-            </div>
-
-            {customerMode === 'existing' ? (
-              selectedCustomer ? (
-                <SelectedPill
-                  label={`${selectedCustomer.first_name} ${selectedCustomer.last_name}`}
-                  sub={selectedCustomer.phone || selectedCustomer.cell || undefined}
-                  onClear={() => setSelectedCustomer(null)}
-                />
-              ) : (
-                <SearchDropdown
-                  placeholder="Search by name or phone…"
-                  value={custSearch}
-                  onChange={setCustSearch}
-                  results={filteredCustomers}
-                  renderItem={c => `${c.first_name} ${c.last_name}${(c.phone || c.cell) ? ` · ${c.phone || c.cell}` : ''}`}
-                  onSelect={c => { setSelectedCustomer(c); setCustSearch('') }}
-                />
-              )
-            ) : (
-              <div style={s.fieldRow}>
-                <input
-                  style={s.input}
-                  placeholder="Customer name"
-                  value={walkinName}
-                  onChange={e => setWalkinName(e.target.value)}
-                />
-                <input
-                  style={s.input}
-                  placeholder="Phone (optional)"
-                  value={walkinPhone}
-                  onChange={e => setWalkinPhone(e.target.value)}
-                />
-              </div>
-            )}
-          </Section>
-
-          {/* ── Wig ── */}
-          <Section icon={<Package size={13} />} label="Wig">
-            <div style={s.modeToggle}>
-              <ModeBtn
-                active={wigMode === 'customer'}
-                onClick={() => { setWigMode('customer'); setSelectedWig(null); setWigSearch('') }}
-                disabled={customerMode === 'walkin'}
-              >
-                Customer's Wigs
-              </ModeBtn>
-              <ModeBtn active={wigMode === 'external'} onClick={() => { setWigMode('external'); setSelectedWig(null) }}>External Wig</ModeBtn>
-            </div>
-
-            {wigMode === 'customer' ? (
-              selectedWig ? (
-                <SelectedPill
-                  label={selectedWig.daysmart_serial ?? selectedWig.name}
-                  sub={[selectedWig.brand, selectedWig.color, selectedWig.length].filter(Boolean).join(' · ')}
-                  onClear={() => setSelectedWig(null)}
-                />
-              ) : (
-                <>
-                  {!selectedCustomer && (
-                    <p style={s.emptyNote}>Select a customer above to see their wigs.</p>
-                  )}
-                  {selectedCustomer && (
-                    <SearchDropdown
-                      placeholder="Search by serial, brand, color…"
-                      value={wigSearch}
-                      onChange={setWigSearch}
-                      results={filteredWigs}
-                      renderItem={w => [w.daysmart_serial, w.brand, w.color, w.length].filter(Boolean).join(' · ')}
-                      onSelect={w => { setSelectedWig(w); setWigSearch('') }}
-                    />
-                  )}
-                  {selectedCustomer && filteredWigs.length === 0 && !wigSearch && (
-                    <p style={s.emptyNote}>No wigs on file for this customer. Use "External Wig" to enter details manually.</p>
-                  )}
-                </>
-              )
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <input
-                  style={{ ...s.input, marginBottom: 0 }}
-                  placeholder="Serial number"
-                  value={extSerial}
-                  onChange={e => setExtSerial(e.target.value)}
-                />
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    style={{ ...s.input, flex: 1, marginBottom: 0 }}
-                    placeholder="Brand"
-                    value={extBrand}
-                    onChange={e => setExtBrand(e.target.value)}
-                  />
-                  <input
-                    style={{ ...s.input, flex: 1, marginBottom: 0 }}
-                    placeholder="Color"
-                    value={extColor}
-                    onChange={e => setExtColor(e.target.value)}
-                  />
-                </div>
-                <input
-                  style={{ ...s.input, marginBottom: 0 }}
-                  placeholder="Length (optional)"
-                  value={extLength}
-                  onChange={e => setExtLength(e.target.value)}
-                />
-                {customerMode === 'existing' && selectedCustomer && (
-                  <p style={{ fontSize: 11, color: '#71717a', margin: 0 }}>
-                    This wig will be added to {selectedCustomer.first_name}'s history automatically.
-                  </p>
-                )}
-              </div>
-            )}
-          </Section>
-
-          {/* ── Services ── */}
-          <Section icon={<ClipboardList size={13} />} label="Services">
-            {services.map(svc => (
-              <ServiceRowEditor
-                key={svc.key}
-                row={svc}
-                repairServices={repairServices}
-                onChange={patch => updateService(svc.key, patch)}
-                onRemove={() => removeService(svc.key)}
-              />
-            ))}
-            {customerMode === 'walkin' && services.length > 0 && (
-              <p style={s.warningNote}>Walk-in orders: services can't be added to cart (no customer account). They'll be recorded on the repair order only.</p>
-            )}
-            <button style={s.addServiceBtn} onClick={addService}>
-              <Plus size={13} />
-              Add Service
-            </button>
-          </Section>
-
-          {/* ── Notes ── */}
-          <Section icon={<ClipboardList size={13} />} label="Notes">
-            <textarea
-              style={s.textarea}
-              placeholder="Repair notes, special instructions…"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-            />
-          </Section>
-
-          {/* ── Video ── */}
-          <Section icon={<Video size={13} />} label="Video Link">
-            <input
-              style={s.input}
-              placeholder="WhatsApp / Drive video URL (optional)"
-              value={videoUrl}
-              onChange={e => setVideoUrl(e.target.value)}
-            />
-          </Section>
-
-          {/* ── External Provider ── */}
-          <Section icon={<Building2 size={13} />} label="External Provider (optional)">
-            <select
-              style={s.select}
-              value={providerId}
-              onChange={e => setProviderId(e.target.value)}
-            >
-              <option value="">None — handled in-house</option>
-              {providers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </Section>
-
-          {error && <p style={s.errorMsg}>{error}</p>}
-        </div>
-
-        <div style={s.panelFooter}>
-          <button style={s.cancelBtn} onClick={onClose}>Cancel</button>
-          <button
-            style={{ ...s.submitBtn, ...(canSubmit ? {} : s.submitBtnDisabled) }}
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-          >
-            {step === 'submitting' ? 'Creating…' : 'Create Repair Order'}
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
-
-// ── Service Row Editor ────────────────────────────────────────
-
-function ServiceRowEditor({
-  row,
-  repairServices,
-  onChange,
-  onRemove,
-}: {
-  row: ServiceRow
-  repairServices: RepairService[]
-  onChange: (patch: Partial<ServiceRow>) => void
-  onRemove: () => void
-}) {
   function handleServiceSelect(id: string) {
     const svc = repairServices.find(s => s.id === id)
     if (!svc) return
-    onChange({
-      service_id:   svc.id,
-      service_name: svc.name,
-      price:        svc.default_price != null ? String(svc.default_price) : '',
-    })
+    setServiceId(svc.id)
+    setServiceName(svc.name)
+    if (svc.default_price != null) setPrice(String(svc.default_price))
+  }
+
+  async function handleSave() {
+    if (!serviceName.trim()) return
+    setSaving(true)
+    try {
+      await api.post('/repair-tasks/', {
+        repair_order_id: orderId,
+        repair_service_id: serviceId || null,
+        description: serviceName.trim(),
+        price: parseFloat(price) || 0,
+        tax_rate: 0.045,
+        notes: notes.trim() || null,
+        video_url: videoUrl.trim() || null,
+      })
+      onDone()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <div style={s.serviceRowEditor}>
+    <div style={s.addTaskForm}>
       <select
-        style={{ ...s.select, flex: 1 }}
-        value={row.service_id}
+        style={{ ...s.addInput, flex: '0 0 200px' }}
+        value={serviceId}
         onChange={e => handleServiceSelect(e.target.value)}
       >
         <option value="">Select service…</option>
@@ -748,202 +535,364 @@ function ServiceRowEditor({
       </select>
 
       <div style={s.priceWrap}>
-        <span style={s.priceDollar}>$</span>
+        <span style={s.pricePre}>$</span>
         <input
-          style={s.priceInput}
+          style={s.priceField}
           placeholder="0.00"
-          value={row.price}
-          onChange={e => onChange({ price: e.target.value })}
+          value={price}
+          onChange={e => setPrice(e.target.value)}
         />
       </div>
 
-      <button
-        style={{ ...s.taxToggle, ...(row.tax_rate > 0 ? s.taxToggleOn : {}) }}
-        onClick={() => onChange({ tax_rate: row.tax_rate > 0 ? 0 : TAX_RATE_SERVICE })}
-        title="Toggle tax"
-      >
-        {row.tax_rate > 0 ? `${(row.tax_rate * 100).toFixed(1)}%` : 'No tax'}
-      </button>
-
       <input
-        style={{ ...s.input, flex: 1, marginBottom: 0 }}
+        style={{ ...s.addInput, flex: 1 }}
         placeholder="Notes (optional)"
-        value={row.notes}
-        onChange={e => onChange({ notes: e.target.value })}
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
       />
 
-      <button style={s.iconBtn} onClick={onRemove} title="Remove">
-        <Trash2 size={13} color="rgba(13,13,13,0.3)" />
+      <input
+        style={{ ...s.addInput, flex: '0 0 160px' }}
+        placeholder="Drive / video link"
+        value={videoUrl}
+        onChange={e => setVideoUrl(e.target.value)}
+      />
+
+      <button
+        style={{ ...s.saveTaskBtn, ...(saving ? { opacity: 0.5 } : {}) }}
+        onClick={handleSave}
+        disabled={saving || !serviceName.trim()}
+      >
+        {saving ? '…' : 'Save'}
+      </button>
+      <button style={s.cancelTaskBtn} onClick={onCancel}>
+        <X size={13} />
       </button>
     </div>
   )
 }
 
-// ── Repair Detail Panel ───────────────────────────────────────
+// ── Create Order Modal ────────────────────────────────────────
 
-function RepairDetailPanel({
-  order,
-  onClose,
-  onUpdated,
-}: {
-  order: RepairOrder
-  onClose: () => void
-  onUpdated: () => void
-}) {
-  const qc = useQueryClient()
-  const [status, setStatus]       = useState<RepairOrderStatus>(order.status)
-  const [notes, setNotes]         = useState(order.notes ?? '')
-  const [videoUrl, setVideoUrl]   = useState(order.video_url ?? '')
-  const [providerId, setProviderId] = useState(order.external_provider_id ?? '')
-  const [saving, setSaving]       = useState(false)
+type TaskDraft = {
+  key: string
+  service_id: string
+  service_name: string
+  price: string
+  notes: string
+  video_url: string
+}
 
-  const { data: providers = [] } = useQuery<Provider[]>({
-    queryKey: ['providers'],
-    queryFn: () => api.get('/providers/').then(r => r.data),
+function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  // Customer
+  const [custSearch, setCustSearch]           = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [walkinName, setWalkinName]           = useState('')
+  const [walkinPhone, setWalkinPhone]         = useState('')
+  const [customerMode, setCustomerMode]       = useState<'existing' | 'walkin'>('existing')
+
+  // Wig
+  const [wigMode, setWigMode]         = useState<'customer' | 'external'>('customer')
+  const [wigSearch, setWigSearch]     = useState('')
+  const [selectedWig, setSelectedWig] = useState<InventoryItem | null>(null)
+  const [extSerial, setExtSerial]     = useState('')
+  const [extBrand, setExtBrand]       = useState('')
+  const [extColor, setExtColor]       = useState('')
+
+  // Order meta
+  const [orderNotes, setOrderNotes]   = useState('')
+
+  // Tasks
+  const [tasks, setTasks] = useState<TaskDraft[]>([])
+
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
+
+  // Data
+  const { data: customers = [] } = useQuery<Customer[]>({
+    queryKey: ['customers'],
+    queryFn: () => api.get('/customers/').then(r => r.data),
+  })
+  const { data: inventory = [] } = useQuery<InventoryItem[]>({
+    queryKey: ['inventory'],
+    queryFn: () => api.get('/inventory/').then(r => r.data),
+  })
+  const { data: repairServices = [] } = useQuery<RepairService[]>({
+    queryKey: ['repair-services'],
+    queryFn: () => api.get('/repair-services/').then(r => r.data),
   })
 
-  // Cart items linked to this repair order
-  const { data: allCart = [] } = useQuery<CartItem[]>({
-    queryKey: ['cart-active'],
-    queryFn: () => api.get('/cart/active').then(r => r.data),
-    staleTime: 0,
-  })
+  const filteredCustomers = useMemo(() => {
+    if (!custSearch) return []
+    const q = custSearch.toLowerCase()
+    return customers.filter(c =>
+      `${c.first_name} ${c.last_name} ${c.phone ?? ''} ${c.cell ?? ''}`.toLowerCase().includes(q)
+    ).slice(0, 8)
+  }, [customers, custSearch])
 
-  const linkedItems = useMemo(
-    () => allCart.filter(i => i.repair_order_id === order.id),
-    [allCart, order.id]
-  )
+  const filteredWigs = useMemo(() => {
+    if (!selectedCustomer || wigMode !== 'customer') return []
+    const mine = inventory.filter(i => i.item_type === 'wig' && i.customer_id === selectedCustomer.id)
+    if (!wigSearch) return mine.slice(0, 8)
+    const q = wigSearch.toLowerCase()
+    return mine.filter(i =>
+      [i.daysmart_serial, i.brand, i.color, i.length, i.name].join(' ').toLowerCase().includes(q)
+    ).slice(0, 8)
+  }, [inventory, wigSearch, selectedCustomer, wigMode])
 
-  const removeCartItem = useMutation({
-    mutationFn: (id: string) => api.delete(`/cart/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cart-active'] })
-      qc.invalidateQueries({ queryKey: ['repair-orders'] })
-    },
-  })
+  function addTask() {
+    setTasks(prev => [...prev, { key: crypto.randomUUID(), service_id: '', service_name: '', price: '', notes: '', video_url: '' }])
+  }
 
-  async function handleSave() {
+  function updateTask(key: string, patch: Partial<TaskDraft>) {
+    setTasks(prev => prev.map(t => t.key === key ? { ...t, ...patch } : t))
+  }
+
+  function removeTask(key: string) {
+    setTasks(prev => prev.filter(t => t.key !== key))
+  }
+
+  function handleServiceSelect(key: string, id: string) {
+    const svc = repairServices.find(s => s.id === id)
+    if (!svc) return
+    updateTask(key, {
+      service_id:   svc.id,
+      service_name: svc.name,
+      price: svc.default_price != null ? String(svc.default_price) : '',
+    })
+  }
+
+  async function handleCreate() {
+    setError(null)
     setSaving(true)
     try {
-      await api.patch(`/repair-orders/${order.id}`, {
-        status,
-        notes:                notes || null,
-        video_url:            videoUrl || null,
-        external_provider_id: providerId || null,
-      })
-      onUpdated()
-    } finally {
+      const payload: Record<string, unknown> = {
+        notes: orderNotes.trim() || null,
+        status: 'in_progress',
+      }
+
+      if (customerMode === 'existing' && selectedCustomer) {
+        payload.customer_id    = selectedCustomer.id
+        payload.customer_name  = `${selectedCustomer.first_name} ${selectedCustomer.last_name}`
+        payload.customer_phone = selectedCustomer.phone || selectedCustomer.cell || null
+      } else {
+        payload.customer_name  = walkinName.trim() || null
+        payload.customer_phone = walkinPhone.trim() || null
+      }
+
+      if (wigMode === 'customer' && selectedWig) {
+        payload.inventory_item_id = selectedWig.id
+      } else if (wigMode === 'external') {
+        const serial = extSerial.trim()
+        if (customerMode === 'existing' && selectedCustomer && serial) {
+          const { data: newWig } = await api.post('/inventory/', {
+            item_type: 'wig',
+            name: serial,
+            daysmart_serial: serial,
+            brand: extBrand.trim() || null,
+            color: extColor.trim() || null,
+            customer_id: selectedCustomer.id,
+            sale_status: 'paid_in_full',
+            is_external: true,
+          })
+          payload.inventory_item_id = newWig.id
+        } else {
+          payload.wig_description = [extSerial, extBrand, extColor].map(s => s.trim()).filter(Boolean).join(' · ') || null
+        }
+      }
+
+      const { data: order } = await api.post('/repair-orders/', payload)
+
+      // Create tasks sequentially
+      for (const t of tasks) {
+        if (!t.service_name.trim()) continue
+        await api.post('/repair-tasks/', {
+          repair_order_id:  order.id,
+          repair_service_id: t.service_id || null,
+          description:      t.service_name.trim(),
+          price:            parseFloat(t.price) || 0,
+          tax_rate:         0.045,
+          notes:            t.notes.trim() || null,
+          video_url:        t.video_url.trim() || null,
+        })
+      }
+
+      onCreated()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
       setSaving(false)
     }
   }
 
-  const name = order.customer_full_name || order.customer_name || 'Walk-in'
-  const wig  = order.wig_serial || order.wig_description || '—'
+  const canCreate =
+    !saving &&
+    (customerMode === 'existing' ? !!selectedCustomer : !!walkinName.trim()) &&
+    (wigMode === 'customer' ? !!selectedWig : !!(extSerial.trim() || extBrand.trim()))
 
   return (
     <>
       <div style={s.overlay} onClick={onClose} />
-      <div style={s.panel}>
-        <div style={s.panelHeader}>
+      <div style={s.modal}>
+        {/* Header */}
+        <div style={s.modalHeader}>
           <div>
-            <div style={s.panelTitle}>{name}</div>
-            <div style={s.panelSubtitle}>{wig}</div>
+            <div style={s.modalTitle}>New Repair Order</div>
+            <div style={s.modalSubtitle}>Customer · Wig · Tasks</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}><X size={16} /></button>
         </div>
 
-        <div style={s.panelBody}>
+        {/* Body */}
+        <div style={s.modalBody}>
 
-          {/* Status */}
-          <Section icon={<Wrench size={13} />} label="Status">
-            <div style={s.statusGrid}>
-              {(Object.keys(STATUS_LABEL) as RepairOrderStatus[]).filter(st => st !== 'completed').map(st => {
-                const sc = STATUS_COLOR[st]
-                return (
-                  <button
-                    key={st}
-                    style={{
-                      ...s.statusBtn,
-                      background: status === st ? sc.bg : 'transparent',
-                      color: status === st ? sc.color : 'rgba(13,13,13,0.45)',
-                      border: status === st ? `1px solid ${sc.color}33` : '1px solid rgba(13,13,13,0.1)',
-                    }}
-                    onClick={() => setStatus(st)}
-                  >
-                    {status === st && <Check size={11} />}
-                    {STATUS_LABEL[st]}
-                  </button>
-                )
-              })}
+          {/* ── Customer ── */}
+          <FieldGroup label="Customer">
+            <div style={s.modeRow}>
+              <ModeBtn active={customerMode === 'existing'} onClick={() => { setCustomerMode('existing'); setSelectedCustomer(null); setCustSearch('') }}>Existing</ModeBtn>
+              <ModeBtn active={customerMode === 'walkin'}   onClick={() => { setCustomerMode('walkin'); setSelectedCustomer(null); setWigMode('external') }}>Walk-in</ModeBtn>
             </div>
-          </Section>
 
-          {/* Services in cart */}
-          <Section icon={<ClipboardList size={13} />} label={`Services in Cart (${linkedItems.length})`}>
-            {linkedItems.length === 0 ? (
-              <p style={s.emptyNote}>No services added yet.</p>
+            {customerMode === 'existing' ? (
+              selectedCustomer ? (
+                <Pill
+                  label={`${selectedCustomer.first_name} ${selectedCustomer.last_name}`}
+                  sub={selectedCustomer.phone || selectedCustomer.cell}
+                  onClear={() => setSelectedCustomer(null)}
+                />
+              ) : (
+                <Dropdown
+                  placeholder="Search by name or phone…"
+                  value={custSearch}
+                  onChange={setCustSearch}
+                  results={filteredCustomers}
+                  renderItem={c => `${c.first_name} ${c.last_name}${(c.phone || c.cell) ? ` · ${c.phone || c.cell}` : ''}`}
+                  onSelect={c => { setSelectedCustomer(c); setCustSearch('') }}
+                />
+              )
             ) : (
-              <div style={s.cartItemList}>
-                {linkedItems.map(item => (
-                  <div key={item.id} style={s.cartItemRow}>
-                    <div style={s.cartItemInfo}>
-                      <span style={s.cartItemName}>{item.description}</span>
-                      <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
-                    </div>
-                    <button
-                      style={s.iconBtn}
-                      onClick={() => removeCartItem.mutate(item.id)}
-                      title="Remove"
-                    >
-                      <Trash2 size={13} color="rgba(13,13,13,0.3)" />
-                    </button>
-                  </div>
-                ))}
+              <div style={s.inlineRow}>
+                <input style={s.field} placeholder="Customer name" value={walkinName} onChange={e => setWalkinName(e.target.value)} />
+                <input style={s.field} placeholder="Phone (optional)" value={walkinPhone} onChange={e => setWalkinPhone(e.target.value)} />
               </div>
             )}
-          </Section>
+          </FieldGroup>
 
-          {/* Notes */}
-          <Section icon={<ClipboardList size={13} />} label="Notes">
-            <textarea
-              style={s.textarea}
-              placeholder="Repair notes…"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={3}
-            />
-          </Section>
+          {/* ── Wig ── */}
+          <FieldGroup label="Wig">
+            <div style={s.modeRow}>
+              <ModeBtn
+                active={wigMode === 'customer'}
+                disabled={customerMode === 'walkin'}
+                onClick={() => { setWigMode('customer'); setSelectedWig(null); setWigSearch('') }}
+              >
+                Customer's Wig
+              </ModeBtn>
+              <ModeBtn active={wigMode === 'external'} onClick={() => { setWigMode('external'); setSelectedWig(null) }}>
+                External
+              </ModeBtn>
+            </div>
 
-          {/* Video */}
-          <Section icon={<Video size={13} />} label="Video Link">
+            {wigMode === 'customer' ? (
+              selectedWig ? (
+                <Pill
+                  label={selectedWig.daysmart_serial ?? selectedWig.name}
+                  sub={[selectedWig.brand, selectedWig.color, selectedWig.length].filter(Boolean).join(' · ')}
+                  onClear={() => setSelectedWig(null)}
+                />
+              ) : selectedCustomer ? (
+                <Dropdown
+                  placeholder="Search by serial, brand, color…"
+                  value={wigSearch}
+                  onChange={setWigSearch}
+                  results={filteredWigs}
+                  renderItem={w => [w.daysmart_serial, w.brand, w.color, w.length].filter(Boolean).join(' · ') || w.name}
+                  onSelect={w => { setSelectedWig(w); setWigSearch('') }}
+                />
+              ) : (
+                <p style={s.hint}>Select a customer first.</p>
+              )
+            ) : (
+              <div style={s.inlineRow}>
+                <input style={s.field} placeholder="Serial number" value={extSerial} onChange={e => setExtSerial(e.target.value)} />
+                <input style={s.field} placeholder="Brand" value={extBrand} onChange={e => setExtBrand(e.target.value)} />
+                <input style={s.field} placeholder="Color" value={extColor} onChange={e => setExtColor(e.target.value)} />
+              </div>
+            )}
+          </FieldGroup>
+
+          {/* ── Notes ── */}
+          <FieldGroup label="Notes">
             <input
-              style={s.input}
-              placeholder="WhatsApp / Drive video URL"
-              value={videoUrl}
-              onChange={e => setVideoUrl(e.target.value)}
+              style={s.field}
+              placeholder="General instructions, context… (optional)"
+              value={orderNotes}
+              onChange={e => setOrderNotes(e.target.value)}
             />
-          </Section>
+          </FieldGroup>
 
-          {/* External provider */}
-          <Section icon={<Building2 size={13} />} label="External Provider">
-            <select
-              style={s.select}
-              value={providerId}
-              onChange={e => setProviderId(e.target.value)}
-            >
-              <option value="">None — handled in-house</option>
-              {providers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </Section>
+          {/* ── Tasks ── */}
+          <FieldGroup label="Tasks">
+            {tasks.map(t => (
+              <div key={t.key} style={s.taskDraftRow}>
+                <select
+                  style={{ ...s.field, flex: '0 0 190px' }}
+                  value={t.service_id}
+                  onChange={e => handleServiceSelect(t.key, e.target.value)}
+                >
+                  <option value="">Select service…</option>
+                  {repairServices.filter(s => s.is_active).map(svc => (
+                    <option key={svc.id} value={svc.id}>{svc.name}</option>
+                  ))}
+                </select>
 
+                <div style={s.priceWrap}>
+                  <span style={s.pricePre}>$</span>
+                  <input
+                    style={s.priceField}
+                    placeholder="0.00"
+                    value={t.price}
+                    onChange={e => updateTask(t.key, { price: e.target.value })}
+                  />
+                </div>
+
+                <input
+                  style={{ ...s.field, flex: 1 }}
+                  placeholder="Notes (optional)"
+                  value={t.notes}
+                  onChange={e => updateTask(t.key, { notes: e.target.value })}
+                />
+
+                <input
+                  style={{ ...s.field, flex: '0 0 150px' }}
+                  placeholder="Drive / video link"
+                  value={t.video_url}
+                  onChange={e => updateTask(t.key, { video_url: e.target.value })}
+                />
+
+                <button style={s.iconBtn} onClick={() => removeTask(t.key)}>
+                  <X size={13} color="rgba(13,13,13,0.3)" />
+                </button>
+              </div>
+            ))}
+
+            <button style={s.addTaskDraftBtn} onClick={addTask}>
+              <Plus size={13} />
+              Add task
+            </button>
+          </FieldGroup>
+
+          {error && <p style={s.errorMsg}>{error}</p>}
         </div>
 
-        <div style={s.panelFooter}>
+        {/* Footer */}
+        <div style={s.modalFooter}>
           <button style={s.cancelBtn} onClick={onClose}>Cancel</button>
-          <button style={s.submitBtn} onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
+          <button
+            style={{ ...s.createBtn, ...(!canCreate ? s.createBtnDisabled : {}) }}
+            onClick={handleCreate}
+            disabled={!canCreate}
+          >
+            {saving ? 'Creating…' : 'Create Order'}
           </button>
         </div>
       </div>
@@ -951,11 +900,24 @@ function RepairDetailPanel({
   )
 }
 
-// ── Active Carts Tab ──────────────────────────────────────────
-// Shows customers who have repair services pending at POS
+// ── Active Carts Tab ─────────────────────────────────────────
+
+type CartItem = {
+  id: string
+  customer_id: string
+  customer_name?: string
+  item_type: string
+  description: string
+  price: number
+  notes?: string
+  department: string
+  status: string
+  repair_order_id?: string
+  created_at: string
+}
 
 function ActiveCartsTab() {
-  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const { data: allCart = [], isLoading } = useQuery<CartItem[]>({
     queryKey: ['cart-active'],
@@ -963,54 +925,38 @@ function ActiveCartsTab() {
     staleTime: 0,
   })
 
-  // Only repairs department items
-  const repairItems = useMemo(
-    () => allCart.filter(i => i.department === 'repairs'),
-    [allCart]
-  )
-
-  // Group by customer
   const grouped = useMemo(() => {
+    const repairItems = allCart.filter(i => i.department === 'repairs')
     const map = new Map<string, CartItem[]>()
     for (const item of repairItems) {
-      const existing = map.get(item.customer_id) ?? []
-      map.set(item.customer_id, [...existing, item])
+      map.set(item.customer_id, [...(map.get(item.customer_id) ?? []), item])
     }
     return Array.from(map.entries())
-  }, [repairItems])
+  }, [allCart])
 
-  if (isLoading) return <div style={s.empty}>Loading carts…</div>
-
-  if (grouped.length === 0) {
-    return <div style={s.empty}>No customers with pending repair services.</div>
-  }
+  if (isLoading) return <div style={s.empty}>Loading…</div>
+  if (grouped.length === 0) return <div style={s.empty}>No pending repair carts.</div>
 
   return (
-    <div style={s.orderList}>
+    <div style={s.list}>
       {grouped.map(([custId, items]) => {
-        const customerName = items[0].customer_name ?? 'Unknown Customer'
+        const name  = items[0].customer_name ?? 'Unknown'
         const total = items.reduce((sum, i) => sum + Number(i.price), 0)
-        const isExpanded = expandedCustomer === custId
+        const open  = expanded === custId
 
         return (
           <div key={custId} style={s.cartGroup}>
-            <button
-              style={s.cartGroupHeader}
-              onClick={() => setExpandedCustomer(isExpanded ? null : custId)}
-            >
-              <User size={14} color="rgba(13,13,13,0.35)" />
-              <span style={s.cartCustomerName}>{customerName}</span>
-              <span style={s.cartItemCountBadge}>{items.length} item{items.length !== 1 ? 's' : ''}</span>
+            <button style={s.cartHeader} onClick={() => setExpanded(open ? null : custId)}>
+              <User size={13} color="rgba(13,13,13,0.35)" />
+              <span style={s.cartName}>{name}</span>
+              <span style={s.cartBadge}>{items.length} item{items.length !== 1 ? 's' : ''}</span>
+              <span style={{ flex: 1 }} />
               <span style={s.cartTotal}>${total.toFixed(2)}</span>
-              <ChevronRight
-                size={14}
-                color="rgba(13,13,13,0.35)"
-                style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}
-              />
+              {open ? <ChevronDown size={14} color="rgba(13,13,13,0.35)" /> : <ChevronRight size={14} color="rgba(13,13,13,0.35)" />}
             </button>
 
-            {isExpanded && (
-              <div style={s.cartGroupBody}>
+            {open && (
+              <div style={s.cartBody}>
                 {items.map(item => (
                   <div key={item.id} style={s.cartItemRow}>
                     <div style={s.cartItemInfo}>
@@ -1029,17 +975,45 @@ function ActiveCartsTab() {
   )
 }
 
-// ── Small helper components ───────────────────────────────────
+// ── Print Task Slip ──────────────────────────────────────────
+
+function printSlip(task: RepairTask) {
+  const w = window.open('', '_blank', 'width=400,height=600')
+  if (!w) return
+  const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  w.document.write(`<!DOCTYPE html><html><head><title>Task Slip</title>
+  <style>
+    body { font-family: 'Courier New', monospace; padding: 24px; font-size: 13px; color: #111; }
+    h2 { font-size: 15px; margin: 0 0 4px; }
+    .divider { border-top: 1px dashed #999; margin: 10px 0; }
+    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #666; margin-bottom: 2px; }
+    .value { font-size: 13px; margin-bottom: 10px; }
+    .status { font-weight: bold; }
+    .price { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+  </style>
+  </head><body>
+  <h2>Repair Task Slip</h2>
+  <div class="label">Date</div><div class="value">${date}</div>
+  <div class="divider"></div>
+  <div class="label">Service</div><div class="value">${task.description}</div>
+  <div class="label">Price</div><div class="price">$${Number(task.price).toFixed(2)}</div>
+  ${task.assigned_provider_name ? `<div class="label">Assigned To</div><div class="value">${task.assigned_provider_name}</div>` : ''}
+  ${task.notes ? `<div class="label">Instructions</div><div class="value">${task.notes}</div>` : ''}
+  ${task.video_url ? `<div class="label">Reference Video</div><div class="value">${task.video_url}</div>` : ''}
+  <div class="divider"></div>
+  <div class="label">Status</div><div class="value status">${TASK_STATUS_LABEL[task.status]}</div>
+  </body></html>`)
+  w.document.close()
+  w.focus()
+  w.print()
+  w.close()
+}
+
+// ── Small helpers ─────────────────────────────────────────────
 
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        ...s.tabBtn,
-        ...(active ? s.tabBtnActive : {}),
-      }}
-    >
+    <button onClick={onClick} style={{ ...s.tabBtn, ...(active ? s.tabBtnActive : {}) }}>
       {children}
     </button>
   )
@@ -1050,66 +1024,43 @@ function ModeBtn({ active, onClick, disabled, children }: { active: boolean; onC
     <button
       onClick={onClick}
       disabled={disabled}
-      style={{ ...s.modeBtn, ...(active ? s.modeBtnActive : {}), ...(disabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
+      style={{ ...s.modeBtn, ...(active ? s.modeBtnActive : {}), ...(disabled ? { opacity: 0.35, cursor: 'not-allowed' } : {}) }}
     >
       {children}
     </button>
   )
 }
 
-function Section({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode
-  label: string
-  children: React.ReactNode
-}) {
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={s.section}>
-      <div style={s.sectionHeader}>
-        {icon}
-        <span style={s.sectionLabel}>{label}</span>
-      </div>
-      <div>{children}</div>
+    <div style={s.fieldGroup}>
+      <div style={s.fieldLabel}>{label}</div>
+      <div style={s.fieldContent}>{children}</div>
     </div>
   )
 }
 
-function SelectedPill({ label, sub, onClear }: { label: string; sub?: string; onClear: () => void }) {
+function Pill({ label, sub, onClear }: { label: string; sub?: string | null; onClear: () => void }) {
   return (
-    <div style={s.selectedPill}>
-      <div style={s.pillContent}>
+    <div style={s.pill}>
+      <div style={{ flex: 1 }}>
         <span style={s.pillLabel}>{label}</span>
-        {sub && <span style={s.pillSub}>{sub}</span>}
+        {sub && <span style={s.pillSub}> · {sub}</span>}
       </div>
-      <button style={s.pillClear} onClick={onClear}><X size={12} /></button>
+      <button style={s.iconBtn} onClick={onClear}><X size={12} /></button>
     </div>
   )
 }
 
-function SearchDropdown<T>({
-  placeholder,
-  value,
-  onChange,
-  results,
-  renderItem,
-  onSelect,
-}: {
-  placeholder: string
-  value: string
-  onChange: (v: string) => void
-  results: T[]
-  renderItem: (item: T) => string
-  onSelect: (item: T) => void
+function Dropdown<T>({ placeholder, value, onChange, results, renderItem, onSelect }: {
+  placeholder: string; value: string; onChange: (v: string) => void
+  results: T[]; renderItem: (item: T) => string; onSelect: (item: T) => void
 }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-
+  const ref = useRef<HTMLDivElement>(null)
   return (
-    <div style={{ position: 'relative' }} ref={containerRef}>
+    <div style={{ position: 'relative' }} ref={ref}>
       <div style={s.searchWrap}>
-        <Search size={13} color="rgba(13,13,13,0.35)" />
+        <Search size={13} color="rgba(13,13,13,0.3)" />
         <input
           style={s.searchInput}
           placeholder={placeholder}
@@ -1117,20 +1068,12 @@ function SearchDropdown<T>({
           onChange={e => onChange(e.target.value)}
           autoComplete="off"
         />
-        {value && (
-          <button style={s.clearBtn} onClick={() => onChange('')}>
-            <X size={12} />
-          </button>
-        )}
+        {value && <button style={s.clearBtn} onClick={() => onChange('')}><X size={12} /></button>}
       </div>
       {results.length > 0 && (
         <div style={s.dropdown}>
           {results.map((item, i) => (
-            <button
-              key={i}
-              style={s.dropdownItem}
-              onMouseDown={e => { e.preventDefault(); onSelect(item) }}
-            >
+            <button key={i} style={s.dropdownItem} onMouseDown={e => { e.preventDefault(); onSelect(item) }}>
               {renderItem(item)}
             </button>
           ))}
@@ -1145,105 +1088,119 @@ function SearchDropdown<T>({
 const BORDER = '1px solid rgba(13,13,13,0.08)'
 
 const s: Record<string, React.CSSProperties> = {
-  header:       { marginBottom: 24 },
-  title:        { fontSize: 22, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.03em', margin: 0 },
-  subtitle:     { fontSize: 13, color: 'rgba(13,13,13,0.45)', marginTop: 4 },
+  // Page
+  header:      { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  title:       { fontSize: 22, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.03em', margin: 0 },
+  subtitle:    { fontSize: 13, color: 'rgba(13,13,13,0.45)', marginTop: 4 },
+  newBtn:      { display: 'flex', alignItems: 'center', gap: 6, background: '#0d0d0d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
 
-  tabRow:       { display: 'flex', gap: 4, marginBottom: 24, borderBottom: BORDER, paddingBottom: 0 },
-  tabBtn:       { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.45)', padding: '8px 14px', borderBottom: '2px solid transparent', marginBottom: -1, borderRadius: 0 },
-  tabBtnActive: { color: '#0d0d0d', borderBottomColor: '#0d0d0d' },
+  tabRow:      { display: 'flex', gap: 4, marginBottom: 24, borderBottom: BORDER },
+  tabBtn:      { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.45)', padding: '8px 14px', borderBottom: '2px solid transparent', marginBottom: -1, borderRadius: 0 },
+  tabBtnActive:{ color: '#0d0d0d', borderBottomColor: '#0d0d0d' },
 
-  toolbar:      { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' as const },
-  searchWrap:   { display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: BORDER, borderRadius: 8, padding: '7px 12px', flex: '1 1 200px', minWidth: 200 },
-  searchInput:  { border: 'none', outline: 'none', fontSize: 13, color: '#0d0d0d', background: 'transparent', flex: 1, width: '100%' },
-  clearBtn:     { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.35)', display: 'flex', alignItems: 'center', padding: 2 },
-  filterGroup:  { display: 'flex', gap: 4 },
-  filterBtn:    { background: '#fff', border: BORDER, borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer', color: 'rgba(13,13,13,0.55)' },
-  filterBtnActive: { background: '#0d0d0d', color: '#fff', borderColor: '#0d0d0d' },
-  addBtn:       { display: 'flex', alignItems: 'center', gap: 6, background: '#0d0d0d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
+  toolbar:     { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' as const },
+  searchWrap:  { display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: BORDER, borderRadius: 8, padding: '7px 12px', flex: '1 1 200px', minWidth: 200 },
+  searchInput: { border: 'none', outline: 'none', fontSize: 13, color: '#0d0d0d', background: 'transparent', flex: 1 },
+  clearBtn:    { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.35)', display: 'flex', alignItems: 'center', padding: 2 },
+  filters:     { display: 'flex', gap: 4, flexWrap: 'wrap' as const },
+  filterBtn:   { background: '#fff', border: BORDER, borderRadius: 7, padding: '6px 11px', fontSize: 12, fontWeight: 500, cursor: 'pointer', color: 'rgba(13,13,13,0.5)' },
+  filterBtnOn: { background: '#0d0d0d', color: '#fff', borderColor: '#0d0d0d' },
 
-  empty:        { textAlign: 'center' as const, color: 'rgba(13,13,13,0.35)', fontSize: 13, padding: '48px 0' },
-  emptyNote:    { fontSize: 12, color: 'rgba(13,13,13,0.35)', margin: '0 0 8px' },
+  list:        { display: 'flex', flexDirection: 'column', gap: 8 },
+  empty:       { textAlign: 'center' as const, color: 'rgba(13,13,13,0.35)', fontSize: 13, padding: '48px 0' },
 
-  orderList:    { display: 'flex', flexDirection: 'column', gap: 8 },
-  orderRow:     { display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: BORDER, borderRadius: 10, padding: '12px 16px', transition: 'box-shadow 0.1s' },
-  statusChip:   { fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, flexShrink: 0, letterSpacing: '0.01em' },
-  orderMeta:    { display: 'flex', flexDirection: 'column', minWidth: 140 },
-  orderCustomer:{ fontSize: 13, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em' },
-  orderPhone:   { fontSize: 11, color: 'rgba(13,13,13,0.4)', marginTop: 2 },
-  orderWig:     { display: 'flex', alignItems: 'center', gap: 5, minWidth: 120 },
-  orderWigLabel:{ fontSize: 12, color: 'rgba(13,13,13,0.55)' },
-  orderServices:{ minWidth: 80 },
-  orderServiceCount: { fontSize: 12, color: 'rgba(13,13,13,0.45)' },
-  orderProvider: { display: 'flex', alignItems: 'center', gap: 4 },
-  orderProviderName: { fontSize: 12, color: 'rgba(13,13,13,0.45)' },
-  orderDate:    { fontSize: 11, color: 'rgba(13,13,13,0.35)', flexShrink: 0 },
-  iconBtn:      { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 6, borderRadius: 6 },
-  openBtn:      { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 6, color: 'rgba(13,13,13,0.35)' },
+  // Order card
+  orderCard:   { background: '#fff', border: BORDER, borderRadius: 12, overflow: 'hidden' },
+  orderHeader: { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const },
+  statusChip:  { fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, flexShrink: 0, letterSpacing: '0.01em' },
+  orderName:   { fontSize: 13, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.01em', flexShrink: 0 },
+  orderPhone:  { fontSize: 11, color: 'rgba(13,13,13,0.4)', flexShrink: 0 },
+  orderDivider:{ fontSize: 13, color: 'rgba(13,13,13,0.2)', flexShrink: 0 },
+  orderWig:    { fontSize: 12, color: 'rgba(13,13,13,0.55)', flexShrink: 0 },
+  orderCount:  { fontSize: 12, color: 'rgba(13,13,13,0.4)', flexShrink: 0 },
+  orderDate:   { fontSize: 11, color: 'rgba(13,13,13,0.3)', flexShrink: 0 },
+  iconBtn:     { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 5, borderRadius: 5 },
 
-  // Panel
-  overlay:      { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 },
-  panel:        { position: 'fixed', top: 0, right: 0, bottom: 0, width: 'clamp(400px,38vw,560px)', background: '#fafaf9', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.08)' },
-  panelHeader:  { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: BORDER },
-  panelTitle:   { fontSize: 16, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.02em' },
-  panelSubtitle:{ fontSize: 12, color: 'rgba(13,13,13,0.45)', marginTop: 3 },
-  closeBtn:     { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.4)', padding: 4, display: 'flex' },
-  panelBody:    { flex: 1, overflowY: 'auto' as const, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 20 },
-  panelFooter:  { padding: '16px 24px', borderTop: BORDER, display: 'flex', gap: 10, justifyContent: 'flex-end' },
-  cancelBtn:    { background: '#fff', border: BORDER, borderRadius: 8, padding: '9px 18px', fontSize: 13, cursor: 'pointer', color: 'rgba(13,13,13,0.55)' },
-  submitBtn:    { background: '#0d0d0d', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
-  submitBtnDisabled: { background: 'rgba(13,13,13,0.15)', cursor: 'not-allowed' },
+  orderBody:   { borderTop: BORDER, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 },
+  orderNotes:  { fontSize: 12, color: 'rgba(13,13,13,0.5)', margin: '0 0 6px', fontStyle: 'italic' },
+  emptyTasks:  { fontSize: 12, color: 'rgba(13,13,13,0.35)', margin: '4px 0' },
 
-  // Sections in panel
-  section:      { display: 'flex', flexDirection: 'column', gap: 10 },
-  sectionHeader:{ display: 'flex', alignItems: 'center', gap: 7 },
-  sectionLabel: { fontSize: 12, fontWeight: 600, color: 'rgba(13,13,13,0.55)', textTransform: 'uppercase' as const, letterSpacing: '0.06em' },
+  // Task row
+  taskRow:         { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#fafaf9', border: BORDER, borderRadius: 8 },
+  taskStatusChip:  { fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' as const, letterSpacing: '0.01em', border: 'none' },
+  taskInfo:        { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
+  taskDesc:        { fontSize: 13, color: '#0d0d0d', fontWeight: 500, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' },
+  taskNotes:       { fontSize: 11, color: 'rgba(13,13,13,0.45)', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' },
+  taskPrice:       { fontSize: 13, fontWeight: 600, color: '#0d0d0d', flexShrink: 0 },
+  providerChip:    { fontSize: 11, background: 'rgba(13,13,13,0.05)', border: BORDER, borderRadius: 6, padding: '3px 9px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' as const, color: 'rgba(13,13,13,0.55)' },
+  providerSelect:  { fontSize: 12, border: BORDER, borderRadius: 6, padding: '4px 8px', background: '#fff', flexShrink: 0, outline: 'none' },
+  linkIcon:        { display: 'flex', alignItems: 'center', flexShrink: 0 },
 
-  modeToggle:   { display: 'flex', gap: 6, marginBottom: 4 },
+  // Add task inline form
+  addTaskBtn:   { display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed rgba(13,13,13,0.18)', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.5)', marginTop: 4 },
+  addTaskForm:  { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'rgba(13,13,13,0.02)', border: BORDER, borderRadius: 8, marginTop: 4 },
+  addInput:     { border: BORDER, borderRadius: 7, padding: '6px 10px', fontSize: 12, outline: 'none', background: '#fff' },
+  priceWrap:    { display: 'flex', alignItems: 'center', border: BORDER, borderRadius: 7, background: '#fff', overflow: 'hidden', flexShrink: 0 },
+  pricePre:     { padding: '0 6px', fontSize: 12, color: 'rgba(13,13,13,0.4)', background: 'rgba(13,13,13,0.04)', borderRight: BORDER },
+  priceField:   { border: 'none', outline: 'none', padding: '6px 8px', fontSize: 12, width: 64, background: 'transparent' },
+  saveTaskBtn:  { background: '#0d0d0d', color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, cursor: 'pointer', flexShrink: 0 },
+  cancelTaskBtn:{ background: 'none', border: BORDER, borderRadius: 7, padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 },
+
+  // Global status row
+  globalStatusRow:  { display: 'flex', alignItems: 'center', gap: 6, paddingTop: 10, marginTop: 4, borderTop: BORDER, flexWrap: 'wrap' as const },
+  globalStatusLabel:{ fontSize: 11, color: 'rgba(13,13,13,0.4)', fontWeight: 500, marginRight: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' },
+  statusOptionBtn:  { fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.1s' },
+
+  // Create order modal
+  overlay:     { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200 },
+  modal:       { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'clamp(560px,56vw,720px)', maxHeight: '86vh', background: '#fff', borderRadius: 16, zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.14)' },
+  modalHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: BORDER, flexShrink: 0 },
+  modalTitle:  { fontSize: 16, fontWeight: 600, color: '#0d0d0d', letterSpacing: '-0.02em' },
+  modalSubtitle:{ fontSize: 12, color: 'rgba(13,13,13,0.4)', marginTop: 2 },
+  closeBtn:    { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.4)', display: 'flex', padding: 4 },
+  modalBody:   { flex: 1, overflowY: 'auto' as const, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 16 },
+  modalFooter: { padding: '16px 24px', borderTop: BORDER, display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 },
+  cancelBtn:   { background: '#fff', border: BORDER, borderRadius: 8, padding: '9px 18px', fontSize: 13, cursor: 'pointer', color: 'rgba(13,13,13,0.55)' },
+  createBtn:   { background: '#0d0d0d', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 500, cursor: 'pointer' },
+  createBtnDisabled: { background: 'rgba(13,13,13,0.2)', cursor: 'not-allowed' },
+
+  // Field groups inside modal
+  fieldGroup:   { display: 'flex', flexDirection: 'column', gap: 8 },
+  fieldLabel:   { fontSize: 11, fontWeight: 600, color: 'rgba(13,13,13,0.5)', textTransform: 'uppercase' as const, letterSpacing: '0.07em' },
+  fieldContent: { display: 'flex', flexDirection: 'column', gap: 6 },
+  field:        { border: BORDER, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', background: '#fff', flex: 1 },
+  inlineRow:    { display: 'flex', gap: 8 },
+
+  modeRow:      { display: 'flex', gap: 6 },
   modeBtn:      { background: '#fff', border: BORDER, borderRadius: 7, padding: '5px 12px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.55)', fontWeight: 500 },
   modeBtnActive:{ background: '#0d0d0d', color: '#fff', borderColor: '#0d0d0d' },
 
-  input:        { width: '100%', border: BORDER, borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', background: '#fff', boxSizing: 'border-box' as const, marginBottom: 8 },
-  textarea:     { width: '100%', border: BORDER, borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', background: '#fff', resize: 'vertical' as const, fontFamily: 'inherit', boxSizing: 'border-box' as const },
-  select:       { width: '100%', border: BORDER, borderRadius: 8, padding: '9px 12px', fontSize: 13, outline: 'none', background: '#fff', boxSizing: 'border-box' as const, appearance: 'auto' as const },
-  fieldRow:     { display: 'flex', gap: 8 },
+  hint:         { fontSize: 12, color: 'rgba(13,13,13,0.35)', margin: 0 },
+  errorMsg:     { fontSize: 12, color: '#c0392b', background: 'rgba(192,57,43,0.06)', borderRadius: 6, padding: '8px 12px' },
 
-  selectedPill: { display: 'flex', alignItems: 'center', background: 'rgba(13,13,13,0.05)', border: BORDER, borderRadius: 8, padding: '8px 12px', gap: 10 },
-  pillContent:  { flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  pillLabel:    { fontSize: 13, fontWeight: 500, color: '#0d0d0d' },
-  pillSub:      { fontSize: 11, color: 'rgba(13,13,13,0.4)' },
-  pillClear:    { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.4)', display: 'flex', padding: 2 },
+  // Task draft rows (inside modal)
+  taskDraftRow:    { display: 'flex', alignItems: 'center', gap: 8, background: '#fafaf9', border: BORDER, borderRadius: 8, padding: '8px 10px' },
+  addTaskDraftBtn: { display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed rgba(13,13,13,0.18)', borderRadius: 8, padding: '7px 14px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.5)' },
 
-  dropdown:     { position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: BORDER, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 10, maxHeight: 220, overflowY: 'auto' as const, marginTop: 4 },
+  // Pill
+  pill:      { display: 'flex', alignItems: 'center', background: 'rgba(13,13,13,0.04)', border: BORDER, borderRadius: 8, padding: '8px 12px', gap: 10 },
+  pillLabel: { fontSize: 13, fontWeight: 500, color: '#0d0d0d' },
+  pillSub:   { fontSize: 12, color: 'rgba(13,13,13,0.4)' },
+
+  // Dropdown
+  dropdown:     { position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: BORDER, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 10, maxHeight: 210, overflowY: 'auto' as const, marginTop: 4 },
   dropdownItem: { display: 'block', width: '100%', textAlign: 'left' as const, padding: '9px 14px', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: '#0d0d0d' },
 
-  serviceRowEditor: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, background: '#fff', border: BORDER, borderRadius: 8, padding: '10px 12px' },
-  priceWrap:    { display: 'flex', alignItems: 'center', border: BORDER, borderRadius: 7, background: '#fff', overflow: 'hidden', flexShrink: 0 },
-  priceDollar:  { padding: '0 6px', fontSize: 12, color: 'rgba(13,13,13,0.4)', background: 'rgba(13,13,13,0.04)', borderRight: BORDER },
-  priceInput:   { border: 'none', outline: 'none', padding: '7px 10px', fontSize: 13, width: 70, background: 'transparent' },
-  taxToggle:    { background: 'rgba(13,13,13,0.06)', border: BORDER, borderRadius: 6, padding: '5px 8px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' as const, flexShrink: 0 },
-  taxToggleOn:  { background: 'rgba(80,180,120,0.15)', borderColor: 'rgba(80,180,120,0.4)', color: '#1f7a4a' },
-
-  addServiceBtn:{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: `1px dashed rgba(13,13,13,0.2)`, borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: 'rgba(13,13,13,0.55)', width: '100%', justifyContent: 'center' },
-  warningNote:  { fontSize: 11, color: '#b36b00', background: 'rgba(227,205,148,0.3)', borderRadius: 6, padding: '6px 10px', margin: '0 0 8px' },
-
-  errorMsg:     { fontSize: 12, color: '#c0392b', background: 'rgba(192,57,43,0.06)', borderRadius: 6, padding: '8px 12px', marginTop: 4 },
-
-  statusGrid:   { display: 'flex', flexWrap: 'wrap' as const, gap: 8 },
-  statusBtn:    { display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 500, cursor: 'pointer' },
-
-  cartItemList: { display: 'flex', flexDirection: 'column', gap: 6 },
-  cartItemRow:  { display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: BORDER, borderRadius: 8, padding: '9px 12px' },
+  // Active Carts
+  cartGroup:  { background: '#fff', border: BORDER, borderRadius: 10, overflow: 'hidden' },
+  cartHeader: { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const },
+  cartName:   { fontSize: 13, fontWeight: 600, color: '#0d0d0d', flex: 1 },
+  cartBadge:  { fontSize: 11, background: 'rgba(13,13,13,0.07)', borderRadius: 20, padding: '2px 8px', color: 'rgba(13,13,13,0.5)' },
+  cartTotal:  { fontSize: 13, fontWeight: 600, color: '#0d0d0d', marginRight: 4 },
+  cartBody:   { borderTop: BORDER, padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 6 },
+  cartItemRow:  { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0' },
   cartItemInfo: { flex: 1, display: 'flex', flexDirection: 'column' },
   cartItemName: { fontSize: 13, color: '#0d0d0d', fontWeight: 500 },
-  cartItemNotes:{ fontSize: 11, color: 'rgba(13,13,13,0.45)', marginTop: 2 },
+  cartItemNotes:{ fontSize: 11, color: 'rgba(13,13,13,0.4)', marginTop: 1 },
   cartItemPrice:{ fontSize: 13, fontWeight: 600, color: '#0d0d0d', flexShrink: 0 },
-
-  // Active Carts tab
-  cartGroup:        { border: BORDER, borderRadius: 10, background: '#fff', overflow: 'hidden' },
-  cartGroupHeader:  { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const },
-  cartCustomerName: { fontSize: 13, fontWeight: 600, color: '#0d0d0d', flex: 1 },
-  cartItemCountBadge: { fontSize: 11, background: 'rgba(13,13,13,0.07)', borderRadius: 20, padding: '2px 8px', color: 'rgba(13,13,13,0.55)' },
-  cartTotal:        { fontSize: 13, fontWeight: 600, color: '#0d0d0d' },
-  cartGroupBody:    { borderTop: BORDER, padding: '8px 16px', display: 'flex', flexDirection: 'column', gap: 6 },
 }

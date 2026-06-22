@@ -24,7 +24,7 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/main-board', label: 'Super Board',       icon: BarChart2,    end: false, roles: ['owner'] },
   { divider: true, roles: ['owner','bookkeeper','sales'] },
   { to: '/bookkeeper/providers',  label: 'Providers',         icon: Building2,    end: false, roles: ['owner','bookkeeper'] },
-  { to: '/bookkeeper/inventory',  label: 'Product Management',icon: Package,      end: false, roles: ['owner','bookkeeper','sales'] },
+  { to: '/bookkeeper/inventory',  label: 'Product Management',icon: Package,      end: false, roles: ['owner','bookkeeper','sales','repairs'] },
   { to: '/bookkeeper/employees',  label: 'Employees',         icon: UserCog,      end: false, roles: ['owner','bookkeeper'] },
   { to: '/bookkeeper/customers',  label: 'Customers',         icon: Contact,      end: false, roles: ['owner','bookkeeper','sales','front_desk','repairs'] },
 ]

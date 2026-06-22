@@ -151,6 +151,12 @@ class RepairOrderStatus(str, enum.Enum):
     ready         = "ready"
     completed     = "completed"
 
+class RepairTaskStatus(str, enum.Enum):
+    pending       = "pending"
+    in_progress   = "in_progress"
+    with_external = "with_external"
+    done          = "done"
+
 class CartItemType(str, enum.Enum):
     wig     = "wig"
     product = "product"
@@ -718,6 +724,7 @@ class RepairOrder(Base):
     external_provider = relationship("Provider",       foreign_keys=[external_provider_id])
     creator           = relationship("User",           foreign_keys=[created_by])
     cart_items        = relationship("PendingCartItem", back_populates="repair_order")
+    tasks             = relationship("RepairTask", back_populates="repair_order", cascade="all, delete-orphan", order_by="RepairTask.created_at")
 
 
 class DeletedSale(Base):
@@ -760,6 +767,7 @@ class PendingCartItem(Base):
     department        = Column(String, nullable=False, default="sales")
     status            = Column(Enum(CartItemStatus, name="cart_item_status"), nullable=False, default=CartItemStatus.pending)
     repair_order_id   = Column(UUID(as_uuid=True), ForeignKey("repair_orders.id", ondelete="SET NULL"), nullable=True)
+    repair_task_id    = Column(UUID(as_uuid=True), ForeignKey("repair_tasks.id",  ondelete="SET NULL"), nullable=True)
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
     updated_at        = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -768,3 +776,31 @@ class PendingCartItem(Base):
     creator        = relationship("User",          foreign_keys=[created_by])
     sales_rep      = relationship("Employee",      foreign_keys=[sales_rep_id])
     repair_order   = relationship("RepairOrder",   foreign_keys=[repair_order_id], back_populates="cart_items")
+    repair_task    = relationship("RepairTask",    foreign_keys=[repair_task_id])
+
+
+class RepairTask(Base):
+    """
+    One service/task within a repair order.
+    Created by Haya's team. Each task auto-creates a pending_cart_item so POS sees it.
+    Haya tracks task-level status independently of the repair order's global status.
+    """
+    __tablename__ = "repair_tasks"
+
+    id                   = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    repair_order_id      = Column(UUID(as_uuid=True), ForeignKey("repair_orders.id", ondelete="CASCADE"), nullable=False)
+    repair_service_id    = Column(UUID(as_uuid=True), ForeignKey("repair_services.id", ondelete="SET NULL"), nullable=True)
+    description          = Column(Text, nullable=False)
+    price                = Column(Numeric(10, 2), nullable=False, default=0)
+    tax_rate             = Column(Numeric(5, 4),  nullable=False, default=0)
+    status               = Column(Enum(RepairTaskStatus, name="repair_task_status"), nullable=False, default=RepairTaskStatus.pending)
+    assigned_provider_id = Column(UUID(as_uuid=True), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    notes                = Column(Text, nullable=True)
+    video_url            = Column(Text, nullable=True)
+    created_by           = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at           = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at           = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    repair_order      = relationship("RepairOrder",   foreign_keys=[repair_order_id], back_populates="tasks")
+    repair_service    = relationship("RepairService", foreign_keys=[repair_service_id])
+    assigned_provider = relationship("Provider",      foreign_keys=[assigned_provider_id])

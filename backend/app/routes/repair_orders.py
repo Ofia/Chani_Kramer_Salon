@@ -22,7 +22,7 @@ from app.models.models import (
 )
 from app.schemas.schemas import (
     RepairOrderCreate, RepairOrderUpdate, RepairOrderResponse,
-    CartItemCreate, CartItemResponse,
+    CartItemCreate, CartItemResponse, RepairTaskResponse,
 )
 
 router = APIRouter(prefix="/repair-orders", tags=["repair-orders"])
@@ -54,7 +54,17 @@ def _build_response(order: RepairOrder, db: Session) -> RepairOrderResponse:
         )
         .count()
     )
+
+    # Include tasks
+    data.tasks = [_build_task(t) for t in order.tasks]
     return data
+
+
+def _build_task(task) -> RepairTaskResponse:
+    r = RepairTaskResponse.model_validate(task)
+    if task.assigned_provider:
+        r.assigned_provider_name = task.assigned_provider.name
+    return r
 
 
 @router.post("/", response_model=RepairOrderResponse, status_code=201)

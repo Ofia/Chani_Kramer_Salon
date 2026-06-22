@@ -24,7 +24,7 @@ from app.models.models import (
     WigStatus, WigPaymentType, PosItemType, PayrollStatus,
     InventoryItemType, WigItemStatus, InventoryEventType, ProviderType,
     AppointmentDepartment, AppointmentStatus,
-    CartItemType, CartItemStatus, RepairOrderStatus
+    CartItemType, CartItemStatus, RepairOrderStatus, RepairTaskStatus
 )
 
 
@@ -1094,7 +1094,48 @@ class CartItemResponse(BaseModel):
         from_attributes = True
 
 
-# ── Repair Orders ──────────────────────────────────────────────
+# ── Repair Tasks ───────────────────────────────────────────────
+
+class RepairTaskCreate(BaseModel):
+    repair_order_id:      UUID
+    repair_service_id:    Optional[UUID]    = None
+    description:          str
+    price:                Decimal           = Decimal("0")
+    tax_rate:             Decimal           = Decimal("0.045")
+    assigned_provider_id: Optional[UUID]   = None
+    notes:                Optional[str]     = None
+    video_url:            Optional[str]     = None
+
+
+class RepairTaskUpdate(BaseModel):
+    status:               Optional[RepairTaskStatus] = None
+    assigned_provider_id: Optional[UUID]             = None
+    notes:                Optional[str]              = None
+    video_url:            Optional[str]              = None
+    price:                Optional[Decimal]          = None
+    description:          Optional[str]              = None
+
+
+class RepairTaskResponse(BaseModel):
+    id:                   UUID
+    repair_order_id:      UUID
+    repair_service_id:    Optional[UUID]
+    description:          str
+    price:                float
+    tax_rate:             float
+    status:               RepairTaskStatus
+    assigned_provider_id: Optional[UUID]
+    assigned_provider_name: Optional[str]  = None
+    notes:                Optional[str]
+    video_url:            Optional[str]
+    created_at:           datetime
+    updated_at:           datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Repair Orders ───────────────────────────────────────────────
 
 class RepairOrderCreate(BaseModel):
     customer_id: Optional[UUID] = None
@@ -1137,6 +1178,7 @@ class RepairOrderResponse(BaseModel):
     wig_serial: Optional[str] = None
     external_provider_name: Optional[str] = None
     cart_item_count: int = 0
+    tasks: list[RepairTaskResponse] = []
 
     class Config:
         from_attributes = True
