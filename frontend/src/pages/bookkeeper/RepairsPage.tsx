@@ -385,6 +385,10 @@ function OrderRow({ order, expanded, onToggle }: {
 
 function TaskRow({ task, providers }: { task: RepairTask; providers: Provider[] }) {
   const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [localNotes, setLocalNotes]     = useState(task.notes ?? '')
+  const [localVideo, setLocalVideo]     = useState(task.video_url ?? '')
+  const [localProvider, setLocalProvider] = useState(task.assigned_provider_id ?? '')
 
   const updateTask = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -400,62 +404,98 @@ function TaskRow({ task, providers }: { task: RepairTask; providers: Provider[] 
     },
   })
 
+  function saveDetails() {
+    updateTask.mutate({
+      assigned_provider_id: localProvider || null,
+      notes:    localNotes.trim() || null,
+      video_url: localVideo.trim() || null,
+    })
+    setOpen(false)
+  }
+
   const tc = TASK_STATUS_COLOR[task.status]
+  const providerName = task.assigned_provider_name ?? '— In house'
 
   return (
-    <div style={s.taskRow}>
-      {/* Status chip — click to advance */}
-      <button
-        style={{ ...s.taskStatusChip, background: tc.bg, color: tc.color }}
-        onClick={() => updateTask.mutate({ status: nextTaskStatus(task.status) })}
-        title="Click to advance status"
-      >
-        {TASK_STATUS_LABEL[task.status]}
-      </button>
+    <div style={s.taskCard}>
+      {/* ── Collapsed row ── */}
+      <div style={s.taskRow}>
+        <button
+          style={{ ...s.taskStatusChip, background: tc.bg, color: tc.color }}
+          onClick={() => updateTask.mutate({ status: nextTaskStatus(task.status) })}
+          title="Click to advance status"
+        >
+          {TASK_STATUS_LABEL[task.status]}
+        </button>
 
-      {/* Description + notes */}
-      <div style={s.taskInfo}>
-        <span style={s.taskDesc}>{task.description}</span>
-        {task.notes && <span style={s.taskNotes}>{task.notes}</span>}
+        <div style={s.taskInfo}>
+          <span style={s.taskDesc}>{task.description}</span>
+          {!open && (task.assigned_provider_name || task.notes) && (
+            <span style={s.taskNotes}>
+              {[providerName !== '— In house' ? providerName : null, task.notes].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </div>
+
+        <span style={s.taskPrice}>${Number(task.price).toFixed(2)}</span>
+
+        {task.video_url && (
+          <a href={task.video_url} target="_blank" rel="noreferrer" style={s.linkIcon} title="Open video">
+            <Link size={13} color="rgba(13,13,13,0.35)" />
+          </a>
+        )}
+
+        <button style={s.iconBtn} title="Print task slip" onClick={() => printSlip(task)}>
+          <Printer size={13} color="rgba(13,13,13,0.3)" />
+        </button>
+
+        <button style={s.iconBtn} title="Edit details" onClick={() => setOpen(o => !o)}>
+          {open
+            ? <ChevronDown size={13} color="rgba(13,13,13,0.4)" />
+            : <ChevronRight size={13} color="rgba(13,13,13,0.4)" />}
+        </button>
+
+        <button
+          style={s.iconBtn}
+          title="Delete task"
+          onClick={() => { if (window.confirm('Delete this task?')) deleteTask.mutate() }}
+        >
+          <Trash2 size={13} color="rgba(13,13,13,0.25)" />
+        </button>
       </div>
 
-      {/* Price */}
-      <span style={s.taskPrice}>${Number(task.price).toFixed(2)}</span>
+      {/* ── Expanded edit section ── */}
+      {open && (
+        <div style={s.taskEditRow}>
+          <select
+            style={s.taskEditField}
+            value={localProvider}
+            onChange={e => setLocalProvider(e.target.value)}
+          >
+            <option value="">— In house</option>
+            {providers.filter(p => p.is_active).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
 
-      {/* Provider — always-visible select */}
-      <select
-        style={s.providerSelect}
-        value={task.assigned_provider_id ?? ''}
-        onChange={e => updateTask.mutate({ assigned_provider_id: e.target.value || null })}
-      >
-        <option value="">— In house</option>
-        {providers.filter(p => p.is_active).map(p => (
-          <option key={p.id} value={p.id}>{p.name}</option>
-        ))}
-      </select>
+          <input
+            style={{ ...s.taskEditField, flex: 1 }}
+            placeholder="Notes…"
+            value={localNotes}
+            onChange={e => setLocalNotes(e.target.value)}
+          />
 
-      {/* Video link */}
-      {task.video_url && (
-        <a href={task.video_url} target="_blank" rel="noreferrer" style={s.linkIcon} title="Open video">
-          <Link size={13} color="rgba(13,13,13,0.35)" />
-        </a>
+          <input
+            style={{ ...s.taskEditField, flex: '0 0 180px' }}
+            placeholder="Drive / video link"
+            value={localVideo}
+            onChange={e => setLocalVideo(e.target.value)}
+          />
+
+          <button style={s.saveTaskBtn} onClick={saveDetails}>Save</button>
+          <button style={s.cancelTaskBtn} onClick={() => setOpen(false)}><X size={13} /></button>
+        </div>
       )}
-
-      {/* Print slip */}
-      <button style={s.iconBtn} title="Print task slip" onClick={() => printSlip(task)}>
-        <Printer size={13} color="rgba(13,13,13,0.3)" />
-      </button>
-
-      {/* Delete */}
-      <button
-        style={s.iconBtn}
-        title="Delete task"
-        onClick={() => {
-          if (window.confirm('Delete this task?')) deleteTask.mutate()
-        }}
-      >
-        <Trash2 size={13} color="rgba(13,13,13,0.25)" />
-      </button>
     </div>
   )
 }
@@ -1138,15 +1178,16 @@ const s: Record<string, React.CSSProperties> = {
   emptyTasks:  { fontSize: 12, color: 'rgba(13,13,13,0.35)', margin: '4px 0' },
 
   // Task row
-  taskRow:         { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#fafaf9', border: BORDER, borderRadius: 8 },
+  taskCard:        { background: '#fafaf9', border: BORDER, borderRadius: 8, overflow: 'hidden' },
+  taskRow:         { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' },
   taskStatusChip:  { fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' as const, letterSpacing: '0.01em', border: 'none' },
   taskInfo:        { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
   taskDesc:        { fontSize: 13, color: '#0d0d0d', fontWeight: 500, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' },
   taskNotes:       { fontSize: 11, color: 'rgba(13,13,13,0.45)', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' },
   taskPrice:       { fontSize: 13, fontWeight: 600, color: '#0d0d0d', flexShrink: 0 },
-  providerChip:    { fontSize: 11, background: 'rgba(13,13,13,0.05)', border: BORDER, borderRadius: 6, padding: '3px 9px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' as const, color: 'rgba(13,13,13,0.55)' },
-  providerSelect:  { fontSize: 12, border: BORDER, borderRadius: 6, padding: '4px 8px', background: '#fff', flexShrink: 0, outline: 'none' },
   linkIcon:        { display: 'flex', alignItems: 'center', flexShrink: 0 },
+  taskEditRow:     { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderTop: BORDER, background: '#fff' },
+  taskEditField:   { border: BORDER, borderRadius: 7, padding: '6px 10px', fontSize: 12, outline: 'none', background: '#fff', flexShrink: 0 },
 
   // Add task inline form
   addTaskBtn:   { display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: '1px dashed rgba(13,13,13,0.18)', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'rgba(13,13,13,0.5)', marginTop: 4 },
