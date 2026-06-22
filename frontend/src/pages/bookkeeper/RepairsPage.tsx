@@ -1033,7 +1033,7 @@ function ActiveCartsTab() {
 // ── Print Task Slip ──────────────────────────────────────────
 
 function printSlip(task: RepairTask) {
-  const w = window.open('', '_blank', 'width=400,height=600')
+  const w = window.open('', '_blank', `width=${screen.width},height=${screen.height},left=0,top=0`)
   if (!w) return
   const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   w.document.write(`<!DOCTYPE html><html><head><title>Task Slip</title>
