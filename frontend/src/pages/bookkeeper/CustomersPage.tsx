@@ -559,23 +559,6 @@ function PurchaseHistoryModal({ customer, onClose }: { customer: Customer; onClo
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={sh.amount}>${Number(wig.total_price).toFixed(2)}</span>
-                  {canEdit && wig.sale_status !== 'paid_in_full' && Number(wig.amount_paid) > 0 && (
-                    <button
-                      style={sh.abandonBtn}
-                      title="Forfeit the deposit as revenue and return the wig to inventory"
-                      onClick={async () => {
-                        const label = wig.daysmart_serial || wig.brand || 'this wig'
-                        if (!window.confirm(
-                          `Mark "${label}" as abandoned?\n\n$${Number(wig.amount_paid).toFixed(2)} deposit will be kept as revenue and the wig returned to inventory. This cannot be undone.`
-                        )) return
-                        await api.post(`/inventory/${wig.id}/abandon-sale`)
-                        qc.invalidateQueries({ queryKey: ['customer-history', customer.id] })
-                        qc.invalidateQueries({ queryKey: ['inventory'] })
-                      }}
-                    >
-                      Mark as Abandoned
-                    </button>
-                  )}
                   {canEdit && (
                     <>
                       <button
@@ -833,5 +816,4 @@ const sh: Record<string, React.CSSProperties> = {
   payChip:    { fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#f0fdf4', color: '#15803d' },
   noteChip:   { fontSize: 11, padding: '3px 8px', borderRadius: 6, background: '#fefce8', color: '#713f12' },
   editBtn:    { background: 'none', border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, cursor: 'pointer', color: '#71717a', display: 'flex', alignItems: 'center', padding: '4px 6px' },
-  abandonBtn: { background: '#fef3c7', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 6, cursor: 'pointer', color: '#92400e', fontSize: 11, fontWeight: 600, padding: '4px 9px', whiteSpace: 'nowrap' as const },
 }

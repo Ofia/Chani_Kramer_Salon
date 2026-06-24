@@ -543,6 +543,48 @@ function inferTaxRate(tax_amount: number, subtotal: number): string {
   return '0.08875'
 }
 
+// Shows "Mark as Abandoned" only when this sale has a wig whose deposit is
+// still pending (not paid in full) — checks live status since SaleItem only
+// has the price at time of sale, not current payment state.
+function AbandonSaleButton({ sale, onDone }: { sale: Sale; onDone: () => void }) {
+  const wigItems = sale.items.filter(i => i.item_type === 'wig' && i.inventory_item_id)
+  const ids = wigItems.map(w => w.inventory_item_id).join(',')
+
+  const { data: wigStates = [] } = useQuery({
+    queryKey: ['wig-live-state', ids],
+    queryFn: () => Promise.all(
+      wigItems.map(w => api.get(`/inventory/${w.inventory_item_id}`).then(r => r.data))
+    ),
+    enabled: wigItems.length > 0,
+  })
+
+  const [busy, setBusy] = useState(false)
+  const eligible = wigStates.find((w: any) => w.sale_status !== 'paid_in_full' && Number(w.amount_paid) > 0)
+  if (!eligible) return null
+
+  return (
+    <button
+      disabled={busy}
+      onClick={async () => {
+        const label = eligible.daysmart_serial || eligible.brand || 'this wig'
+        if (!window.confirm(
+          `Mark "${label}" as abandoned?\n\n$${Number(eligible.amount_paid).toFixed(2)} deposit will be kept as revenue and the wig returned to inventory. This cannot be undone.`
+        )) return
+        setBusy(true)
+        try {
+          await api.post(`/inventory/${eligible.id}/abandon-sale`)
+          onDone()
+        } finally {
+          setBusy(false)
+        }
+      }}
+      style={{ padding: '7px 14px', background: '#fef3c7', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#92400e', cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit' }}
+    >
+      {busy ? 'Marking…' : 'Mark as Abandoned'}
+    </button>
+  )
+}
+
 function SalesHistoryTab({ start, end }: { start: string; end: string }) {
   const queryClient = useQueryClient()
 
@@ -964,6 +1006,13 @@ function SalesHistoryTab({ start, end }: { start: string; end: string }) {
                             <Printer size={13} />Receipt
                           </button>
                           <div style={{ flex: 1 }} />
+                          <AbandonSaleButton
+                            sale={sale}
+                            onDone={() => {
+                              queryClient.invalidateQueries({ queryKey: ['sales-range'] })
+                              queryClient.invalidateQueries({ queryKey: ['operation-overview'] })
+                            }}
+                          />
                           <button
                             onClick={() => { setDeleteTarget(sale.id); setDeleteReason('') }}
                             style={{ padding: '7px 14px', background: 'none', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#ef4444', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'inherit' }}
