@@ -198,6 +198,56 @@ def delete_inventory_item(
     db.commit()
 
 
+@router.post("/{item_id}/abandon-sale", response_model=InventoryItemResponse)
+def abandon_wig_sale(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Customer paid a deposit on a wig but never picked it up. Forfeit the deposit
+    as revenue (recognized today, via the existing paid_in_full wig-sales path),
+    return the wig to inventory, and clear the customer association.
+    """
+    _require_bookkeeper_or_owner(current_user)
+    item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    if item.item_type != InventoryItemType.wig:
+        raise HTTPException(status_code=400, detail="Only wigs can have an abandoned sale.")
+    if item.sale_status == WigStatus.paid_in_full:
+        raise HTTPException(status_code=400, detail="This wig is already paid in full — nothing to abandon.")
+    if not item.amount_paid or item.amount_paid <= 0:
+        raise HTTPException(status_code=400, detail="No deposit has been paid on this wig.")
+
+    deposit = item.amount_paid
+    customer_label = item.customer_name or "customer"
+
+    event = InventoryEvent(
+        inventory_item_id=item.id,
+        event_type="note",
+        customer_id=item.customer_id,
+        amount=deposit,
+        description=f"Sale abandoned — ${deposit:.2f} deposit forfeited (was: {customer_label}) — returned to inventory",
+        event_date=date.today(),
+        created_by=current_user.id,
+    )
+    db.add(event)
+
+    item.total_price  = deposit
+    item.sale_status  = WigStatus.paid_in_full
+    item.pickup_date  = date.today()
+    item.wig_status   = WigItemStatus.in_stock
+    item.customer_id    = None
+    item.customer_name  = None
+    item.customer_phone = None
+    item.order_date     = None
+
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 # ── Events (History Log) ──────────────────────────────────────────────────
 
 @router.get("/{item_id}/events", response_model=List[InventoryEventResponse])
