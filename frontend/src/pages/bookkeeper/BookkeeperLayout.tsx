@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import {
   Activity, Users, Receipt, Building2,
-  LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact, ShoppingCart, Package, CalendarDays, Wrench,
+  LogOut, Search, Sparkles, BarChart2, UserCog, Home, Contact, ShoppingCart, Package, CalendarDays, Wrench, Droplets,
 } from 'lucide-react'
 import EllaChat from '../../components/EllaChat'
 
@@ -16,6 +16,7 @@ const BOOKKEEPING_TABS: NavItem[] = [
   { to: '/bookkeeper/hello',      label: 'Hello Board',       icon: Home,         end: false, roles: ['owner','bookkeeper','sales','front_desk','repairs'] },
   { to: '/bookkeeper/calendar',   label: 'Calendar',          icon: CalendarDays, end: false, roles: ['owner','bookkeeper','sales','front_desk','repairs'] },
   { to: '/bookkeeper/pos',        label: 'Point of Sale',     icon: ShoppingCart, end: false, roles: ['owner','bookkeeper','front_desk'] },
+  { to: '/bookkeeper/wash-set',   label: 'Wash & Set',        icon: Droplets,     end: false, roles: ['owner','bookkeeper','front_desk','sales'] },
   { to: '/bookkeeper/sales',      label: 'Sales Management',  icon: Sparkles,     end: false, roles: ['owner','bookkeeper','sales'] },
   { to: '/bookkeeper/repairs',    label: 'Repairs',           icon: Wrench,       end: false, roles: ['owner','bookkeeper','repairs'] },
   { to: '/bookkeeper/overview',   label: 'Overview',          icon: Activity,     end: false, roles: ['owner','bookkeeper'] },

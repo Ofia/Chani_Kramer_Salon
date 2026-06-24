@@ -64,6 +64,8 @@ type CartItem = {
   showWigSpecs?: boolean
   // wig_balance: original balance before this payment (for receipt display)
   wig_balance_due?: number
+  // who performed/sold this item — commission attribution, carried from pending cart
+  sales_rep_id?: string
 }
 
 type Payment = {
@@ -203,7 +205,7 @@ export default function POSPage() {
     id: string; item_type: 'wig' | 'product' | 'service'
     inventory_item_id?: string; description: string
     price: number; tax_rate: number; discount_amount: number; notes?: string
-    department: string; repair_order_status?: string
+    department: string; repair_order_status?: string; sales_rep_id?: string
     wig_serial?: string; wig_brand?: string; wig_length?: string
     wig_color?: string; wig_size?: string; wig_front?: string
   }
@@ -277,16 +279,17 @@ export default function POSPage() {
   }
 
   function loadPendingCart() {
-    const TYPE_MAP: Record<string, CartItemType> = { wig: 'wig', product: 'inventory', service: 'repair' }
+    const TYPE_MAP: Record<string, CartItemType> = { wig: 'wig', product: 'inventory' }
     const newItems: CartItem[] = unloadedPending.map(p => ({
       _key: nextKey(),
-      item_type: TYPE_MAP[p.item_type] ?? 'repair',
+      item_type: TYPE_MAP[p.item_type] ?? (p.department === 'wash_set' ? 'wash_set' : 'repair'),
       description: p.description,
       quantity: 1,
       unit_price: p.price.toFixed(2),
       tax_rate: p.tax_rate,
       notes: p.notes,
       inventory_item_id: p.inventory_item_id,
+      sales_rep_id: p.sales_rep_id,
       ...(p.item_type === 'wig' ? {
         showWigSpecs: true,
         wig_serial: p.wig_serial,
@@ -409,6 +412,7 @@ export default function POSPage() {
         wig_front: i.wig_front || undefined,
         wig_deposit_amount: wigDeposit,
         wig_deposit_method: i.item_type === 'wig' ? primaryMethod : undefined,
+        sales_rep_id: i.sales_rep_id || undefined,
       }
     })
 
@@ -474,7 +478,7 @@ export default function POSPage() {
             <div style={s.pendingBannerLeft}>
               <CreditCard size={14} color="#5581B1" />
               <span style={s.pendingBannerText}>
-                <strong>{unloadedPending.length} item{unloadedPending.length !== 1 ? 's' : ''}</strong> waiting from {[...new Set(unloadedPending.map(p => p.department))].map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' & ')}
+                <strong>{unloadedPending.length} item{unloadedPending.length !== 1 ? 's' : ''}</strong> waiting from {[...new Set(unloadedPending.map(p => p.department))].map(d => { const t = d.replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1) }).join(' & ')}
               </span>
               <span style={s.pendingBannerItems}>
                 {unloadedPending.map(p => p.description).join(' · ')}

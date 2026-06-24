@@ -531,6 +531,7 @@ class PosSaleItemCreate(BaseModel):
     wig_deposit_method: Optional[PaymentMethod] = None
     # Per-item tax rate (0 = exempt, 0.045 = 4.5%, 0.08875 = 8.875%)
     tax_rate: float = 0.0
+    sales_rep_id: Optional[UUID] = None  # who performed/sold this item — commission attribution
 
 
 class PosSaleItemResponse(BaseModel):
@@ -549,6 +550,7 @@ class PosSaleItemResponse(BaseModel):
     wig_color: Optional[str]
     wig_size: Optional[str]
     wig_front: Optional[str]
+    sales_rep_id: Optional[UUID] = None
     created_at: datetime
 
     class Config:
@@ -983,6 +985,19 @@ class RepairServiceResponse(BaseModel):
     id: UUID
     name: str
     sort_order: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+# ── Wash & Set Services ───────────────────────────────────────
+
+class WashSetServiceResponse(BaseModel):
+    id: UUID
+    name: str
+    sort_order: int
+    default_price: Optional[Decimal] = None
     is_active: bool
 
     class Config:

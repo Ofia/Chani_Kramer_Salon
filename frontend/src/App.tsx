@@ -40,6 +40,7 @@ import ProvidersPage             from './pages/bookkeeper/ProvidersPage'
 import OperationOverviewPage     from './pages/bookkeeper/OperationOverviewPage'
 import CalendarPage               from './pages/bookkeeper/CalendarPage'
 import RepairsPage                from './pages/bookkeeper/RepairsPage'
+import WashSetPage                from './pages/bookkeeper/WashSetPage'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5 } },
@@ -63,6 +64,7 @@ function AppRoutes() {
         <Route path="hello"     element={<HelloBoardPage />} />
         <Route path="calendar"  element={<CalendarPage />} />
         <Route path="pos"       element={<POSPage />} />
+        <Route path="wash-set"  element={<WashSetPage />} />
         <Route path="overview"  element={<OperationOverviewPage />} />
         <Route path="payroll"   element={<PayrollEntryPage />} />
         <Route path="expenses"  element={<ExpensesPage />} />

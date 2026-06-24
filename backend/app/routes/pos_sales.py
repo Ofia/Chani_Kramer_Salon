@@ -120,6 +120,7 @@ def create_pos_sale(
             wig_color         = item_data.wig_color,
             wig_size          = item_data.wig_size,
             wig_front         = item_data.wig_front,
+            sales_rep_id      = item_data.sales_rep_id,
         )
 
         # For inventory items: decrement stock quantity (non-wig products)

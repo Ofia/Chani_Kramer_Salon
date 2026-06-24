@@ -499,9 +499,11 @@ class PosSaleItem(Base):
     wig_front         = Column(String)
     notes             = Column(Text)         # repair notes / free-text annotation
     tax_amount        = Column(Numeric(10, 2), nullable=False, default=0)  # per-item tax computed at sale
+    sales_rep_id      = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"))  # who performed/sold this item — commission attribution
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
-    pos_sale = relationship("PosSale", back_populates="items")
+    pos_sale  = relationship("PosSale", back_populates="items")
+    sales_rep = relationship("Employee", foreign_keys=[sales_rep_id])
 
 
 class PosSalePayment(Base):
@@ -654,6 +656,17 @@ class RepairService(Base):
     name       = Column(String, nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
     is_active  = Column(Boolean, nullable=False, default=True)
+
+
+class WashSetService(Base):
+    """Lookup table of Wash & Set service types — powers the dropdown on the Wash & Set page."""
+    __tablename__ = "wash_set_services"
+
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name          = Column(String, nullable=False)
+    sort_order    = Column(Integer, nullable=False, default=0)
+    default_price = Column(Numeric(10, 2))
+    is_active     = Column(Boolean, nullable=False, default=True)
 
 
 class AiConversation(Base):
