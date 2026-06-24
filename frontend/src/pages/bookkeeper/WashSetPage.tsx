@@ -12,7 +12,7 @@
 
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, X, User, ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 
 const BORDER = '1px solid rgba(13,13,13,0.08)'
@@ -322,7 +322,7 @@ function ActiveCartsTab() {
                   <div key={item.id} style={s.cartItemRow}>
                     <span style={s.cartItemName}>{item.description}</span>
                     <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
-                    <button style={s.clearBtn} onClick={() => removeMutation.mutate(item.id)}><X size={13} /></button>
+                    <button style={s.clearBtn} onClick={() => removeMutation.mutate(item.id)}><Trash2 size={13} /></button>
                   </div>
                 ))}
               </div>
