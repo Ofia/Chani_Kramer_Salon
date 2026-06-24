@@ -408,6 +408,7 @@ export default function InventoryPage() {
 
       {showFileImport && (
         <FileImportModal
+          mode={tab === 'product' ? 'product' : 'wig'}
           onClose={() => setShowFileImport(false)}
           onSaved={() => { setShowFileImport(false); qc.invalidateQueries({ queryKey: ['inventory'] }) }}
         />
@@ -983,21 +984,51 @@ type EditableRow = PreviewRow & {
   selected: boolean
 }
 
-function FileImportModal({ onClose, onSaved }: {
+type ProductPreviewRow = {
+  description: string
+  category: string | null
+  quantity: number
+  cost: number
+  unit_price: number
+  existing_item_id: string | null
+  existing_quantity: number | null
+}
+
+type ProductEditableRow = ProductPreviewRow & {
+  description_edit: string
+  category_edit: string
+  quantity_edit: string
+  markup_edit: string
+  unit_price_edit: string
+  mergeChoice: 'new' | 'merge'
+}
+
+function FileImportModal({ mode, onClose, onSaved }: {
+  mode: 'wig' | 'product'
   onClose: () => void
   onSaved: () => void
 }) {
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [rows, setRows] = useState<EditableRow[]>([])
+  const [productRows, setProductRows] = useState<ProductEditableRow[]>([])
   const [parseError, setParseError] = useState('')
   const [loading, setLoading] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null)
+  const [productResult, setProductResult] = useState<{ created: number; merged: number; errors: string[] } | null>(null)
+
+  const productAccept = '.pdf,.jpg,.jpeg,.png'
 
   function handleFile(f: File) {
-    if (!f.name.toLowerCase().endsWith('.pdf')) {
-      setParseError('Only PDF invoices are supported. Please upload the delivery invoice PDF.')
+    const lower = f.name.toLowerCase()
+    const ok = mode === 'product'
+      ? ['.pdf', '.jpg', '.jpeg', '.png'].some(ext => lower.endsWith(ext))
+      : lower.endsWith('.pdf')
+    if (!ok) {
+      setParseError(mode === 'product'
+        ? 'Only PDF or image (JPG/PNG) files are supported.'
+        : 'Only PDF invoices are supported. Please upload the delivery invoice PDF.')
       return
     }
     setFile(f)
@@ -1013,14 +1044,28 @@ function FileImportModal({ onClose, onSaved }: {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await api.post('/inventory/invoice-preview', formData)
-      const preview: PreviewRow[] = res.data
-      setRows(preview.map(row => ({
-        ...row,
-        markup_edit: row.markup_usd != null ? String(row.markup_usd) : '',
-        retail_edit: row.retail != null ? String(row.retail) : '',
-        selected: !row.already_exists,
-      })))
+      if (mode === 'product') {
+        const res = await api.post('/inventory/product-invoice-preview', formData)
+        const preview: ProductPreviewRow[] = res.data
+        setProductRows(preview.map(row => ({
+          ...row,
+          description_edit: row.description,
+          category_edit: row.category ?? '',
+          quantity_edit: String(row.quantity),
+          markup_edit: '',
+          unit_price_edit: String(row.unit_price),
+          mergeChoice: 'new',
+        })))
+      } else {
+        const res = await api.post('/inventory/invoice-preview', formData)
+        const preview: PreviewRow[] = res.data
+        setRows(preview.map(row => ({
+          ...row,
+          markup_edit: row.markup_usd != null ? String(row.markup_usd) : '',
+          retail_edit: row.retail != null ? String(row.retail) : '',
+          selected: !row.already_exists,
+        })))
+      }
       setStep('preview')
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
@@ -1052,7 +1097,57 @@ function FileImportModal({ onClose, onSaved }: {
     setRows(rs => rs.map((r, idx) => idx === i ? { ...r, selected: !r.selected } : r))
   }
 
+  function updateProductField(i: number, key: 'description_edit' | 'category_edit' | 'quantity_edit', val: string) {
+    setProductRows(rs => rs.map((r, idx) => idx === i ? { ...r, [key]: val } : r))
+  }
+
+  function updateProductMarkup(i: number, val: string) {
+    setProductRows(rs => rs.map((r, idx) => {
+      if (idx !== i) return r
+      const markup = parseFloat(val)
+      const unitPrice = !isNaN(markup) ? (r.cost * (1 + markup / 100)).toFixed(2) : r.unit_price_edit
+      return { ...r, markup_edit: val, unit_price_edit: unitPrice }
+    }))
+  }
+
+  function updateProductUnitPrice(i: number, val: string) {
+    setProductRows(rs => rs.map((r, idx) => {
+      if (idx !== i) return r
+      const unitPrice = parseFloat(val)
+      const markup = (!isNaN(unitPrice) && r.cost > 0) ? (((unitPrice - r.cost) / r.cost) * 100).toFixed(1) : r.markup_edit
+      return { ...r, unit_price_edit: val, markup_edit: markup }
+    }))
+  }
+
+  function setMergeChoice(i: number, choice: 'new' | 'merge') {
+    setProductRows(rs => rs.map((r, idx) => idx === i ? { ...r, mergeChoice: choice } : r))
+  }
+
   async function confirm() {
+    if (mode === 'product') {
+      if (productRows.length === 0) return
+      setLoading(true)
+      try {
+        const payload = productRows.map(r => ({
+          description: r.description_edit,
+          category: r.category_edit || null,
+          quantity: parseInt(r.quantity_edit) || r.quantity,
+          cost: r.cost,
+          unit_price: parseFloat(r.unit_price_edit) || r.cost,
+          merge_into_id: r.mergeChoice === 'merge' ? r.existing_item_id : null,
+        }))
+        const res = await api.post('/inventory/product-invoice-confirm', payload)
+        setProductResult(res.data)
+        setStep('done')
+      } catch (err: unknown) {
+        const e = err as { response?: { data?: { detail?: string } } }
+        setParseError(e.response?.data?.detail || 'Failed to create items.')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     const toCreate = rows.filter(r => r.selected && !r.already_exists)
     if (toCreate.length === 0) return
     setLoading(true)
@@ -1122,15 +1217,19 @@ function FileImportModal({ onClose, onSaved }: {
               >
                 <Upload size={24} color="rgba(13,13,13,0.35)" style={{ marginBottom: 8 }} />
                 <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
-                  Drop a delivery invoice PDF here or click to browse
+                  {mode === 'product'
+                    ? 'Drop a supplier invoice or photo here or click to browse'
+                    : 'Drop a delivery invoice PDF here or click to browse'}
                 </p>
                 <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)', marginTop: 4, marginBottom: 0 }}>
-                  PDF only — Sary/Rina combined invoices supported
+                  {mode === 'product'
+                    ? 'PDF or photo — any supplier invoice (Amazon, Alibaba, etc.)'
+                    : 'PDF only — Sary/Rina combined invoices supported'}
                 </p>
                 <input
                   id="invoice-file-input"
                   type="file"
-                  accept=".pdf"
+                  accept={mode === 'product' ? productAccept : '.pdf'}
                   style={{ display: 'none' }}
                   onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]) }}
                 />
@@ -1147,7 +1246,109 @@ function FileImportModal({ onClose, onSaved }: {
           )}
 
           {/* ── Preview step ── */}
-          {step === 'preview' && (
+          {step === 'preview' && mode === 'product' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
+                  {productRows.length} item{productRows.length !== 1 ? 's' : ''} found
+                </p>
+                <span style={{ fontSize: 11, color: 'rgba(13,13,13,0.4)' }}>
+                  Edit any field. Unit Price defaults to Cost — type a Markup % or a price.
+                </span>
+              </div>
+
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(92vh - 230px)' }}>
+                <table style={{ ...s.table, fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Description</th>
+                      <th style={s.th}>Category</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Qty</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Cost</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Markup %</th>
+                      <th style={{ ...s.th, textAlign: 'right' }}>Unit Price</th>
+                      <th style={s.th}>Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productRows.map((row, i) => (
+                      <tr key={i} style={s.tr}>
+                        <td style={s.td}>
+                          <input
+                            style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 180 }}
+                            value={row.description_edit}
+                            onChange={e => updateProductField(i, 'description_edit', e.target.value)}
+                          />
+                        </td>
+                        <td style={s.td}>
+                          <input
+                            style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 110 }}
+                            value={row.category_edit}
+                            onChange={e => updateProductField(i, 'category_edit', e.target.value)}
+                          />
+                        </td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          <input
+                            style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 50, textAlign: 'right' }}
+                            value={row.quantity_edit}
+                            onChange={e => updateProductField(i, 'quantity_edit', e.target.value)}
+                          />
+                        </td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>${row.cost.toLocaleString()}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          <input
+                            style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 60, textAlign: 'right' }}
+                            placeholder="0"
+                            value={row.markup_edit}
+                            onChange={e => updateProductMarkup(i, e.target.value)}
+                          />
+                        </td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          <input
+                            style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 80, textAlign: 'right', color: '#22c55e', fontWeight: 600 }}
+                            value={row.unit_price_edit}
+                            onChange={e => updateProductUnitPrice(i, e.target.value)}
+                          />
+                        </td>
+                        <td style={s.td}>
+                          {row.existing_item_id ? (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button
+                                type="button"
+                                style={{ ...s.badge, background: row.mergeChoice === 'new' ? '#dcfce7' : '#f3f4f6', color: row.mergeChoice === 'new' ? '#166534' : '#6b7280', border: 'none', cursor: 'pointer' }}
+                                onClick={() => setMergeChoice(i, 'new')}
+                              >
+                                New item
+                              </button>
+                              <button
+                                type="button"
+                                style={{ ...s.badge, background: row.mergeChoice === 'merge' ? '#dbeafe' : '#f3f4f6', color: row.mergeChoice === 'merge' ? '#1e40af' : '#6b7280', border: 'none', cursor: 'pointer' }}
+                                onClick={() => setMergeChoice(i, 'merge')}
+                              >
+                                Merge ({row.existing_quantity} in stock)
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ ...s.badge, background: '#dcfce7', color: '#166534' }}>New</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {parseError && <div style={s.errMsg}>{parseError}</div>}
+              <div style={s.modalFooter}>
+                <button style={s.cancelBtn} onClick={() => { setStep('upload'); setProductRows([]); setFile(null) }}>Back</button>
+                <button style={s.primaryBtn} onClick={confirm} disabled={productRows.length === 0 || loading}>
+                  {loading ? 'Adding…' : `Add ${productRows.length} Item${productRows.length !== 1 ? 's' : ''} to Inventory`}
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 'preview' && mode === 'wig' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', margin: 0 }}>
@@ -1238,7 +1439,24 @@ function FileImportModal({ onClose, onSaved }: {
           )}
 
           {/* ── Done step ── */}
-          {step === 'done' && result && (
+          {step === 'done' && mode === 'product' && productResult && (
+            <>
+              <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>Import complete</p>
+              <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', marginTop: 6 }}>
+                {productResult.created} new product{productResult.created !== 1 ? 's' : ''} added
+                {productResult.merged > 0 ? ` · ${productResult.merged} merged into existing stock` : ''}
+                {productResult.errors.length > 0 ? ` · ${productResult.errors.length} error${productResult.errors.length !== 1 ? 's' : ''}` : ''}.
+              </p>
+              {productResult.errors.length > 0 && (
+                <div style={s.errMsg}>{productResult.errors.map((e, i) => <div key={i}>{e}</div>)}</div>
+              )}
+              <div style={s.modalFooter}>
+                <button style={s.primaryBtn} onClick={onSaved}>Done</button>
+              </div>
+            </>
+          )}
+
+          {step === 'done' && mode === 'wig' && result && (
             <>
               <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>Import complete</p>
               <p style={{ fontSize: 13, color: 'rgba(13,13,13,0.6)', marginTop: 6 }}>
