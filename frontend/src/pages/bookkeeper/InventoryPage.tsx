@@ -998,6 +998,7 @@ type ProductEditableRow = ProductPreviewRow & {
   description_edit: string
   category_edit: string
   quantity_edit: string
+  cost_edit: string
   markup_edit: string
   unit_price_edit: string
   mergeChoice: 'new' | 'merge'
@@ -1052,6 +1053,7 @@ function FileImportModal({ mode, onClose, onSaved }: {
           description_edit: row.description,
           category_edit: row.category ?? '',
           quantity_edit: String(row.quantity),
+          cost_edit: String(row.cost),
           markup_edit: '',
           unit_price_edit: String(row.unit_price),
           mergeChoice: 'new',
@@ -1101,11 +1103,22 @@ function FileImportModal({ mode, onClose, onSaved }: {
     setProductRows(rs => rs.map((r, idx) => idx === i ? { ...r, [key]: val } : r))
   }
 
+  function updateProductCost(i: number, val: string) {
+    setProductRows(rs => rs.map((r, idx) => {
+      if (idx !== i) return r
+      const cost = parseFloat(val)
+      const markup = parseFloat(r.markup_edit)
+      const unitPrice = (!isNaN(cost) && !isNaN(markup)) ? (cost * (1 + markup / 100)).toFixed(2) : r.unit_price_edit
+      return { ...r, cost_edit: val, unit_price_edit: unitPrice }
+    }))
+  }
+
   function updateProductMarkup(i: number, val: string) {
     setProductRows(rs => rs.map((r, idx) => {
       if (idx !== i) return r
+      const cost = parseFloat(r.cost_edit) || r.cost
       const markup = parseFloat(val)
-      const unitPrice = !isNaN(markup) ? (r.cost * (1 + markup / 100)).toFixed(2) : r.unit_price_edit
+      const unitPrice = !isNaN(markup) ? (cost * (1 + markup / 100)).toFixed(2) : r.unit_price_edit
       return { ...r, markup_edit: val, unit_price_edit: unitPrice }
     }))
   }
@@ -1113,8 +1126,9 @@ function FileImportModal({ mode, onClose, onSaved }: {
   function updateProductUnitPrice(i: number, val: string) {
     setProductRows(rs => rs.map((r, idx) => {
       if (idx !== i) return r
+      const cost = parseFloat(r.cost_edit) || r.cost
       const unitPrice = parseFloat(val)
-      const markup = (!isNaN(unitPrice) && r.cost > 0) ? (((unitPrice - r.cost) / r.cost) * 100).toFixed(1) : r.markup_edit
+      const markup = (!isNaN(unitPrice) && cost > 0) ? (((unitPrice - cost) / cost) * 100).toFixed(1) : r.markup_edit
       return { ...r, unit_price_edit: val, markup_edit: markup }
     }))
   }
@@ -1132,7 +1146,7 @@ function FileImportModal({ mode, onClose, onSaved }: {
           description: r.description_edit,
           category: r.category_edit || null,
           quantity: parseInt(r.quantity_edit) || r.quantity,
-          cost: r.cost,
+          cost: parseFloat(r.cost_edit) || r.cost,
           unit_price: parseFloat(r.unit_price_edit) || r.cost,
           merge_into_id: r.mergeChoice === 'merge' ? r.existing_item_id : null,
         }))
@@ -1294,7 +1308,13 @@ function FileImportModal({ mode, onClose, onSaved }: {
                             onChange={e => updateProductField(i, 'quantity_edit', e.target.value)}
                           />
                         </td>
-                        <td style={{ ...s.td, textAlign: 'right' }}>${row.cost.toLocaleString()}</td>
+                        <td style={{ ...s.td, textAlign: 'right' }}>
+                          <input
+                            style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 72, textAlign: 'right' }}
+                            value={row.cost_edit}
+                            onChange={e => updateProductCost(i, e.target.value)}
+                          />
+                        </td>
                         <td style={{ ...s.td, textAlign: 'right' }}>
                           <input
                             style={{ ...s.fi, padding: '3px 6px', fontSize: 12, width: 60, textAlign: 'right' }}

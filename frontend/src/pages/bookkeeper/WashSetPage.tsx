@@ -200,7 +200,7 @@ function AddServiceTab() {
 
       {/* Stylist */}
       <div style={s.field}>
-        <label style={s.fieldLabel}>Stylist <span style={s.optional}>(for commission)</span></label>
+        <label style={s.fieldLabel}>Stylist</label>
         <select style={s.input} value={stylistId} onChange={e => setStylistId(e.target.value)}>
           <option value="">— None —</option>
           {activeEmployees.map(e => (

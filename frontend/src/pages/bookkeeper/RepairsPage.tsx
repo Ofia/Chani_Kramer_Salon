@@ -15,7 +15,7 @@ import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, X, ChevronDown, ChevronRight,
-  Trash2, User, Package, Link, Printer,
+  Trash2, User, Package, Link, Printer, Pencil,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
@@ -965,12 +965,30 @@ type CartItem = {
 }
 
 function ActiveCartsTab() {
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [expanded, setExpanded]     = useState<string | null>(null)
+  const [editingId, setEditingId]   = useState<string | null>(null)
+  const [editPrice, setEditPrice]   = useState('')
+  const [editNotes, setEditNotes]   = useState('')
+  const qc = useQueryClient()
 
   const { data: allCart = [], isLoading } = useQuery<CartItem[]>({
     queryKey: ['cart-active'],
     queryFn: () => api.get('/cart/active').then(r => r.data),
     staleTime: 0,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/cart/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cart-active'] }),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, price, notes }: { id: string; price: number; notes: string }) =>
+      api.patch(`/cart/${id}`, { price, notes: notes || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cart-active'] })
+      setEditingId(null)
+    },
   })
 
   const grouped = useMemo(() => {
@@ -1012,15 +1030,60 @@ function ActiveCartsTab() {
 
             {open && (
               <div style={s.cartBody}>
-                {items.map(item => (
-                  <div key={item.id} style={s.cartItemRow}>
-                    <div style={s.cartItemInfo}>
-                      <span style={s.cartItemName}>{item.description}</span>
-                      {item.notes && <span style={s.cartItemNotes}>{item.notes}</span>}
+                {items.map(item =>
+                  editingId === item.id ? (
+                    <div key={item.id} style={{ ...s.cartItemRow, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={s.priceWrap}>
+                          <span style={s.pricePre}>$</span>
+                          <input
+                            style={s.priceField}
+                            value={editPrice}
+                            onChange={e => setEditPrice(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                        <input
+                          style={{ ...s.addInput, flex: 1 }}
+                          value={editNotes}
+                          onChange={e => setEditNotes(e.target.value)}
+                          placeholder="Notes"
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button style={s.cancelTaskBtn} onClick={() => setEditingId(null)}><X size={12} /></button>
+                        <button
+                          style={s.saveTaskBtn}
+                          onClick={() => updateMutation.mutate({ id: item.id, price: parseFloat(editPrice) || 0, notes: editNotes })}
+                          disabled={updateMutation.isPending}
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
-                    <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
-                  </div>
-                ))}
+                  ) : (
+                    <div key={item.id} style={s.cartItemRow}>
+                      <div style={s.cartItemInfo}>
+                        <span style={s.cartItemName}>{item.description}</span>
+                        {item.notes && <span style={s.cartItemNotes}>{item.notes}</span>}
+                      </div>
+                      <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
+                      <button
+                        style={s.iconBtn}
+                        onClick={() => { setEditingId(item.id); setEditPrice(String(item.price)); setEditNotes(item.notes ?? '') }}
+                      >
+                        <Pencil size={12} color="rgba(13,13,13,0.4)" />
+                      </button>
+                      <button
+                        style={s.iconBtn}
+                        onClick={() => deleteMutation.mutate(item.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 size={12} color="rgba(13,13,13,0.4)" />
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
             )}
           </div>

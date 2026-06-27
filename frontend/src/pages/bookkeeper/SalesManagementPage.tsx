@@ -435,7 +435,7 @@ function AddToCartPanel({ item, onClose }: { item: InventoryItem; onClose: () =>
 
         {/* Sales representative */}
         <div style={s.field}>
-          <label style={s.label}>Sales Representative <span style={s.optional}>(for commission)</span></label>
+          <label style={s.label}>Sales Representative</label>
           <select style={s.input} value={salesRepId} onChange={e => setSalesRepId(e.target.value)}>
             <option value="">— None —</option>
             {activeEmployees.map(e => (
