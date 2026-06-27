@@ -11,7 +11,7 @@
  * Tasks are expandable sub-rows with per-task status, provider, print slip.
  */
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, X, ChevronDown, ChevronRight,
