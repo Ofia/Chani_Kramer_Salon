@@ -15,7 +15,7 @@ import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, X, ChevronDown, ChevronRight,
-  Trash2, User, Package, Link, Printer, Pencil,
+  Trash2, User, Package, Link, Printer,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
@@ -133,7 +133,24 @@ function nextTaskStatus(s: RepairTaskStatus): RepairTaskStatus {
 export default function RepairsPage() {
   const [tab, setTab] = useState<'orders' | 'carts'>('orders')
   const [creating, setCreating] = useState(false)
+  const [editingOrder, setEditingOrder] = useState<RepairOrder | null>(null)
   const qc = useQueryClient()
+
+  async function openEditOrder(orderId: string) {
+    const res = await api.get(`/repair-orders/${orderId}`)
+    setEditingOrder(res.data)
+  }
+
+  function closeModal() {
+    setCreating(false)
+    setEditingOrder(null)
+  }
+
+  function afterSave() {
+    closeModal()
+    qc.invalidateQueries({ queryKey: ['repair-orders'] })
+    qc.invalidateQueries({ queryKey: ['cart-active'] })
+  }
 
   return (
     <div>
@@ -154,16 +171,13 @@ export default function RepairsPage() {
       </div>
 
       {tab === 'orders' && <RepairOrdersTab />}
-      {tab === 'carts'  && <ActiveCartsTab />}
+      {tab === 'carts'  && <ActiveCartsTab onEditOrder={openEditOrder} />}
 
-      {creating && (
+      {(creating || editingOrder) && (
         <CreateOrderModal
-          onClose={() => setCreating(false)}
-          onCreated={() => {
-            setCreating(false)
-            qc.invalidateQueries({ queryKey: ['repair-orders'] })
-            qc.invalidateQueries({ queryKey: ['cart-active'] })
-          }}
+          order={editingOrder ?? undefined}
+          onClose={closeModal}
+          onCreated={afterSave}
         />
       )}
     </div>
@@ -601,6 +615,7 @@ function AddTaskForm({ orderId, onDone, onCancel }: {
 
 type TaskDraft = {
   key: string
+  id?: string        // set for existing tasks (edit mode)
   service_id: string
   service_name: string
   price: string
@@ -609,7 +624,13 @@ type TaskDraft = {
   video_url: string
 }
 
-function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateOrderModal({ order, onClose, onCreated }: {
+  order?: RepairOrder
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const isEdit = !!order
+
   // Customer
   const [custSearch, setCustSearch]           = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -630,9 +651,11 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
   // Tasks
   const [tasks, setTasks] = useState<TaskDraft[]>([])
+  const [removedTaskIds, setRemovedTaskIds] = useState<string[]>([])
 
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
+  const initialized = useRef(false)
 
   // Data
   const { data: customers = [] } = useQuery<Customer[]>({
@@ -651,6 +674,47 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
     queryKey: ['providers'],
     queryFn: () => api.get('/providers/').then(r => r.data),
   })
+
+  // Pre-populate from existing order (edit mode) once query data is available
+  useEffect(() => {
+    if (!order || initialized.current) return
+    if (customers.length === 0 || inventory.length === 0) return
+
+    if (order.customer_id) {
+      const c = customers.find(c => c.id === order.customer_id)
+      if (c) setSelectedCustomer(c)
+    } else if (order.customer_name) {
+      setCustomerMode('walkin')
+      setWalkinName(order.customer_name)
+      setWalkinPhone(order.customer_phone ?? '')
+    }
+
+    if (order.inventory_item_id) {
+      const w = inventory.find(i => i.id === order.inventory_item_id)
+      if (w) { setSelectedWig(w); setWigMode('customer') }
+    } else if (order.wig_description) {
+      setWigMode('external')
+      const parts = order.wig_description.split(' · ')
+      setExtSerial(parts[0] ?? '')
+      setExtBrand(parts[1] ?? '')
+      setExtColor(parts[2] ?? '')
+    }
+
+    setOrderNotes(order.notes ?? '')
+
+    setTasks(order.tasks.map(t => ({
+      key: t.id,
+      id: t.id,
+      service_id: t.repair_service_id ?? '',
+      service_name: t.description,
+      price: String(t.price),
+      provider_id: t.assigned_provider_id ?? '',
+      notes: t.notes ?? '',
+      video_url: t.video_url ?? '',
+    })))
+
+    initialized.current = true
+  }, [order, customers, inventory])
 
   const filteredCustomers = useMemo(() => {
     if (!custSearch) return []
@@ -679,6 +743,8 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   function removeTask(key: string) {
+    const t = tasks.find(t => t.key === key)
+    if (t?.id) setRemovedTaskIds(prev => [...prev, t.id!])
     setTasks(prev => prev.filter(t => t.key !== key))
   }
 
@@ -692,60 +758,104 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
     })
   }
 
-  async function handleCreate() {
+  async function handleSave() {
     setError(null)
     setSaving(true)
     try {
-      const payload: Record<string, unknown> = {
+      const orderPayload: Record<string, unknown> = {
         notes: orderNotes.trim() || null,
-        status: 'in_progress',
       }
 
       if (customerMode === 'existing' && selectedCustomer) {
-        payload.customer_id    = selectedCustomer.id
-        payload.customer_name  = `${selectedCustomer.first_name} ${selectedCustomer.last_name}`
-        payload.customer_phone = selectedCustomer.phone || selectedCustomer.cell || null
+        orderPayload.customer_name  = `${selectedCustomer.first_name} ${selectedCustomer.last_name}`
+        orderPayload.customer_phone = selectedCustomer.phone || selectedCustomer.cell || null
       } else {
-        payload.customer_name  = walkinName.trim() || null
-        payload.customer_phone = walkinPhone.trim() || null
+        orderPayload.customer_name  = walkinName.trim() || null
+        orderPayload.customer_phone = walkinPhone.trim() || null
       }
 
       if (wigMode === 'customer' && selectedWig) {
-        payload.inventory_item_id = selectedWig.id
+        orderPayload.inventory_item_id = selectedWig.id
+        orderPayload.wig_description   = null
       } else if (wigMode === 'external') {
-        const serial = extSerial.trim()
-        if (customerMode === 'existing' && selectedCustomer && serial) {
-          const { data: newWig } = await api.post('/inventory/', {
-            item_type: 'wig',
-            name: serial,
-            daysmart_serial: serial,
-            brand: extBrand.trim() || null,
-            color: extColor.trim() || null,
-            customer_id: selectedCustomer.id,
-            sale_status: 'paid_in_full',
-            is_external: true,
-          })
-          payload.inventory_item_id = newWig.id
-        } else {
-          payload.wig_description = [extSerial, extBrand, extColor].map(s => s.trim()).filter(Boolean).join(' · ') || null
-        }
+        orderPayload.wig_description = [extSerial, extBrand, extColor].map(s => s.trim()).filter(Boolean).join(' · ') || null
       }
 
-      const { data: order } = await api.post('/repair-orders/', payload)
+      if (isEdit) {
+        // ── Update existing order ──
+        await api.patch(`/repair-orders/${order!.id}`, orderPayload)
 
-      // Create tasks sequentially
-      for (const t of tasks) {
-        if (!t.service_name.trim()) continue
-        await api.post('/repair-tasks/', {
-          repair_order_id:  order.id,
-          repair_service_id:    t.service_id || null,
-          description:          t.service_name.trim(),
-          price:                parseFloat(t.price) || 0,
-          tax_rate:             0.045,
-          assigned_provider_id: t.provider_id || null,
-          notes:                t.notes.trim() || null,
-          video_url:            t.video_url.trim() || null,
-        })
+        // Delete removed tasks
+        for (const tid of removedTaskIds) {
+          await api.delete(`/repair-tasks/${tid}`)
+        }
+
+        // Patch existing tasks, create new ones
+        for (const t of tasks) {
+          if (!t.service_name.trim()) continue
+          if (t.id) {
+            await api.patch(`/repair-tasks/${t.id}`, {
+              description:          t.service_name.trim(),
+              price:                parseFloat(t.price) || 0,
+              assigned_provider_id: t.provider_id || null,
+              notes:                t.notes.trim() || null,
+              video_url:            t.video_url.trim() || null,
+            })
+          } else {
+            await api.post('/repair-tasks/', {
+              repair_order_id:      order!.id,
+              repair_service_id:    t.service_id || null,
+              description:          t.service_name.trim(),
+              price:                parseFloat(t.price) || 0,
+              tax_rate:             0.045,
+              assigned_provider_id: t.provider_id || null,
+              notes:                t.notes.trim() || null,
+              video_url:            t.video_url.trim() || null,
+            })
+          }
+        }
+      } else {
+        // ── Create new order ──
+        if (customerMode === 'existing' && selectedCustomer) {
+          orderPayload.customer_id = selectedCustomer.id
+          orderPayload.status      = 'in_progress'
+        } else {
+          orderPayload.status = 'in_progress'
+        }
+
+        if (wigMode === 'external') {
+          const serial = extSerial.trim()
+          if (customerMode === 'existing' && selectedCustomer && serial) {
+            const { data: newWig } = await api.post('/inventory/', {
+              item_type: 'wig',
+              name: serial,
+              daysmart_serial: serial,
+              brand: extBrand.trim() || null,
+              color: extColor.trim() || null,
+              customer_id: selectedCustomer.id,
+              sale_status: 'paid_in_full',
+              is_external: true,
+            })
+            orderPayload.inventory_item_id = newWig.id
+            delete orderPayload.wig_description
+          }
+        }
+
+        const { data: newOrder } = await api.post('/repair-orders/', orderPayload)
+
+        for (const t of tasks) {
+          if (!t.service_name.trim()) continue
+          await api.post('/repair-tasks/', {
+            repair_order_id:      newOrder.id,
+            repair_service_id:    t.service_id || null,
+            description:          t.service_name.trim(),
+            price:                parseFloat(t.price) || 0,
+            tax_rate:             0.045,
+            assigned_provider_id: t.provider_id || null,
+            notes:                t.notes.trim() || null,
+            video_url:            t.video_url.trim() || null,
+          })
+        }
       }
 
       onCreated()
@@ -755,7 +865,7 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
     }
   }
 
-  const canCreate =
+  const canSave =
     !saving &&
     (customerMode === 'existing' ? !!selectedCustomer : !!walkinName.trim()) &&
     (wigMode === 'customer' ? !!selectedWig : !!(extSerial.trim() || extBrand.trim()))
@@ -767,7 +877,7 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
         {/* Header */}
         <div style={s.modalHeader}>
           <div>
-            <div style={s.modalTitle}>New Repair Order</div>
+            <div style={s.modalTitle}>{isEdit ? 'Edit Repair Order' : 'New Repair Order'}</div>
             <div style={s.modalSubtitle}>Customer · Wig · Tasks</div>
           </div>
           <button style={s.closeBtn} onClick={onClose}><X size={16} /></button>
@@ -935,11 +1045,11 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
         <div style={s.modalFooter}>
           <button style={s.cancelBtn} onClick={onClose}>Cancel</button>
           <button
-            style={{ ...s.createBtn, ...(!canCreate ? s.createBtnDisabled : {}) }}
-            onClick={handleCreate}
-            disabled={!canCreate}
+            style={{ ...s.createBtn, ...(!canSave ? s.createBtnDisabled : {}) }}
+            onClick={handleSave}
+            disabled={!canSave}
           >
-            {saving ? 'Creating…' : 'Create Order'}
+            {saving ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Changes' : 'Create Order')}
           </button>
         </div>
       </div>
@@ -964,11 +1074,8 @@ type CartItem = {
   created_at: string
 }
 
-function ActiveCartsTab() {
-  const [expanded, setExpanded]     = useState<string | null>(null)
-  const [editingId, setEditingId]   = useState<string | null>(null)
-  const [editPrice, setEditPrice]   = useState('')
-  const [editNotes, setEditNotes]   = useState('')
+function ActiveCartsTab({ onEditOrder }: { onEditOrder: (orderId: string) => void }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
   const qc = useQueryClient()
 
   const { data: allCart = [], isLoading } = useQuery<CartItem[]>({
@@ -980,15 +1087,6 @@ function ActiveCartsTab() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/cart/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cart-active'] }),
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, price, notes }: { id: string; price: number; notes: string }) =>
-      api.patch(`/cart/${id}`, { price, notes: notes || null }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cart-active'] })
-      setEditingId(null)
-    },
   })
 
   const grouped = useMemo(() => {
@@ -1030,60 +1128,27 @@ function ActiveCartsTab() {
 
             {open && (
               <div style={s.cartBody}>
-                {items.map(item =>
-                  editingId === item.id ? (
-                    <div key={item.id} style={{ ...s.cartItemRow, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <div style={s.priceWrap}>
-                          <span style={s.pricePre}>$</span>
-                          <input
-                            style={s.priceField}
-                            value={editPrice}
-                            onChange={e => setEditPrice(e.target.value)}
-                            autoFocus
-                          />
-                        </div>
-                        <input
-                          style={{ ...s.addInput, flex: 1 }}
-                          value={editNotes}
-                          onChange={e => setEditNotes(e.target.value)}
-                          placeholder="Notes"
-                        />
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button style={s.cancelTaskBtn} onClick={() => setEditingId(null)}><X size={12} /></button>
-                        <button
-                          style={s.saveTaskBtn}
-                          onClick={() => updateMutation.mutate({ id: item.id, price: parseFloat(editPrice) || 0, notes: editNotes })}
-                          disabled={updateMutation.isPending}
-                        >
-                          Save
-                        </button>
-                      </div>
+                {items.map(item => (
+                  <div
+                    key={item.id}
+                    style={{ ...s.cartItemRow, cursor: item.repair_order_id ? 'pointer' : 'default' }}
+                    onClick={() => item.repair_order_id && onEditOrder(item.repair_order_id)}
+                  >
+                    <div style={s.cartItemInfo}>
+                      <span style={s.cartItemName}>{item.description}</span>
+                      {item.notes && <span style={s.cartItemNotes}>{item.notes}</span>}
                     </div>
-                  ) : (
-                    <div key={item.id} style={s.cartItemRow}>
-                      <div style={s.cartItemInfo}>
-                        <span style={s.cartItemName}>{item.description}</span>
-                        {item.notes && <span style={s.cartItemNotes}>{item.notes}</span>}
-                      </div>
-                      <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
-                      <button
-                        style={s.iconBtn}
-                        onClick={() => { setEditingId(item.id); setEditPrice(String(item.price)); setEditNotes(item.notes ?? '') }}
-                      >
-                        <Pencil size={12} color="rgba(13,13,13,0.4)" />
-                      </button>
-                      <button
-                        style={s.iconBtn}
-                        onClick={() => deleteMutation.mutate(item.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 size={12} color="rgba(13,13,13,0.4)" />
-                      </button>
-                    </div>
-                  )
-                )}
+                    <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
+                    <button
+                      style={s.iconBtn}
+                      onClick={e => { e.stopPropagation(); deleteMutation.mutate(item.id) }}
+                      disabled={deleteMutation.isPending}
+                      title="Remove from cart"
+                    >
+                      <Trash2 size={12} color="rgba(13,13,13,0.4)" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
