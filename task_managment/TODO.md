@@ -100,7 +100,7 @@ None of these have been touched since the audit. The critical ones are the highe
 
 **Sales Management** — inventory browse, Add to Cart with service add-on, Active Carts with live editing, sales rep capture.
 
-**Repairs — fully built** — dedicated page, ClickUp-style task board (per-wig global status + per-task status), provider assignment, video links, printable task slips, Active Carts integration (`b2a9f07`, `5a98acd`–`b6b3bac`). Google Drive integration deferred — Haya shares folder links manually via a video URL field instead.
+**Repairs — fully built** — dedicated page, ClickUp-style task board (per-wig global status + per-task status), provider assignment, video links, printable task slips, Active Carts integration (`b2a9f07`, `5a98acd`–`b6b3bac`). Google Drive integration deferred — Haya shares folder links manually via a video URL field instead. Full edit dialog wired to Repair Orders tab + pencil affordance on Active Carts rows (`ff4745c`, Session 30).
 
 **Wash & Set — built Session 27** — dedicated page (`/bookkeeper/wash-set`), customer → stylist → service (new `wash_set_services` lookup table) → price → cart, same `pending_cart_items` → POS pipeline as Repairs/Sales. Fixed two related bugs while building it: `sales_rep_id` was being silently dropped at POS checkout, and pending service items were always mislabeled `'repair'` in POS regardless of department (`8a8ca94`, `f7d25c8`, `5583446`).
 
@@ -108,7 +108,7 @@ None of these have been touched since the audit. The critical ones are the highe
 
 **Calendar** — Day/Week/Month views, department color-coding, appointment CRUD.
 
-**Operation Overview** — Day/Month/Range, 5 report tabs + Sales History, all business logic (tithes, sales tax, wig revenue/tax deferral, repair revenue deferral tied to wig deposits) automated. Sales History tab also has "Mark as Abandoned" per sale — forfeits a pending wig deposit as revenue, returns the wig to inventory, clears the customer association (`45d925a`, Session 27).
+**Operation Overview** — Day/Month/Range, 5 report tabs + Sales History, all business logic (tithes, sales tax, wig revenue/tax deferral, repair revenue deferral tied to wig deposits) automated. Sales History tab also has "Mark as Abandoned" per sale — forfeits a pending wig deposit as revenue, returns the wig to inventory, clears the customer association (`45d925a`, Session 27). Sales History rows now show wig serial chips + expanded wig specs (brand/color/length/front); Print Daily List and Receipt both redesigned to DaySmart two-column layout (`d039db0`, Session 30).
 
 **Expenses** — 13 industry-standard categories, bank/cash payment-source tag per entry (already built — toggle + badge in `ExpensesPage.tsx`, just never marked off in any doc until now).
 

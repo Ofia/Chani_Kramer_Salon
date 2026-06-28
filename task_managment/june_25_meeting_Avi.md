@@ -42,8 +42,8 @@ On the same page we will add a commision tab where commission in auto added to e
 | 1 | Calendar — add Employee + Service dropdowns to new appointment dialog | ⬜ TODO | Pull from employees table + repair_services/services |
 | 2 | Employees page — add Department field (frontdesk, sales, Cut, w&s, Repairs, bookkeeping, owner) | ⬜ TODO | New enum or string field on employees table |
 | 3 | Mobile calendar page + Google Drive image/video upload | ⬜ TODO | Complex — Google Drive OAuth integration |
-| 4 | Repairs Active Cart — edit options on already-added repair items | 🔧 PARTIAL | Built: clicking item row opens full Edit Repair Order dialog (pre-populates customer, wig, tasks). Fine-tuning needed: (a) same edit option should also be accessible from Repair Orders tab (currently only in Active Carts); (b) no visual affordance on row — add pencil icon or chevron so user knows it's clickable |
-| 5 | Sales History tab — expand sale rows to show all DaySmart details (serial, color, client, price…) | ⬜ TODO | Expand row detail view in OperationOverviewPage |
+| 4 | Repairs Active Cart — edit options on already-added repair items | ✅ DONE | Pencil icon on Active Carts rows; Repair Orders tab header also has pencil that opens full edit dialog (ff4745c) |
+| 5 | Sales History tab — expand sale rows to show all DaySmart details (serial, color, client, price…) | ✅ DONE | Wig serial chips on collapsed row; brand/color/length/front chips in expanded view; both Print Daily List and Receipt redesigned to DaySmart two-column layout (`d039db0`, Session 30) |
 | 6 | Invoice parser — editable cost price (not just retail/markup) | ✅ DONE | Cost cell is now editable in product invoice preview; markup/unit price recalculate on change |
 | 7 | Pending Orders flow — CoGS expense → Pending Orders tab → check-in to inventory | ⬜ DISCUSS | QuickBooks best practice: expense at PO date or receipt date? |
 | 8 | Calendar Day view — columns per employee; Week/Month — appointment list on click | ⬜ TODO | CalendarPage layout change |
