@@ -41,12 +41,13 @@ type ReportData = {
   net_profit: number; tithes: number
 }
 
-type SalePayment = { id: string; payment_method: string; amount: number }
+type SalePayment = { id: string; payment_method: string; amount: number; created_at: string }
 type SaleItem    = {
   id: string; item_type: string; description: string
   quantity: number; unit_price: number; subtotal: number
   tax_amount: number; notes?: string; inventory_item_id?: string
   wig_serial?: string; wig_brand?: string; wig_color?: string
+  wig_length?: string; wig_size?: string; wig_front?: string
 }
 type Sale = {
   id: string; customer_name: string; customer_phone?: string
@@ -765,45 +766,85 @@ function SalesHistoryTab({ start, end }: { start: string; end: string }) {
   }
 
   function printReceipt(sale: Sale) {
-    const win = window.open('', '_blank', 'width=420,height=680')
+    const win = window.open('', '_blank', 'width=900,height=700')
     if (!win) return
-    const dateLabel = new Date(sale.sale_date + 'T00:00:00').toLocaleDateString('en-US', {
-      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-    })
-    const itemRows = sale.items.map(i => `
-      <tr>
-        <td style="padding:5px 8px;font-size:12px">${i.description}${i.wig_serial ? `<br/><span style="font-size:10px;color:#888">Wig: ${i.wig_serial}</span>` : ''}</td>
-        <td style="padding:5px 8px;font-size:12px;text-align:right">${fmt(i.unit_price)}</td>
-        <td style="padding:5px 8px;font-size:12px;text-align:right">${fmt(i.tax_amount)}</td>
-      </tr>`).join('')
-    const pmtRows = sale.payments.map(p => `
-      <tr>
-        <td style="padding:3px 8px;font-size:11px;color:#555">${p.payment_method.replace(/_/g,' ')}</td>
-        <td colspan="2" style="padding:3px 8px;font-size:11px;text-align:right;color:#555">${fmt(p.amount)}</td>
-      </tr>`).join('')
+
+    const fmtDate = (iso: string) =>
+      new Date(iso).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+
+    const ordDate = fmtDate(sale.created_at || sale.sale_date + 'T00:00:00')
+
+    const itemRows = sale.items.map(i => {
+      const wigCols = i.wig_serial
+        ? `<td>${i.wig_serial}</td><td>${i.wig_brand ?? ''}</td><td>${i.wig_length ?? ''}</td><td>${i.wig_color ?? ''}</td><td>${i.wig_front ?? ''}</td>`
+        : `<td colspan="5" style="color:#888;font-style:italic">${i.description}${i.notes ? ` — ${i.notes}` : ''}</td>`
+      return `<tr>
+        ${wigCols}
+        <td style="text-align:right">${fmt(i.unit_price * i.quantity)}</td>
+        <td style="color:#888">${ordDate}</td>
+      </tr>`
+    }).join('')
+
+    const pmtRows = sale.payments.map(p => `<tr>
+      <td style="text-align:right">${fmt(p.amount)}</td>
+      <td>${fmtDate(p.created_at)}</td>
+      <td style="text-transform:capitalize">${p.payment_method.replace(/_/g, ' ')}</td>
+    </tr>`).join('')
+
+    const totalPaid   = sale.payments.reduce((s, p) => s + p.amount, 0)
+
     win.document.write(`<html><head><title>Receipt — ${sale.customer_name}</title>
-      <style>body{font-family:Arial,sans-serif;max-width:320px;margin:0 auto;padding:16px}
-      h2{text-align:center;font-size:15px;margin:0 0 3px}
-      p{text-align:center;font-size:11px;color:#666;margin:2px 0}
-      table{width:100%;border-collapse:collapse}
-      hr{border:none;border-top:1px solid #ccc;margin:8px 0}
-      @media print{body{padding:0}}</style></head><body>
-      <h2>THE SALON</h2>
-      <p>${dateLabel}</p><p style="font-weight:600;color:#18181b">${sale.customer_name}</p>
-      <hr/>
-      <table><thead><tr>
-        <th style="padding:4px 8px;font-size:10px;text-align:left;color:#888">ITEM</th>
-        <th style="padding:4px 8px;font-size:10px;text-align:right;color:#888">PRICE</th>
-        <th style="padding:4px 8px;font-size:10px;text-align:right;color:#888">TAX</th>
-      </tr></thead><tbody>${itemRows}</tbody></table>
-      <hr/>
-      ${sale.discount_amount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 8px"><span style="color:#555">Discount</span><span>-${fmt(sale.discount_amount)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;padding:5px 8px"><span>TOTAL</span><span>${fmt(sale.total_amount)}</span></div>
-      <hr/>
-      <table><tbody>${pmtRows}</tbody></table>
-      ${sale.balance_due > 0 ? `<p style="color:#ef4444;font-weight:bold;margin-top:8px">Balance Due: ${fmt(sale.balance_due)}</p>` : ''}
-      <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
-      </body></html>`)
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 12px; padding: 24px; color: #111; }
+      h2 { margin: 0 0 2px; font-size: 15px; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+      th, td { border: 1px solid #ccc; padding: 5px 8px; }
+      th { background: #f5f5f5; font-size: 11px; text-align: left; }
+      .header-table td { border: none; padding: 3px 8px; }
+      .section-label { font-size: 11px; font-weight: bold; margin: 14px 0 4px; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+      .totals { text-align: right; font-size: 12px; margin-top: 8px; }
+      .totals td { border: none; padding: 2px 8px; }
+      @media print { body { padding: 8px; } }
+    </style></head><body>
+
+    <h2>THE SALON</h2>
+
+    <table class="header-table" style="margin-bottom:12px">
+      <tr>
+        <th>Last Name</th><th>First Name</th><th>Phone</th><th>Order Date</th><th>Total Amt</th>${sale.notes ? '<th>Note</th>' : ''}
+      </tr>
+      <tr>
+        ${(() => { const parts = sale.customer_name.split(' '); const first = parts[0]; const last = parts.slice(1).join(' ') || ''; return `<td>${last}</td><td>${first}</td>` })()}
+        <td>${sale.customer_phone ?? ''}</td>
+        <td>${ordDate}</td>
+        <td><b>${fmt(sale.total_amount)}</b></td>
+        ${sale.notes ? `<td>${sale.notes}</td>` : ''}
+      </tr>
+    </table>
+
+    <div class="section-label">Order Detail</div>
+    <table>
+      <thead><tr>
+        <th>Wig</th><th>Company</th><th>Length</th><th>Color</th><th>Front</th><th style="text-align:right">Total</th><th>Date</th>
+      </tr></thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+
+    ${sale.discount_amount > 0 ? `<div style="text-align:right;font-size:12px;margin-bottom:8px">Discount: <b>-${fmt(sale.discount_amount)}</b></div>` : ''}
+
+    <div class="section-label">Payments</div>
+    <table>
+      <thead><tr><th style="text-align:right">Amount</th><th>Date</th><th>Method</th></tr></thead>
+      <tbody>${pmtRows}</tbody>
+    </table>
+
+    <table class="totals">
+      <tr><td>Total Payment:</td><td><b>${fmt(totalPaid)}</b></td></tr>
+      ${sale.balance_due > 0 ? `<tr><td style="color:#c00">Balance Due:</td><td style="color:#c00"><b>${fmt(sale.balance_due)}</b></td></tr>` : ''}
+    </table>
+
+    <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
+    </body></html>`)
     win.document.close()
   }
 
@@ -856,9 +897,14 @@ function SalesHistoryTab({ start, end }: { start: string; end: string }) {
                       onClick={() => openSale(sale)}
                       style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', background: isExpanded ? '#f9f9f9' : '#fff', gap: 12, userSelect: 'none' }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 14, fontWeight: 600, color: '#18181b' }}>{sale.customer_name}</span>
-                        {sale.customer_phone && <span style={{ fontSize: 12, color: '#a1a1aa', marginLeft: 8 }}>{sale.customer_phone}</span>}
+                        {sale.customer_phone && <span style={{ fontSize: 12, color: '#a1a1aa' }}>{sale.customer_phone}</span>}
+                        {sale.items.filter(i => i.wig_serial).map(i => (
+                          <span key={i.id} style={{ fontSize: 11, fontWeight: 600, background: '#f4f4f5', color: '#71717a', borderRadius: 4, padding: '1px 7px', letterSpacing: '0.02em' }}>
+                            {i.wig_serial}
+                          </span>
+                        ))}
                       </div>
                       <span style={{ fontSize: 12, color: '#a1a1aa', flexShrink: 0 }}>{sale.items.length} item{sale.items.length !== 1 ? 's' : ''}</span>
                       <span style={{ fontSize: 12, color: '#71717a', flexShrink: 0 }}>{pmtLabel}</span>
@@ -901,12 +947,25 @@ function SalesHistoryTab({ start, end }: { start: string; end: string }) {
                                     </select>
                                   )}
                                   {/* Description: read-only for wigs, editable for all else */}
-                                  {item.isWig ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span style={{ fontSize: 13, color: '#18181b' }}>{item.description}</span>
-                                      <span style={{ fontSize: 10, background: '#f4f4f5', color: '#71717a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Wig</span>
-                                    </div>
-                                  ) : (
+                                  {item.isWig ? (() => {
+                                    const orig = sale.items.find(o => o.id === item.id)
+                                    const specs = [orig?.wig_serial, orig?.wig_brand, orig?.wig_color, orig?.wig_length, orig?.wig_front].filter(Boolean)
+                                    return (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          <span style={{ fontSize: 13, color: '#18181b' }}>{item.description}</span>
+                                          <span style={{ fontSize: 10, background: '#f4f4f5', color: '#71717a', padding: '1px 6px', borderRadius: 4, fontWeight: 600 }}>Wig</span>
+                                        </div>
+                                        {specs.length > 0 && (
+                                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                                            {specs.map((v, i) => (
+                                              <span key={i} style={{ fontSize: 11, color: '#71717a', background: 'rgba(113,113,122,0.08)', borderRadius: 4, padding: '1px 6px' }}>{v}</span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })() : (
                                     <>
                                       <input
                                         value={item.description}
