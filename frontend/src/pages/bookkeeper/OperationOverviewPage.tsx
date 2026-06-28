@@ -739,113 +739,117 @@ function SalesHistoryTab({ start, end }: { start: string; end: string }) {
     }
   }
 
-  function printDailyList() {
-    const win = window.open('', '_blank', 'width=640,height=800')
-    if (!win) return
-    const dateLabel = start === end
-      ? new Date(start + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-      : `${start} — ${end}`
-    const saleBlocks = sales.map(sale => {
-      const itemLines = sale.items.map(i =>
-        `  ${i.description.padEnd(32, '.')} ${fmt(i.unit_price)}`
-      ).join('\n')
-      const pmtLine = sale.payments.map(p => `${p.payment_method.replace(/_/g,' ')}: ${fmt(p.amount)}`).join('  |  ')
-      return [
-        sale.customer_name + (sale.customer_phone ? `   ${sale.customer_phone}` : ''),
-        itemLines,
-        `  ${'─'.repeat(42)}`,
-        `  Tax: ${fmt(sale.tax_amount)}   Disc: -${fmt(sale.discount_amount)}   TOTAL: ${fmt(sale.total_amount)}`,
-        `  ${pmtLine}`,
-      ].join('\n')
-    }).join('\n\n' + '═'.repeat(50) + '\n\n')
-    const grandTotal = sales.reduce((s, x) => s + x.total_amount, 0)
-    win.document.write(`<pre style="font-family:monospace;font-size:12px;padding:24px;white-space:pre-wrap">THE SALON — Daily Sales Report\n${dateLabel}\n${'═'.repeat(50)}\n\n${saleBlocks}\n\n${'═'.repeat(50)}\nTotal: ${sales.length} sale${sales.length !== 1 ? 's' : ''}   Grand Total: ${fmt(grandTotal)}</pre>`)
-    win.document.close()
-    win.focus()
-    setTimeout(() => win.print(), 300)
+  // ── Shared print helpers ────────────────────────────────────────
+
+  const PRINT_STYLES = `
+    body { font-family: Arial, sans-serif; font-size: 11px; padding: 16px; color: #111; }
+    h2   { font-size: 14px; margin: 0 0 12px; }
+    table { border-collapse: collapse; }
+    th, td { border: 1px solid #bbb; padding: 4px 7px; }
+    th { background: #f0f0f0; font-size: 10px; font-weight: bold; text-align: left; }
+    .header-table { width: 100%; margin-bottom: 10px; }
+    .two-col { display: flex; gap: 20px; align-items: flex-start; }
+    .order-col { flex: 1; }
+    .order-col table { width: 100%; }
+    .pmt-col { min-width: 210px; }
+    .pmt-col table { width: 100%; }
+    .section-label { font-size: 10px; font-weight: bold; margin: 0 0 3px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+    .balance { font-size: 11px; margin-top: 6px; }
+    .balance div { display: flex; justify-content: space-between; padding: 1px 2px; }
+    .sale-block { margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #444; }
+    .sale-block:last-child { border-bottom: none; }
+    .grand-total { font-size: 12px; font-weight: bold; border-top: 2px solid #444; padding-top: 8px; margin-top: 12px; }
+    @media print { body { padding: 6px; } .sale-block { page-break-inside: avoid; } }
+  `
+
+  function fmtDt(iso: string) {
+    return new Date(iso).toLocaleString('en-US', {
+      month: '2-digit', day: '2-digit', year: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
   }
 
-  function printReceipt(sale: Sale) {
-    const win = window.open('', '_blank', 'width=900,height=700')
-    if (!win) return
-
-    const fmtDate = (iso: string) =>
-      new Date(iso).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
-
-    const ordDate = fmtDate(sale.created_at || sale.sale_date + 'T00:00:00')
+  function buildSaleBlock(sale: Sale): string {
+    const ordDate  = fmtDt(sale.created_at || sale.sale_date + 'T12:00:00')
+    const parts    = sale.customer_name.trim().split(' ')
+    const lastName = parts.slice(1).join(' ') || ''
+    const firstName = parts[0]
 
     const itemRows = sale.items.map(i => {
       const wigCols = i.wig_serial
         ? `<td>${i.wig_serial}</td><td>${i.wig_brand ?? ''}</td><td>${i.wig_length ?? ''}</td><td>${i.wig_color ?? ''}</td><td>${i.wig_front ?? ''}</td>`
-        : `<td colspan="5" style="color:#888;font-style:italic">${i.description}${i.notes ? ` — ${i.notes}` : ''}</td>`
-      return `<tr>
-        ${wigCols}
-        <td style="text-align:right">${fmt(i.unit_price * i.quantity)}</td>
-        <td style="color:#888">${ordDate}</td>
-      </tr>`
+        : `<td colspan="5" style="color:#555;font-style:italic">${i.description}${i.notes ? ` — ${i.notes}` : ''}</td>`
+      return `<tr>${wigCols}<td style="text-align:right">${fmt(i.unit_price * i.quantity)}</td><td style="color:#888;white-space:nowrap">${ordDate}</td></tr>`
     }).join('')
 
-    const pmtRows = sale.payments.map(p => `<tr>
-      <td style="text-align:right">${fmt(p.amount)}</td>
-      <td>${fmtDate(p.created_at)}</td>
-      <td style="text-transform:capitalize">${p.payment_method.replace(/_/g, ' ')}</td>
-    </tr>`).join('')
+    const pmtRows = sale.payments.map(p =>
+      `<tr>
+        <td style="text-align:right">${fmt(p.amount)}</td>
+        <td style="white-space:nowrap">${fmtDt(p.created_at)}</td>
+        <td style="text-transform:capitalize">${p.payment_method.replace(/_/g, ' ')}</td>
+      </tr>`
+    ).join('')
 
-    const totalPaid   = sale.payments.reduce((s, p) => s + p.amount, 0)
+    const totalPaid = sale.payments.reduce((s, p) => s + p.amount, 0)
 
-    win.document.write(`<html><head><title>Receipt — ${sale.customer_name}</title>
-    <style>
-      body { font-family: Arial, sans-serif; font-size: 12px; padding: 24px; color: #111; }
-      h2 { margin: 0 0 2px; font-size: 15px; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-      th, td { border: 1px solid #ccc; padding: 5px 8px; }
-      th { background: #f5f5f5; font-size: 11px; text-align: left; }
-      .header-table td { border: none; padding: 3px 8px; }
-      .section-label { font-size: 11px; font-weight: bold; margin: 14px 0 4px; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
-      .totals { text-align: right; font-size: 12px; margin-top: 8px; }
-      .totals td { border: none; padding: 2px 8px; }
-      @media print { body { padding: 8px; } }
-    </style></head><body>
+    return `
+      <table class="header-table">
+        <thead><tr><th>Last Name</th><th>First Name</th><th>Phone</th><th>Cell</th><th>Ord Date</th><th>TotAmt</th><th>Note</th></tr></thead>
+        <tbody><tr>
+          <td>${lastName}</td><td>${firstName}</td>
+          <td>${sale.customer_phone ?? ''}</td><td></td>
+          <td>${ordDate}</td><td><b>${fmt(sale.total_amount)}</b></td>
+          <td>${sale.notes ?? ''}</td>
+        </tr></tbody>
+      </table>
 
-    <h2>THE SALON</h2>
+      <div class="two-col">
+        <div class="order-col">
+          <div class="section-label">Order Detail</div>
+          <table>
+            <thead><tr><th>Wig</th><th>Company</th><th>Length</th><th>Color</th><th>Front</th><th style="text-align:right">Total</th><th>Date</th></tr></thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+          ${sale.discount_amount > 0 ? `<div style="text-align:right;font-size:11px;margin-top:4px">Discount: <b>-${fmt(sale.discount_amount)}</b></div>` : ''}
+        </div>
 
-    <table class="header-table" style="margin-bottom:12px">
-      <tr>
-        <th>Last Name</th><th>First Name</th><th>Phone</th><th>Order Date</th><th>Total Amt</th>${sale.notes ? '<th>Note</th>' : ''}
-      </tr>
-      <tr>
-        ${(() => { const parts = sale.customer_name.split(' '); const first = parts[0]; const last = parts.slice(1).join(' ') || ''; return `<td>${last}</td><td>${first}</td>` })()}
-        <td>${sale.customer_phone ?? ''}</td>
-        <td>${ordDate}</td>
-        <td><b>${fmt(sale.total_amount)}</b></td>
-        ${sale.notes ? `<td>${sale.notes}</td>` : ''}
-      </tr>
-    </table>
+        <div class="pmt-col">
+          <div class="section-label">Payments</div>
+          <table>
+            <thead><tr><th style="text-align:right">Amount</th><th>Date</th><th>Method</th></tr></thead>
+            <tbody>${pmtRows}</tbody>
+          </table>
+          <div class="balance">
+            <div><span>Total Payment:</span><span>${fmt(totalPaid)}</span></div>
+            ${sale.balance_due > 0 ? `<div style="color:#c00"><span>Balance:</span><span><b>${fmt(sale.balance_due)}</b></span></div>` : ''}
+          </div>
+        </div>
+      </div>
+    `
+  }
 
-    <div class="section-label">Order Detail</div>
-    <table>
-      <thead><tr>
-        <th>Wig</th><th>Company</th><th>Length</th><th>Color</th><th>Front</th><th style="text-align:right">Total</th><th>Date</th>
-      </tr></thead>
-      <tbody>${itemRows}</tbody>
-    </table>
-
-    ${sale.discount_amount > 0 ? `<div style="text-align:right;font-size:12px;margin-bottom:8px">Discount: <b>-${fmt(sale.discount_amount)}</b></div>` : ''}
-
-    <div class="section-label">Payments</div>
-    <table>
-      <thead><tr><th style="text-align:right">Amount</th><th>Date</th><th>Method</th></tr></thead>
-      <tbody>${pmtRows}</tbody>
-    </table>
-
-    <table class="totals">
-      <tr><td>Total Payment:</td><td><b>${fmt(totalPaid)}</b></td></tr>
-      ${sale.balance_due > 0 ? `<tr><td style="color:#c00">Balance Due:</td><td style="color:#c00"><b>${fmt(sale.balance_due)}</b></td></tr>` : ''}
-    </table>
-
-    <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
-    </body></html>`)
+  function openPrintWindow(title: string, bodyHtml: string, onload = 200) {
+    const win = window.open('', '_blank', 'width=1050,height=800')
+    if (!win) return
+    win.document.write(`<html><head><title>${title}</title><style>${PRINT_STYLES}</style></head><body>${bodyHtml}<script>window.onload=()=>setTimeout(()=>window.print(),${onload})</script></body></html>`)
     win.document.close()
+  }
+
+  function printDailyList() {
+    const dateLabel = start === end
+      ? new Date(start + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      : `${start} — ${end}`
+    const grandTotal = sales.reduce((s, x) => s + x.total_amount, 0)
+    const blocks = sales.map(s => `<div class="sale-block">${buildSaleBlock(s)}</div>`).join('')
+    openPrintWindow(
+      `Daily Sales — ${dateLabel}`,
+      `<h2>THE SALON — Daily Sales Report</h2><p style="margin:0 0 16px;color:#555">${dateLabel}</p>${blocks}<div class="grand-total">${sales.length} sale${sales.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Grand Total: ${fmt(grandTotal)}</div>`,
+      300,
+    )
+  }
+
+  function printReceipt(sale: Sale) {
+    openPrintWindow(`Receipt — ${sale.customer_name}`, `<h2>THE SALON</h2>${buildSaleBlock(sale)}`)
   }
 
   if (isLoading) return <div style={s.state}>Loading sales…</div>
