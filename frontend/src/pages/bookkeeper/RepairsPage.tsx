@@ -15,7 +15,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, X, ChevronDown, ChevronRight,
-  Trash2, User, Package, Link, Printer,
+  Trash2, User, Package, Link, Printer, Pencil,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 
@@ -170,7 +170,7 @@ export default function RepairsPage() {
         <TabBtn active={tab === 'carts'}  onClick={() => setTab('carts')}>Active Carts</TabBtn>
       </div>
 
-      {tab === 'orders' && <RepairOrdersTab />}
+      {tab === 'orders' && <RepairOrdersTab onEditOrder={openEditOrder} />}
       {tab === 'carts'  && <ActiveCartsTab onEditOrder={openEditOrder} />}
 
       {(creating || editingOrder) && (
@@ -186,7 +186,7 @@ export default function RepairsPage() {
 
 // ── Repair Orders Tab ────────────────────────────────────────
 
-function RepairOrdersTab() {
+function RepairOrdersTab({ onEditOrder }: { onEditOrder: (id: string) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<RepairOrderStatus | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -246,6 +246,7 @@ function RepairOrdersTab() {
               order={order}
               expanded={expandedId === order.id}
               onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
+              onEdit={() => onEditOrder(order.id)}
             />
           ))}
         </div>
@@ -256,10 +257,11 @@ function RepairOrdersTab() {
 
 // ── Order Row (collapsed + expanded) ─────────────────────────
 
-function OrderRow({ order, expanded, onToggle }: {
+function OrderRow({ order, expanded, onToggle, onEdit }: {
   order: RepairOrder
   expanded: boolean
   onToggle: () => void
+  onEdit: () => void
 }) {
   const qc = useQueryClient()
   const [addingTask, setAddingTask] = useState(false)
@@ -312,6 +314,14 @@ function OrderRow({ order, expanded, onToggle }: {
 
         <span style={{ flex: 1 }} />
         <span style={s.orderDate}>{date}</span>
+
+        <button
+          style={s.iconBtn}
+          title="Edit order"
+          onClick={e => { e.stopPropagation(); onEdit() }}
+        >
+          <Pencil size={13} color="rgba(13,13,13,0.35)" />
+        </button>
 
         <button
           style={s.iconBtn}
@@ -1139,6 +1149,9 @@ function ActiveCartsTab({ onEditOrder }: { onEditOrder: (orderId: string) => voi
                       {item.notes && <span style={s.cartItemNotes}>{item.notes}</span>}
                     </div>
                     <span style={s.cartItemPrice}>${Number(item.price).toFixed(2)}</span>
+                    {item.repair_order_id && (
+                      <Pencil size={12} color="rgba(13,13,13,0.25)" style={{ flexShrink: 0 }} />
+                    )}
                     <button
                       style={s.iconBtn}
                       onClick={e => { e.stopPropagation(); deleteMutation.mutate(item.id) }}

@@ -28,6 +28,8 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~023~~ | ~~`backend/migrations/023_repair_orders.sql`~~ | ✅ Run (2026-06-11) |
 | ~~024~~ | ~~`backend/migrations/024_role_expansion.sql`~~ | ✅ Run (2026-06-16) |
 | ~~025~~ | ~~`backend/migrations/025_deleted_sales.sql`~~ | ✅ Run (2026-06-16) |
+| ~~026~~ | ~~`backend/migrations/026_repair_tasks.sql`~~ | ✅ Run (2026-06-22) |
+| ~~027~~ | ~~`backend/migrations/027_wash_set.sql`~~ | ✅ Run (2026-06-24) |
 
 
 ## Color Palette
@@ -211,12 +213,15 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 | Route | Component | Purpose |
 |-------|-----------|---------|
 | `/bookkeeper/hello` | HelloBoardPage | Hello board: posts, clock-in, notices, weather |
+| `/bookkeeper/calendar` | CalendarPage | Day/Week/Month appointment calendar |
 | `/bookkeeper/pos` | POSPage | Point of sale — multi-item cart, wig balance payments |
-| `/bookkeeper/overview` | OperationOverviewPage | Read-only reporting hub (Day/Month/Range, 5 tabs) |
+| `/bookkeeper/wash-set` | WashSetPage | Wash & Set entry: customer + stylist + service → cart |
+| `/bookkeeper/overview` | OperationOverviewPage | Read-only reporting hub (Day/Month/Range, 6 tabs) |
 | `/bookkeeper/expenses` | ExpensesPage | Add/delete expense entries |
 | `/bookkeeper/payroll` | PayrollEntryPage | Weekly payroll accordion, mark paid |
 | `/bookkeeper/wigs` | WigOrdersPage | In Progress / Completed wig orders |
 | `/bookkeeper/sales` | SalesManagementPage | Sales + inventory management |
+| `/bookkeeper/repairs` | RepairsPage | Repair orders task board + Active Carts |
 | `/bookkeeper/providers` | ProvidersPage | Wig providers + repair services |
 | `/bookkeeper/inventory` | InventoryPage | Inventory stock, add/edit/events |
 | `/bookkeeper/employees` | EmployeesPage | Employee list, time log modal |
@@ -281,11 +286,14 @@ The salon uses **DaySmart** as their POS/appointment system. This app is the fin
 - [x] All business logic (tithes, sales tax, wig tax deferral, wig_status lifecycle) automated
 - [x] Overview payment tab F1 bug fixed (commit 9569c84)
 - [x] Invoice import (P1) — upload PDF invoice → parse → markup lookup from provider rules → preview table → bulk add to inventory (commit bed8d2a)
-- [x] Repairs management page (L4) — create order (customer + wig + services), status tracking, wig history logged, cart integration (commit b2a9f07)
-- [ ] Edit sale/receipt (task #8)
-- [ ] Bank statement auto-import (task #14)
+- [x] Repairs management page (L4) — create order (customer + wig + services), status tracking, wig history logged, cart integration (commit b2a9f07); full ClickUp-style task board + provider/video/print added Session 25 (commits 5a98acd–b6b3bac)
+- [x] Edit sale/receipt (task #8) — Sales History tab in Operation Overview, Session 24 (commit c78759c)
+- [x] Inventory page → rename to Product Management (Session 21)
+- [x] Bank/cash source tag per expense (task #13) — already built, `payment_source` toggle on `ExpensesPage.tsx`
+- [x] AI-based product invoice import (task #8b) — any marketplace, via Claude native PDF/image input (commit adf8b3a, Session 27)
+- [x] Wash & Set page — customer/stylist/service → cart, same pipeline as Repairs/Sales (Session 27)
+- [ ] Bank statement auto-import (task #14) — blocked, needs Tzipora's workflow/format first
 - [ ] Persist unsaved form data on navigation (task #15)
-- [ ] Inventory page → rename to Product Management
 - [ ] Abandoned deposit flow (Mark as Abandoned)
 
 ### Phase 2 — Mobile
