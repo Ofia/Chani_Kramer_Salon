@@ -375,6 +375,30 @@ function CustomerModal({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g = (window as any).google
+    // Inject global style once — ::part(input) pierces the closed shadow DOM
+    // because the inner <input part="input"> explicitly exposes itself via the part attribute
+    if (!document.getElementById('gmp-ac-style')) {
+      const st = document.createElement('style')
+      st.id = 'gmp-ac-style'
+      st.textContent = `
+        gmp-place-autocomplete {
+          background: #f9f9f9 !important;
+          border: 1px solid rgba(0,0,0,0.12) !important;
+          border-radius: 10px !important;
+          overflow: hidden;
+          width: 100%;
+        }
+        gmp-place-autocomplete::part(input) {
+          background: #f9f9f9 !important;
+          color: #18181b !important;
+          font-size: 14px !important;
+          font-family: inherit !important;
+          outline: none !important;
+        }
+      `
+      document.head.appendChild(st)
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const el: any = new g.maps.places.PlaceAutocompleteElement({
       types: ['address'],
@@ -382,30 +406,6 @@ function CustomerModal({
     })
     el.placeholder = 'Start typing to search address…'
     container.appendChild(el)
-
-    // Inject style into shadow DOM (the element uses shadow DOM; external CSS can't reach it)
-    requestAnimationFrame(() => {
-      const shadow = el.shadowRoot as ShadowRoot | null
-      if (shadow) {
-        const st = document.createElement('style')
-        st.textContent = `
-          :host { display: block; width: 100%; }
-          input, [type="text"] {
-            background: #f9f9f9 !important;
-            border: 1px solid rgba(0,0,0,0.12) !important;
-            border-radius: 10px !important;
-            padding: 10px 12px !important;
-            font-size: 14px !important;
-            color: #18181b !important;
-            font-family: inherit !important;
-            outline: none !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
-          }
-        `
-        shadow.appendChild(st)
-      }
-    })
 
     // Pre-fill (edit mode or typed value before Google loaded)
     const inner = el.querySelector('input') as HTMLInputElement | null
