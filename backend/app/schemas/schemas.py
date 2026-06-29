@@ -96,7 +96,12 @@ class CustomerCreate(BaseModel):
     last_name: str
     phone: Optional[str] = None
     cell: Optional[str] = None
+    email: Optional[str] = None
     address: Optional[str] = None
+    address2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
     daysmart_client_id: Optional[str] = None
     access_id: Optional[int] = None
     notes: Optional[str] = None
@@ -107,7 +112,12 @@ class CustomerUpdate(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     cell: Optional[str] = None
+    email: Optional[str] = None
     address: Optional[str] = None
+    address2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
     access_id: Optional[int] = None
     notes: Optional[str] = None
 
@@ -118,7 +128,12 @@ class CustomerResponse(BaseModel):
     last_name: str
     phone: Optional[str]
     cell: Optional[str]
+    email: Optional[str]
     address: Optional[str]
+    address2: Optional[str]
+    city: Optional[str]
+    state: Optional[str]
+    zip_code: Optional[str]
     daysmart_client_id: Optional[str]
     access_id: Optional[int]
     notes: Optional[str]

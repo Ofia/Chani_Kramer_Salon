@@ -46,7 +46,7 @@ On the same page we will add a commision tab where commission in auto added to e
 | 5 | Sales History tab — expand sale rows to show all DaySmart details (serial, color, client, price…) | ✅ DONE | Wig serial chips on collapsed row; brand/color/length/front chips in expanded view; both Print Daily List and Receipt redesigned to DaySmart two-column layout (`d039db0`, Session 30) |
 | 6 | Invoice parser — editable cost price (not just retail/markup) | ✅ DONE | Cost cell is now editable in product invoice preview; markup/unit price recalculate on change |
 | 7 | Pending Orders flow — CoGS expense → Pending Orders tab → check-in to inventory | ⬜ DISCUSS | QuickBooks best practice: expense at PO date or receipt date? |
-| 8 | Calendar Day view — columns per employee; Week/Month — appointment list on click | ⬜ TODO | CalendarPage layout change |
+| 8 | Calendar Day view — columns per employee; Week/Month — appointment list on click | ✅ DONE | Day view groups by employee_name into side-by-side columns; week/month chip click opens DayListPanel → click-through to drawer (345b85d) |
 | 9 | Customers CRM — add email, split address fields, Google Places autocomplete, address 2 | ⬜ TODO | Google Maps Places API |
 | 10 | Remove "(for commission)" label from Sales Management + W&S dialogs | ✅ DONE | |
 | 11 | Get employee table from Tzipora (names, emails, emp#, dept, position, commission rules) | ⬜ WAITING | Action item for Ofir |

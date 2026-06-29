@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote, History, Trash2 } from 'lucide-react'
+import { Plus, Search, X, Pencil, Phone, Smartphone, MapPin, StickyNote, History, Trash2, Mail } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -12,7 +12,12 @@ type Customer = {
   last_name: string
   phone?: string
   cell?: string
+  email?: string
   address?: string
+  address2?: string
+  city?: string
+  state?: string
+  zip_code?: string
   daysmart_client_id?: string
   access_id?: number
   notes?: string
@@ -25,14 +30,9 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function cityFromAddress(address?: string): string {
-  if (!address) return '—'
-  const parts = address.split(',')
-  return parts.length >= 2 ? parts[parts.length - 2].trim() : parts[0].trim()
-}
-
 const EMPTY_FORM = {
-  first_name: '', last_name: '', phone: '', cell: '', address: '', notes: '',
+  first_name: '', last_name: '', phone: '', cell: '', email: '',
+  address: '', address2: '', city: '', state: '', zip_code: '', notes: '',
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -148,7 +148,7 @@ export default function CustomersPage() {
                     <span style={s.muted}>{c.phone || c.cell || '—'}</span>
                   </Cell>
                   <Cell w={140}>
-                    <span style={s.muted}>{cityFromAddress(c.address)}</span>
+                    <span style={s.muted}>{c.city || '—'}</span>
                   </Cell>
                   <Cell w={120}>
                     <span style={s.muted}>{fmtDate(c.created_at)}</span>
@@ -198,16 +198,28 @@ export default function CustomersPage() {
             <div style={s.drawerSection}>
               <p style={s.drawerSectionTitle}>Contact</p>
               <div style={s.contactGrid}>
+                {selected.email && (
+                  <ContactRow icon={<Mail size={12} />} label="Email" value={selected.email} />
+                )}
                 {selected.phone && (
                   <ContactRow icon={<Phone size={12} />} label="Phone" value={selected.phone} />
                 )}
                 {selected.cell && (
                   <ContactRow icon={<Smartphone size={12} />} label="Cell" value={selected.cell} />
                 )}
-                {selected.address && (
-                  <ContactRow icon={<MapPin size={12} />} label="Address" value={selected.address} />
+                {(selected.address || selected.city) && (
+                  <ContactRow
+                    icon={<MapPin size={12} />}
+                    label="Address"
+                    value={[
+                      selected.address,
+                      selected.address2,
+                      [selected.city, selected.state].filter(Boolean).join(', '),
+                      selected.zip_code,
+                    ].filter(Boolean).join('\n')}
+                  />
                 )}
-                {!selected.phone && !selected.cell && !selected.address && (
+                {!selected.email && !selected.phone && !selected.cell && !selected.address && !selected.city && (
                   <p style={s.muted}>No contact info on file.</p>
                 )}
               </div>
@@ -313,21 +325,61 @@ function CustomerModal({
   const isEdit = customer !== null
   const [form, setForm] = useState(
     customer
-      ? { first_name: customer.first_name, last_name: customer.last_name,
+      ? {
+          first_name: customer.first_name, last_name: customer.last_name,
           phone: customer.phone ?? '', cell: customer.cell ?? '',
-          address: customer.address ?? '', notes: customer.notes ?? '' }
+          email: customer.email ?? '',
+          address: customer.address ?? '', address2: customer.address2 ?? '',
+          city: customer.city ?? '', state: customer.state ?? '', zip_code: customer.zip_code ?? '',
+          notes: customer.notes ?? '',
+        }
       : EMPTY_FORM
   )
   const [error, setError] = useState('')
+  const addressRef = useRef<HTMLInputElement>(null)
 
-  const mutation = useMutation({
-    mutationFn: (data: object) =>
-      isEdit
-        ? api.patch(`/customers/${customer!.id}`, data).then(r => r.data)
-        : api.post('/customers/', data).then(r => r.data),
-    onSuccess: onSaved,
-    onError: () => setError('Failed to save. Please try again.'),
-  })
+  useEffect(() => {
+    function initAC() {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = (window as any).google
+      if (!addressRef.current || !g) return
+      const ac = new g.maps.places.Autocomplete(addressRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+        fields: ['address_components'],
+      })
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace()
+        if (!place.address_components) return
+        let num = '', route = '', city = '', state = '', zip = ''
+        for (const c of place.address_components) {
+          if (c.types.includes('street_number')) num = c.long_name
+          if (c.types.includes('route')) route = c.short_name
+          if (c.types.includes('locality')) city = c.long_name
+          if (c.types.includes('administrative_area_level_1')) state = c.short_name
+          if (c.types.includes('postal_code')) zip = c.long_name
+        }
+        setForm(f => ({ ...f, address: `${num} ${route}`.trim(), city, state, zip_code: zip }))
+      })
+    }
+
+    const key = import.meta.env.VITE_GOOGLE_MAPS_KEY
+    if (!key) return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).google) { initAC(); return }
+
+    const existing = document.querySelector('script[src*="maps.googleapis"]') as HTMLScriptElement | null
+    if (existing) {
+      existing.addEventListener('load', initAC)
+      return () => existing.removeEventListener('load', initAC)
+    }
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`
+    script.async = true
+    script.onload = initAC
+    document.head.appendChild(script)
+  }, [])
 
   function set(field: string, value: string) {
     setForm(p => ({ ...p, [field]: value }))
@@ -342,12 +394,26 @@ function CustomerModal({
     mutation.mutate({
       first_name: form.first_name,
       last_name:  form.last_name,
-      phone:      form.phone   || null,
-      cell:       form.cell    || null,
-      address:    form.address || null,
-      notes:      form.notes   || null,
+      phone:      form.phone    || null,
+      cell:       form.cell     || null,
+      email:      form.email    || null,
+      address:    form.address  || null,
+      address2:   form.address2 || null,
+      city:       form.city     || null,
+      state:      form.state    || null,
+      zip_code:   form.zip_code || null,
+      notes:      form.notes    || null,
     })
   }
+
+  const mutation = useMutation({
+    mutationFn: (data: object) =>
+      isEdit
+        ? api.patch(`/customers/${customer!.id}`, data).then(r => r.data)
+        : api.post('/customers/', data).then(r => r.data),
+    onSuccess: onSaved,
+    onError: () => setError('Failed to save. Please try again.'),
+  })
 
   return (
     <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -374,9 +440,33 @@ function CustomerModal({
               <input value={form.cell} onChange={e => set('cell', e.target.value)} style={s.input} placeholder="(718) 555-0101" />
             </Field>
           </div>
-          <Field label="Address">
-            <input value={form.address} onChange={e => set('address', e.target.value)} style={s.input} placeholder="123 Main St, Brooklyn, NY 11201" />
+          <Field label="Email">
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={s.input} placeholder="name@email.com" />
           </Field>
+          <Field label="Address">
+            <input
+              ref={addressRef}
+              value={form.address}
+              onChange={e => set('address', e.target.value)}
+              style={s.input}
+              placeholder="Start typing to search address…"
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Address 2">
+            <input value={form.address2} onChange={e => set('address2', e.target.value)} style={s.input} placeholder="Apt, Suite, Floor (optional)" />
+          </Field>
+          <div style={s.grid3}>
+            <Field label="City">
+              <input value={form.city} onChange={e => set('city', e.target.value)} style={s.input} placeholder="Brooklyn" />
+            </Field>
+            <Field label="State">
+              <input value={form.state} onChange={e => set('state', e.target.value)} style={s.input} placeholder="NY" />
+            </Field>
+            <Field label="Zip Code">
+              <input value={form.zip_code} onChange={e => set('zip_code', e.target.value)} style={s.input} placeholder="11201" />
+            </Field>
+          </div>
           <Field label="Notes">
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} style={{ ...s.input, resize: 'vertical', minHeight: 72 }} placeholder="Optional" />
           </Field>
@@ -776,6 +866,7 @@ const s: Record<string, React.CSSProperties> = {
   closeBtn:     { background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', fontSize: 20, lineHeight: 1, padding: 0 },
 
   grid2:      { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  grid3:      { display: 'grid', gridTemplateColumns: '1fr 80px 100px', gap: 10 },
   fieldLabel: { fontSize: 12, fontWeight: 500, color: '#71717a' },
   input:      { border: '1px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: '#18181b', background: '#f9f9f9', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
 

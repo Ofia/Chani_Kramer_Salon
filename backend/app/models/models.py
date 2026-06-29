@@ -209,7 +209,12 @@ class Customer(Base):
     last_name           = Column(String, nullable=False)
     phone               = Column(String)
     cell                = Column(String)
+    email               = Column(String)
     address             = Column(Text)
+    address2            = Column(String)
+    city                = Column(String)
+    state               = Column(String)
+    zip_code            = Column(String)
     daysmart_client_id  = Column(String, unique=True)
     access_id           = Column(Integer, unique=True)   # Access/Sheitel.mdb row ID for upsert imports
     notes               = Column(Text)
