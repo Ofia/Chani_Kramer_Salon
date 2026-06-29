@@ -16,11 +16,24 @@ interface Appointment {
   appointment_date: string   // ISO datetime from API
   duration_minutes: number
   department: Department
+  employee_id: string | null
+  employee_name: string | null
   services_requested: string | null
   status: ApptStatus
   notes: string | null
   created_by: string | null
   created_at: string
+}
+
+interface EmployeeOption {
+  id: string
+  first_name: string
+  last_name: string
+}
+
+interface ServiceOption {
+  id: string
+  name: string
 }
 
 interface CustomerSearchResult {
@@ -446,9 +459,31 @@ function NewAppointmentModal({ date, hour, onClose, onSaved }: {
     time: defaultTime,
     duration_minutes: 60,
     department: 'sales' as Department,
+    employee_id: '' as string | null,
     services_requested: '',
     notes: '',
   })
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['employees-list'],
+    queryFn: () => api.get('/employees/?active_only=true').then(r => r.data),
+  })
+
+  const { data: repairServices = [] } = useQuery<ServiceOption[]>({
+    queryKey: ['repair-services'],
+    queryFn: () => api.get('/repair-services/').then(r => r.data),
+  })
+
+  const { data: washSetServices = [] } = useQuery<ServiceOption[]>({
+    queryKey: ['wash-set-services'],
+    queryFn: () => api.get('/wash-set-services/').then(r => r.data),
+  })
+
+  const allServices = useMemo(() => {
+    if (form.department === 'repairs') return repairServices
+    if (form.department === 'wash_set') return washSetServices
+    return [...washSetServices, ...repairServices]
+  }, [form.department, repairServices, washSetServices])
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<CustomerSearchResult[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -496,6 +531,7 @@ function NewAppointmentModal({ date, hour, onClose, onSaved }: {
       appointment_date: dt.toISOString(),
       duration_minutes: form.duration_minutes,
       department: form.department,
+      employee_id: form.employee_id || null,
       services_requested: form.services_requested || null,
       notes: form.notes || null,
     })
@@ -560,7 +596,7 @@ function NewAppointmentModal({ date, hour, onClose, onSaved }: {
             </div>
             <div style={{...s.field, flex:1}}>
               <label style={s.label}>Department</label>
-              <select style={s.input} value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value as Department}))}>
+              <select style={s.input} value={form.department} onChange={e => setForm(f=>({...f,department:e.target.value as Department, services_requested:''}))}>
                 {(Object.keys(DEPT_LABEL) as Department[]).map(d => (
                   <option key={d} value={d}>{DEPT_LABEL[d]}</option>
                 ))}
@@ -568,11 +604,22 @@ function NewAppointmentModal({ date, hour, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Services */}
-          <div style={s.field}>
-            <label style={s.label}>Services Requested</label>
-            <input style={s.input} placeholder="e.g. New wig consultation, color repair…" value={form.services_requested}
-              onChange={e => setForm(f=>({...f,services_requested:e.target.value}))} />
+          {/* Employee + Service row */}
+          <div style={s.row}>
+            <div style={{...s.field, flex:1}}>
+              <label style={s.label}>Employee</label>
+              <select style={s.input} value={form.employee_id || ''} onChange={e => setForm(f=>({...f,employee_id:e.target.value||null}))}>
+                <option value="">Any / Unassigned</option>
+                {employees.map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
+              </select>
+            </div>
+            <div style={{...s.field, flex:1}}>
+              <label style={s.label}>Service</label>
+              <select style={s.input} value={form.services_requested} onChange={e => setForm(f=>({...f,services_requested:e.target.value}))}>
+                <option value="">— Select service —</option>
+                {allServices.map(sv => <option key={sv.id} value={sv.name}>{sv.name}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Notes */}
@@ -639,6 +686,9 @@ function AppointmentDrawer({ appt, onClose, onUpdated, onDeleted }: {
             </div>
             {appt.customer_phone && (
               <div style={s.metaRow}><UserIcon size={14} color="rgba(13,13,13,0.4)"/><span>{appt.customer_phone}</span></div>
+            )}
+            {appt.employee_name && (
+              <div style={s.metaRow}><UserIcon size={14} color="rgba(13,13,13,0.4)"/><span>Employee: {appt.employee_name}</span></div>
             )}
             {appt.services_requested && (
               <div style={s.metaRow}><Tag size={14} color="rgba(13,13,13,0.4)"/><span>{appt.services_requested}</span></div>

@@ -52,6 +52,7 @@ class EmployeeCreate(BaseModel):
     commission_rate: Optional[Decimal] = None
     hourly_rate: Optional[Decimal] = None
     is_active: bool = True
+    department: Optional[str] = None
     notes: Optional[str] = None
     hired_at: Optional[date] = None
 
@@ -65,6 +66,7 @@ class EmployeeUpdate(BaseModel):
     commission_rate: Optional[Decimal] = None
     hourly_rate: Optional[Decimal] = None
     is_active: Optional[bool] = None
+    department: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -78,6 +80,7 @@ class EmployeeResponse(BaseModel):
     commission_rate: Optional[float]
     hourly_rate: Optional[float]
     is_active: bool
+    department: Optional[str]
     notes: Optional[str]
     hired_at: Optional[date]
     created_at: datetime
@@ -1017,6 +1020,7 @@ class AppointmentCreate(BaseModel):
     appointment_date: datetime
     duration_minutes: int = 60
     department: AppointmentDepartment
+    employee_id: Optional[UUID] = None
     services_requested: Optional[str] = None
     status: AppointmentStatus = AppointmentStatus.scheduled
     notes: Optional[str] = None
@@ -1029,6 +1033,7 @@ class AppointmentUpdate(BaseModel):
     appointment_date: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     department: Optional[AppointmentDepartment] = None
+    employee_id: Optional[UUID] = None
     services_requested: Optional[str] = None
     status: Optional[AppointmentStatus] = None
     notes: Optional[str] = None
@@ -1042,6 +1047,8 @@ class AppointmentResponse(BaseModel):
     appointment_date: datetime
     duration_minutes: int
     department: AppointmentDepartment
+    employee_id: Optional[UUID]
+    employee_name: Optional[str]
     services_requested: Optional[str]
     status: AppointmentStatus
     notes: Optional[str]

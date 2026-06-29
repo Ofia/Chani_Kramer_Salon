@@ -7,7 +7,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 
 ## Deployment
 - **Database + Auth:** Supabase (PostgreSQL + Supabase Auth)
-- **Backend:** Runs locally via `uvicorn app.main:app --reload` (no cloud deploy yet)
+- **Backend:** Runs locally via `uvicorn app.main:app --reload` (deployed on Railway)
 - **Frontend:** Runs locally via `npm run dev` (deployed on Vercel)
 - **Migrations:** Run SQL files manually in Supabase SQL Editor
 
@@ -30,6 +30,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~025~~ | ~~`backend/migrations/025_deleted_sales.sql`~~ | ✅ Run (2026-06-16) |
 | ~~026~~ | ~~`backend/migrations/026_repair_tasks.sql`~~ | ✅ Run (2026-06-22) |
 | ~~027~~ | ~~`backend/migrations/027_wash_set.sql`~~ | ✅ Run (2026-06-24) |
+| ~~028~~ | ~~`backend/migrations/028_appointment_employee_dept.sql`~~ | ✅ Run (2026-06-29) |
 
 
 ## Color Palette

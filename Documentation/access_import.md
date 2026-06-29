@@ -129,6 +129,32 @@ These should be a dropdown in the Wig Orders entry form instead of free-text. Lo
 
 ---
 
+## 5. Handling "Newer Data" — App Records Coexisting with Access Import
+
+### The Situation (as of shipping week, 2026-06-29)
+The Access DB is not fully up-to-date. The salon has been using this app for weeks, so our Supabase DB already has records that don't exist in Access (new customers, new sales, new wig orders entered through the app).
+
+### How Coexistence Works
+| Record type | `access_id` | What happens on import |
+|---|---|---|
+| Customer from Access | Integer (e.g. `1234`) | Upserted — inserted or updated by `access_id` |
+| Customer added in our app | `NULL` | **Untouched** — upsert only matches on `access_id` |
+| Wig/order from Access | Integer | Upserted |
+| Wig/order added via POS | `NULL` | **Untouched** |
+
+### The Only Risk: True Duplicates
+If Tzipora added a customer manually in the app **and** that same customer exists in Access — Access data will win on import (it will overwrite the name/phone/address). CRM notes and app-specific fields are always preserved (see "Fields Owned by Each System" above).
+
+**Mitigation:** Before running the import, run a preview query to surface collisions — customers where the name in Access closely matches a `NULL` access_id customer in our DB. Review manually, then import.
+
+### Newer Access Records (e.g. June orders)
+If Tzipora also kept entering data in Access during the transition — those records have new `access_id` values we haven't seen yet. They'll be **inserted fresh** automatically. No gaps.
+
+### Short Answer
+`ON CONFLICT (access_id) DO UPDATE` handles everything. App-only records (`access_id = NULL`) are invisible to the upsert and always safe.
+
+---
+
 ## Future Script: `scripts/import_access.py`
 
 Will be a Python script that:

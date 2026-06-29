@@ -39,8 +39,8 @@ On the same page we will add a commision tab where commission in auto added to e
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1 | Calendar — add Employee + Service dropdowns to new appointment dialog | ⬜ TODO | Pull from employees table + repair_services/services |
-| 2 | Employees page — add Department field (frontdesk, sales, Cut, w&s, Repairs, bookkeeping, owner) | ⬜ TODO | New enum or string field on employees table |
+| 1 | Calendar — add Employee + Service dropdowns to new appointment dialog | ✅ DONE | employee_id FK on appointments; services from repair/wash-set tables; drawer shows employee name (028 migration) |
+| 2 | Employees page — add Department field (frontdesk, sales, Cut, w&s, Repairs, bookkeeping, owner) | ✅ DONE | `department` varchar on employees table; select in modal; column in table (028 migration) |
 | 3 | Mobile calendar page + Google Drive image/video upload | ⬜ TODO | Complex — Google Drive OAuth integration |
 | 4 | Repairs Active Cart — edit options on already-added repair items | ✅ DONE | Pencil icon on Active Carts rows; Repair Orders tab header also has pencil that opens full edit dialog (ff4745c) |
 | 5 | Sales History tab — expand sale rows to show all DaySmart details (serial, color, client, price…) | ✅ DONE | Wig serial chips on collapsed row; brand/color/length/front chips in expanded view; both Print Daily List and Receipt redesigned to DaySmart two-column layout (`d039db0`, Session 30) |

@@ -15,9 +15,14 @@ type Employee = {
   commission_rate?: number
   hourly_rate?: number
   hired_at?: string
+  department?: string
   notes?: string
   is_active: boolean
 }
+
+const DEPARTMENTS = [
+  'Front Desk', 'Sales', 'Cut', 'Wash & Set', 'Repairs', 'Bookkeeping', 'Owner',
+]
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -49,7 +54,7 @@ function fmtDate(str: string) {
 
 const EMPTY_FORM = {
   first_name: '', last_name: '', job_title: '', pay_type: 'weekly_flat',
-  weekly_rate: '', commission_rate: '', hourly_rate: '', hired_at: '', notes: '',
+  weekly_rate: '', commission_rate: '', hourly_rate: '', hired_at: '', department: '', notes: '',
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -117,30 +122,34 @@ export default function EmployeesPage() {
       ) : (
         <div style={s.table}>
           <div style={s.tableHead}>
-            <Cell w={200}>Name</Cell>
-            <Cell w={150}>Job Title</Cell>
-            <Cell w={120}>Pay Type</Cell>
-            <Cell w={100} right>Rate</Cell>
-            <Cell w={110}>Hired</Cell>
+            <Cell w={180}>Name</Cell>
+            <Cell w={130}>Job Title</Cell>
+            <Cell w={110}>Department</Cell>
+            <Cell w={110}>Pay Type</Cell>
+            <Cell w={90} right>Rate</Cell>
+            <Cell w={100}>Hired</Cell>
             <Cell w={70}>Status</Cell>
             <Cell w={100} right>Actions</Cell>
           </div>
 
           {shown.map((emp, i) => (
             <div key={emp.id} style={{ ...s.tableRow, borderBottom: i < shown.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none', opacity: emp.is_active ? 1 : 0.5 }}>
-              <Cell w={200}>
+              <Cell w={180}>
                 <span style={s.empName}>{emp.first_name} {emp.last_name}</span>
               </Cell>
-              <Cell w={150}>
+              <Cell w={130}>
                 <span style={s.muted}>{emp.job_title}</span>
               </Cell>
-              <Cell w={120}>
-                <span style={s.badge}>{PAY_TYPE_LABEL[emp.pay_type]}</span>
-              </Cell>
-              <Cell w={100} right>
-                <span style={s.rate}>{rateDisplay(emp)}</span>
+              <Cell w={110}>
+                <span style={s.badge}>{emp.department || '—'}</span>
               </Cell>
               <Cell w={110}>
+                <span style={s.badge}>{PAY_TYPE_LABEL[emp.pay_type]}</span>
+              </Cell>
+              <Cell w={90} right>
+                <span style={s.rate}>{rateDisplay(emp)}</span>
+              </Cell>
+              <Cell w={100}>
                 <span style={s.muted}>{emp.hired_at ? fmtDate(emp.hired_at) : '—'}</span>
               </Cell>
               <Cell w={70}>
@@ -221,6 +230,7 @@ function EmployeeModal({
           commission_rate: employee.commission_rate ? String(Number(employee.commission_rate) * 100)       : '',
           hourly_rate:     employee.hourly_rate     ? String(employee.hourly_rate)                         : '',
           hired_at:        employee.hired_at        ? employee.hired_at                                    : '',
+          department:      employee.department      ? employee.department                                  : '',
           notes:           employee.notes           ? employee.notes                                       : '',
         }
       : EMPTY_FORM
@@ -254,8 +264,9 @@ function EmployeeModal({
       weekly_rate:     form.pay_type === 'weekly_flat'    && form.weekly_rate     ? parseFloat(form.weekly_rate)         : null,
       commission_rate: form.pay_type === 'commission_pct' && form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
       hourly_rate:     form.pay_type === 'hourly'         && form.hourly_rate     ? parseFloat(form.hourly_rate)         : null,
-      hired_at:        form.hired_at || null,
-      notes:           form.notes    || null,
+      hired_at:        form.hired_at   || null,
+      department:      form.department || null,
+      notes:           form.notes      || null,
     })
   }
 
@@ -278,6 +289,12 @@ function EmployeeModal({
           </div>
           <Field label="Job Title *">
             <input value={form.job_title} onChange={e => set('job_title', e.target.value)} style={s.input} placeholder="e.g. Stylist" />
+          </Field>
+          <Field label="Department">
+            <select value={form.department} onChange={e => set('department', e.target.value)} style={s.select}>
+              <option value="">— Select department —</option>
+              {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
           </Field>
           <Field label="Pay Type">
             <select value={form.pay_type} onChange={e => set('pay_type', e.target.value)} style={s.select}>

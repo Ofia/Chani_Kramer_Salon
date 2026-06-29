@@ -193,6 +193,7 @@ class Employee(Base):
     commission_rate = Column(Numeric(5, 4))
     hourly_rate     = Column(Numeric(10, 2))
     is_active       = Column(Boolean, nullable=False, default=True)
+    department      = Column(String, nullable=True)
     notes           = Column(Text)
     hired_at        = Column(Date)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
@@ -701,6 +702,7 @@ class Appointment(Base):
     appointment_date   = Column(DateTime(timezone=True), nullable=False)
     duration_minutes   = Column(Integer, nullable=False, default=60)
     department         = Column(Enum(AppointmentDepartment, name="appointment_department"), nullable=False)
+    employee_id        = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     services_requested = Column(Text, nullable=True)
     status             = Column(Enum(AppointmentStatus, name="appointment_status"), nullable=False, default=AppointmentStatus.scheduled)
     notes              = Column(Text, nullable=True)
@@ -708,6 +710,13 @@ class Appointment(Base):
     created_at         = Column(DateTime(timezone=True), server_default=func.now())
 
     customer = relationship("Customer", foreign_keys=[customer_id])
+    employee = relationship("Employee", foreign_keys=[employee_id])
+
+    @property
+    def employee_name(self):
+        if self.employee:
+            return f"{self.employee.first_name} {self.employee.last_name}"
+        return None
 
 
 class RepairOrder(Base):
