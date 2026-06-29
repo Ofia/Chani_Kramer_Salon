@@ -31,7 +31,7 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~026~~ | ~~`backend/migrations/026_repair_tasks.sql`~~ | ✅ Run (2026-06-22) |
 | ~~027~~ | ~~`backend/migrations/027_wash_set.sql`~~ | ✅ Run (2026-06-24) |
 | ~~028~~ | ~~`backend/migrations/028_appointment_employee_dept.sql`~~ | ✅ Run (2026-06-29) |
-| 029 | `backend/migrations/029_customer_address_email.sql` | ⬜ Needs Run |
+| ~~029~~ | ~~`backend/migrations/029_customer_address_email.sql`~~ | ✅ Run (2026-06-29) |
 
 
 ## Color Palette
