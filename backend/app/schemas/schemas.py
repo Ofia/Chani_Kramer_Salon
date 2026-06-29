@@ -110,6 +110,8 @@ class EmployeeResponse(BaseModel):
 
 class TimedocParseRequest(BaseModel):
     content: str
+    week_start: Optional[str] = None
+    week_end: Optional[str] = None
 
 
 class TimedocEmployeeResult(BaseModel):

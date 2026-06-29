@@ -60,9 +60,20 @@ def parse_timedoc(
     if not raw:
         return TimedocParseResponse(date_from=None, date_to=None, employees=[])
 
-    all_dates = [dt for _, dt in raw]
-    date_from = min(all_dates).date().isoformat()
-    date_to   = max(all_dates).date().isoformat()
+    # Filter to selected week if provided
+    if data.week_start and data.week_end:
+        ws = datetime.strptime(data.week_start, "%Y-%m-%d").date()
+        we = datetime.strptime(data.week_end,   "%Y-%m-%d").date()
+        raw = [(uid, dt) for uid, dt in raw if ws <= dt.date() <= we]
+        date_from = data.week_start
+        date_to   = data.week_end
+    else:
+        all_dates = [dt for _, dt in raw]
+        date_from = min(all_dates).date().isoformat()
+        date_to   = max(all_dates).date().isoformat()
+
+    if not raw:
+        return TimedocParseResponse(date_from=date_from, date_to=date_to, employees=[])
 
     # Group punches by (uid, day)
     by_user_day: dict[tuple[int, date_type], list[datetime]] = defaultdict(list)

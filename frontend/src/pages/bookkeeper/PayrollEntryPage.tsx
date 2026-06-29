@@ -518,7 +518,7 @@ export default function PayrollEntryPage() {
     setTimedocStatus('parsing')
     const text = await file.text()
     try {
-      const res = await api.post('/payroll/parse-timedoc', { content: text })
+      const res = await api.post('/payroll/parse-timedoc', { content: text, week_start: weekStart, week_end: weekEnd })
       const { employees, date_from, date_to } = res.data as {
         employees: TimedocResult[]
         date_from: string | null
