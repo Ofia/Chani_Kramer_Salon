@@ -394,6 +394,12 @@ function CustomerModal({
           font-family: inherit !important;
           outline: none !important;
         }
+        gmp-place-autocomplete::part(prediction-list) {
+          background: #fff !important;
+          border: 1px solid rgba(0,0,0,0.12) !important;
+          border-radius: 8px !important;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important;
+        }
       `
       document.head.appendChild(st)
     }
