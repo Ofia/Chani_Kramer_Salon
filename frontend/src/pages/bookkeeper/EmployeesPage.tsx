@@ -341,7 +341,7 @@ function EmployeeModal({
               <input type="number" min="1" value={form.timedoc_number} onChange={e => set('timedoc_number', e.target.value)} style={s.input} placeholder="e.g. 5" />
             </Field>
           </div>
-          <Field label="Overtime after (hours/week)" hint="Leave blank for no overtime tracking">
+          <Field label="Overtime after (hours/week — blank = none)">
             <input type="number" min="1" step="1" value={form.overtime_after_hours}
               onChange={e => set('overtime_after_hours', e.target.value)} style={s.input} placeholder="e.g. 40" />
           </Field>
