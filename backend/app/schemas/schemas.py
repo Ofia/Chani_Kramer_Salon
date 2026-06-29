@@ -43,6 +43,11 @@ class UserResponse(BaseModel):
 
 # ── Employees ────────────────────────────────────────────────
 
+class CommissionRule(BaseModel):
+    label: str
+    amount: float
+
+
 class EmployeeCreate(BaseModel):
     first_name: str
     last_name: str
@@ -53,6 +58,9 @@ class EmployeeCreate(BaseModel):
     hourly_rate: Optional[Decimal] = None
     is_active: bool = True
     department: Optional[str] = None
+    email: Optional[str] = None
+    timedoc_number: Optional[int] = None
+    commission_rules: Optional[List[CommissionRule]] = None
     notes: Optional[str] = None
     hired_at: Optional[date] = None
 
@@ -64,9 +72,12 @@ class EmployeeUpdate(BaseModel):
     pay_type: Optional[PayType] = None
     weekly_rate: Optional[Decimal] = None
     commission_rate: Optional[Decimal] = None
-    hourly_rate: Optional[Decimal] = None
+    hourly_rate: Optional[float] = None
     is_active: Optional[bool] = None
     department: Optional[str] = None
+    email: Optional[str] = None
+    timedoc_number: Optional[int] = None
+    commission_rules: Optional[List[CommissionRule]] = None
     notes: Optional[str] = None
 
 
@@ -81,6 +92,9 @@ class EmployeeResponse(BaseModel):
     hourly_rate: Optional[float]
     is_active: bool
     department: Optional[str]
+    email: Optional[str]
+    timedoc_number: Optional[int]
+    commission_rules: Optional[List[CommissionRule]]
     notes: Optional[str]
     hired_at: Optional[date]
     created_at: datetime

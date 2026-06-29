@@ -5,6 +5,8 @@ import { Plus, Pencil, UserX, UserCheck, Clock, Trash2, X } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────
 
+type CommissionRule = { label: string; amount: number }
+
 type Employee = {
   id: string
   first_name: string
@@ -16,6 +18,9 @@ type Employee = {
   hourly_rate?: number
   hired_at?: string
   department?: string
+  email?: string
+  timedoc_number?: number
+  commission_rules?: CommissionRule[]
   notes?: string
   is_active: boolean
 }
@@ -54,7 +59,8 @@ function fmtDate(str: string) {
 
 const EMPTY_FORM = {
   first_name: '', last_name: '', job_title: '', pay_type: 'weekly_flat',
-  weekly_rate: '', commission_rate: '', hourly_rate: '', hired_at: '', department: '', notes: '',
+  weekly_rate: '', commission_rate: '', hourly_rate: '', hired_at: '',
+  department: '', email: '', timedoc_number: '', notes: '',
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -123,11 +129,11 @@ export default function EmployeesPage() {
         <div style={s.table}>
           <div style={s.tableHead}>
             <Cell w={180}>Name</Cell>
-            <Cell w={130}>Job Title</Cell>
+            <Cell w={120}>Job Title</Cell>
             <Cell w={110}>Department</Cell>
-            <Cell w={110}>Pay Type</Cell>
-            <Cell w={90} right>Rate</Cell>
-            <Cell w={100}>Hired</Cell>
+            <Cell w={90}>Pay Type</Cell>
+            <Cell w={80} right>Rate</Cell>
+            <Cell w={50} right>#</Cell>
             <Cell w={70}>Status</Cell>
             <Cell w={100} right>Actions</Cell>
           </div>
@@ -137,20 +143,20 @@ export default function EmployeesPage() {
               <Cell w={180}>
                 <span style={s.empName}>{emp.first_name} {emp.last_name}</span>
               </Cell>
-              <Cell w={130}>
+              <Cell w={120}>
                 <span style={s.muted}>{emp.job_title}</span>
               </Cell>
               <Cell w={110}>
                 <span style={s.badge}>{emp.department || '—'}</span>
               </Cell>
-              <Cell w={110}>
+              <Cell w={90}>
                 <span style={s.badge}>{PAY_TYPE_LABEL[emp.pay_type]}</span>
               </Cell>
-              <Cell w={90} right>
+              <Cell w={80} right>
                 <span style={s.rate}>{rateDisplay(emp)}</span>
               </Cell>
-              <Cell w={100}>
-                <span style={s.muted}>{emp.hired_at ? fmtDate(emp.hired_at) : '—'}</span>
+              <Cell w={50} right>
+                <span style={s.muted}>{emp.timedoc_number ?? '—'}</span>
               </Cell>
               <Cell w={70}>
                 <span style={{ ...s.statusDot, color: emp.is_active ? '#10b981' : '#a1a1aa' }}>
@@ -226,14 +232,19 @@ function EmployeeModal({
           last_name:       employee.last_name,
           job_title:       employee.job_title,
           pay_type:        employee.pay_type,
-          weekly_rate:     employee.weekly_rate     ? String(employee.weekly_rate)                         : '',
-          commission_rate: employee.commission_rate ? String(Number(employee.commission_rate) * 100)       : '',
-          hourly_rate:     employee.hourly_rate     ? String(employee.hourly_rate)                         : '',
-          hired_at:        employee.hired_at        ? employee.hired_at                                    : '',
-          department:      employee.department      ? employee.department                                  : '',
-          notes:           employee.notes           ? employee.notes                                       : '',
+          weekly_rate:     employee.weekly_rate     ? String(employee.weekly_rate)               : '',
+          commission_rate: employee.commission_rate ? String(Number(employee.commission_rate) * 100) : '',
+          hourly_rate:     employee.hourly_rate     ? String(employee.hourly_rate)               : '',
+          hired_at:        employee.hired_at        ?? '',
+          department:      employee.department      ?? '',
+          email:           employee.email           ?? '',
+          timedoc_number:  employee.timedoc_number  != null ? String(employee.timedoc_number)   : '',
+          notes:           employee.notes           ?? '',
         }
       : EMPTY_FORM
+  )
+  const [commissionRules, setCommissionRules] = useState<CommissionRule[]>(
+    employee?.commission_rules ?? []
   )
   const [error, setError] = useState('')
 
@@ -257,16 +268,19 @@ function EmployeeModal({
     }
     setError('')
     mutation.mutate({
-      first_name:      form.first_name,
-      last_name:       form.last_name,
-      job_title:       form.job_title,
-      pay_type:        form.pay_type,
-      weekly_rate:     form.pay_type === 'weekly_flat'    && form.weekly_rate     ? parseFloat(form.weekly_rate)         : null,
-      commission_rate: form.pay_type === 'commission_pct' && form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
-      hourly_rate:     form.pay_type === 'hourly'         && form.hourly_rate     ? parseFloat(form.hourly_rate)         : null,
-      hired_at:        form.hired_at   || null,
-      department:      form.department || null,
-      notes:           form.notes      || null,
+      first_name:       form.first_name,
+      last_name:        form.last_name,
+      job_title:        form.job_title,
+      pay_type:         form.pay_type,
+      weekly_rate:      form.pay_type === 'weekly_flat'    && form.weekly_rate     ? parseFloat(form.weekly_rate)          : null,
+      commission_rate:  form.pay_type === 'commission_pct' && form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
+      hourly_rate:      form.pay_type === 'hourly'         && form.hourly_rate     ? parseFloat(form.hourly_rate)          : null,
+      hired_at:         form.hired_at        || null,
+      department:       form.department      || null,
+      email:            form.email           || null,
+      timedoc_number:   form.timedoc_number  ? parseInt(form.timedoc_number) : null,
+      commission_rules: commissionRules.filter(r => r.label.trim()),
+      notes:            form.notes           || null,
     })
   }
 
@@ -319,9 +333,62 @@ function EmployeeModal({
                 onChange={e => set('hourly_rate', e.target.value)} style={s.input} placeholder="0.00" />
             </Field>
           )}
+          <div style={s.grid2}>
+            <Field label="Email">
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={s.input} placeholder="name@email.com" />
+            </Field>
+            <Field label="TimeDocs #">
+              <input type="number" min="1" value={form.timedoc_number} onChange={e => set('timedoc_number', e.target.value)} style={s.input} placeholder="e.g. 5" />
+            </Field>
+          </div>
           <Field label="Hire Date">
             <input type="date" value={form.hired_at} onChange={e => set('hired_at', e.target.value)} style={s.input} />
           </Field>
+
+          {/* Commission Rules */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={s.fieldLabel}>Commission Rules</label>
+              <button
+                type="button"
+                onClick={() => setCommissionRules(r => [...r, { label: '', amount: 0 }])}
+                style={{ fontSize: 12, color: '#5581B1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                + Add Rule
+              </button>
+            </div>
+            {commissionRules.length === 0 && (
+              <p style={{ fontSize: 12, color: '#a1a1aa', margin: 0 }}>No commission rules. Click + Add Rule to add one.</p>
+            )}
+            {commissionRules.map((rule, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                <input
+                  value={rule.label}
+                  onChange={e => setCommissionRules(r => r.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                  style={{ ...s.input, flex: 2 }}
+                  placeholder="Service (e.g. Wash and Set)"
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                  <span style={{ fontSize: 13, color: '#666' }}>$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={rule.amount}
+                    onChange={e => setCommissionRules(r => r.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
+                    style={{ ...s.input, flex: 1 }}
+                    placeholder="0.00"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCommissionRules(r => r.filter((_, j) => j !== i))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0 4px' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+
           <Field label="Notes">
             <input value={form.notes} onChange={e => set('notes', e.target.value)} style={s.input} placeholder="Optional" />
           </Field>
