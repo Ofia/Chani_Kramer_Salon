@@ -47,10 +47,10 @@ On the same page we will add a commision tab where commission in auto added to e
 | 6 | Invoice parser — editable cost price (not just retail/markup) | ✅ DONE | Cost cell is now editable in product invoice preview; markup/unit price recalculate on change |
 | 7 | Pending Orders flow — CoGS expense → Pending Orders tab → check-in to inventory | ⬜ DISCUSS | QuickBooks best practice: expense at PO date or receipt date? |
 | 8 | Calendar Day view — columns per employee; Week/Month — appointment list on click | ✅ DONE | Day view groups by employee_name into side-by-side columns; week/month chip click opens DayListPanel → click-through to drawer (345b85d) |
-| 9 | Customers CRM — add email, split address fields, Google Places autocomplete, address 2 | ⬜ TODO | Google Maps Places API |
+| 9 | Customers CRM — add email, split address fields, Google Places autocomplete, address 2 | ✅ DONE | PlaceAutocompleteElement (new API); mapsReady fallback to plain input; ::part(input/prediction-list) for styling; 029 migration |
 | 10 | Remove "(for commission)" label from Sales Management + W&S dialogs | ✅ DONE | |
-| 11 | Get employee table from Tzipora (names, emails, emp#, dept, position, commission rules) | ⬜ WAITING | Action item for Ofir |
-| 12 | Payroll redesign — TimeDocs file drop, per-employee rows, commission tab | ⬜ TODO | Larger redesign; depends on #11 |
+| 11 | Get employee table from Tzipora (names, emails, emp#, dept, position, commission rules) | ✅ DONE | 12 employees seeded via migration 031; overtime_after_hours added to profile |
+| 12 | Payroll redesign — TimeDocs file drop, per-employee rows, commission tab | ✅ DONE | File drop parses .dat → hours + OT per employee; Commission tab auto-calculates from sales; migrations 032+033 pending run |
 | 13 | CC bank statement vs expenses reconciliation tool | ⬜ TODO | PDF/CSV parser + matching logic |
 | 14 | SMS/WhatsApp appointment notifications | ⬜ TODO | Twilio or WhatsApp Business API |
 | 15 | Clean test data + import real data from Access | ⬜ NEXT WEEK | Depends on Access migration (6,914 customers) |

@@ -32,6 +32,10 @@ https://github.com/Ofia/Chani_Kramer_Salon.git
 | ~~027~~ | ~~`backend/migrations/027_wash_set.sql`~~ | ✅ Run (2026-06-24) |
 | ~~028~~ | ~~`backend/migrations/028_appointment_employee_dept.sql`~~ | ✅ Run (2026-06-29) |
 | ~~029~~ | ~~`backend/migrations/029_customer_address_email.sql`~~ | ✅ Run (2026-06-29) |
+| ~~030~~ | ~~`backend/migrations/030_employee_fields.sql`~~ | ✅ Run (2026-06-29) |
+| ~~031~~ | ~~`backend/migrations/031_seed_employees.sql`~~ | ✅ Run (2026-06-29) |
+| 032 | `backend/migrations/032_employee_overtime.sql` | ⬜ Pending |
+| 033 | `backend/migrations/033_commission_payouts.sql` | ⬜ Pending |
 
 
 ## Color Palette
