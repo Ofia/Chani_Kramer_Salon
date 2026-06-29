@@ -385,7 +385,6 @@ function CustomerModal({
           background: #f9f9f9 !important;
           border: 1px solid rgba(0,0,0,0.12) !important;
           border-radius: 10px !important;
-          overflow: hidden;
           width: 100%;
         }
         gmp-place-autocomplete::part(input) {
