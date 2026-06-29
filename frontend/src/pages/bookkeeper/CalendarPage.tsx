@@ -172,7 +172,7 @@ export default function CalendarPage() {
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null)
   const [dayList, setDayList] = useState<{date:Date; appts:Appointment[]} | null>(null)
 
-  const openDayList = (appt: Appointment, date: Date) => {
+  const openDayList = (_appt: Appointment, date: Date) => {
     setDayList({ date, appts: appointments.filter(a => apptOnDay(a, date)) })
   }
 
