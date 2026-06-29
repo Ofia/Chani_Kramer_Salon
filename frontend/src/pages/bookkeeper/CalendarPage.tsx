@@ -170,6 +170,11 @@ export default function CalendarPage() {
   const [current, setCurrent] = useState(() => { const d = new Date(); d.setHours(0,0,0,0); return d })
   const [newModal, setNewModal] = useState<{open:boolean; date?:Date; hour?:number}>({open:false})
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null)
+  const [dayList, setDayList] = useState<{date:Date; appts:Appointment[]} | null>(null)
+
+  const openDayList = (appt: Appointment, date: Date) => {
+    setDayList({ date, appts: appointments.filter(a => apptOnDay(a, date)) })
+  }
 
   // Date range for query
   const { start, end } = useMemo(() => {
@@ -246,8 +251,8 @@ export default function CalendarPage() {
 
       {/* ── Views ── */}
       {view === 'day'   && <DayView   appointments={appointments} date={current}                    today={today} onSlotClick={(h)=>setNewModal({open:true,date:current,hour:h})} onApptClick={setDetailAppt}/>}
-      {view === 'week'  && <WeekView  appointments={appointments} weekDates={getWeekDates(current)} today={today} onSlotClick={(d,h)=>setNewModal({open:true,date:d,hour:h})}    onApptClick={setDetailAppt}/>}
-      {view === 'month' && <MonthView appointments={appointments} currentDate={current}              today={today} onDayClick={(d)=>{setCurrent(d);setView('day')}}               onApptClick={setDetailAppt}/>}
+      {view === 'week'  && <WeekView  appointments={appointments} weekDates={getWeekDates(current)} today={today} onSlotClick={(d,h)=>setNewModal({open:true,date:d,hour:h})}    onApptClick={openDayList}/>}
+      {view === 'month' && <MonthView appointments={appointments} currentDate={current}              today={today} onDayClick={(d)=>{setCurrent(d);setView('day')}}               onApptClick={openDayList}/>}
 
       {/* ── Modals ── */}
       {newModal.open && (
@@ -256,6 +261,14 @@ export default function CalendarPage() {
           hour={newModal.hour}
           onClose={() => setNewModal({open:false})}
           onSaved={() => { setNewModal({open:false}); qc.invalidateQueries({queryKey:['appointments']}) }}
+        />
+      )}
+      {dayList && (
+        <DayListPanel
+          date={dayList.date}
+          appts={dayList.appts}
+          onClose={() => setDayList(null)}
+          onApptClick={(a) => { setDayList(null); setDetailAppt(a) }}
         />
       )}
       {detailAppt && (
@@ -298,19 +311,54 @@ function DayView({ appointments, date, today, onSlotClick, onApptClick }: {
   const dayAppts = appointments.filter(a => apptOnDay(a, date))
   const isToday = isSameDay(date, today)
 
+  const columns = useMemo(() => {
+    if (dayAppts.length === 0) return []
+    const map = new Map<string, { name: string; appts: Appointment[] }>()
+    for (const appt of dayAppts) {
+      const key = appt.employee_id ?? 'unassigned'
+      const label = appt.employee_name ?? 'Unassigned'
+      if (!map.has(key)) map.set(key, { name: label, appts: [] })
+      map.get(key)!.appts.push(appt)
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => (a === 'unassigned' ? -1 : b === 'unassigned' ? 1 : 0))
+      .map(([key, val]) => ({ key, ...val }))
+  }, [dayAppts])
+
+  // Single column — original layout
+  if (columns.length <= 1) {
+    return (
+      <TimeGrid>
+        <div style={{...s.dayCol, flex:1}}>
+          {HOURS.map(h => <div key={h} style={s.hourSlot} onClick={() => onSlotClick(h)} />)}
+          {dayAppts.map(a => <ApptBlock key={a.id} appt={a} onClick={onApptClick} wide />)}
+          {isToday && <CurrentTimeLine />}
+        </div>
+      </TimeGrid>
+    )
+  }
+
+  // Multi-employee columns
   return (
-    <TimeGrid>
-      <div style={{...s.dayCol, flex:1}}>
-        {/* Hour slot backgrounds */}
-        {HOURS.map(h => (
-          <div key={h} style={s.hourSlot} onClick={() => onSlotClick(h)} />
+    <div>
+      <div style={s.weekHeader}>
+        <div style={{width:52, flexShrink:0}}/>
+        {columns.map(col => (
+          <div key={col.key} style={{...s.weekDayHeader, flex:1}}>
+            <span style={s.weekDayName}>{col.name}</span>
+          </div>
         ))}
-        {/* Appointment blocks */}
-        {dayAppts.map(a => <ApptBlock key={a.id} appt={a} onClick={onApptClick} wide />)}
-        {/* Current time line */}
-        {isToday && <CurrentTimeLine />}
       </div>
-    </TimeGrid>
+      <TimeGrid>
+        {columns.map((col, i) => (
+          <div key={col.key} style={{...s.dayCol, flex:1, borderLeft: i > 0 ? '1px solid rgba(13,13,13,0.06)' : undefined}}>
+            {HOURS.map(h => <div key={h} style={s.hourSlot} onClick={() => onSlotClick(h)} />)}
+            {col.appts.map(a => <ApptBlock key={a.id} appt={a} onClick={onApptClick} wide />)}
+            {isToday && <CurrentTimeLine />}
+          </div>
+        ))}
+      </TimeGrid>
+    </div>
   )
 }
 
@@ -321,7 +369,7 @@ function WeekView({ appointments, weekDates, today, onSlotClick, onApptClick }: 
   weekDates: Date[]
   today: Date
   onSlotClick: (date: Date, hour: number) => void
-  onApptClick: (a: Appointment) => void
+  onApptClick: (a: Appointment, date: Date) => void
 }) {
   return (
     <div>
@@ -347,7 +395,7 @@ function WeekView({ appointments, weekDates, today, onSlotClick, onApptClick }: 
               {HOURS.map(h => (
                 <div key={h} style={s.hourSlot} onClick={() => onSlotClick(d, h)} />
               ))}
-              {dayAppts.map(a => <ApptBlock key={a.id} appt={a} onClick={onApptClick} />)}
+              {dayAppts.map(a => <ApptBlock key={a.id} appt={a} onClick={(ap) => onApptClick(ap, d)} />)}
               {isToday && <CurrentTimeLine />}
             </div>
           )
@@ -364,7 +412,7 @@ function MonthView({ appointments, currentDate, today, onDayClick, onApptClick }
   currentDate: Date
   today: Date
   onDayClick: (d: Date) => void
-  onApptClick: (a: Appointment) => void
+  onApptClick: (a: Appointment, date: Date) => void
 }) {
   const grid = useMemo(() => getMonthGrid(currentDate), [currentDate])
   const currentMonth = currentDate.getMonth()
@@ -386,7 +434,7 @@ function MonthView({ appointments, currentDate, today, onDayClick, onApptClick }
               <div style={s.monthAppts}>
                 {dayAppts.slice(0,3).map(a => (
                   <div key={a.id} style={{...s.monthApptChip, background:DEPT_COLOR[a.department], color:DEPT_TEXT[a.department]}}
-                    onClick={e => { e.stopPropagation(); onApptClick(a) }}>
+                    onClick={e => { e.stopPropagation(); onApptClick(a, d) }}>
                     {formatTime(a.appointment_date)} {a.customer_name.split(' ')[0]}
                   </div>
                 ))}
@@ -651,6 +699,55 @@ function NewAppointmentModal({ date, hour, onClose, onSaved }: {
   )
 }
 
+// ── Day List Panel ────────────────────────────────────────────
+
+function DayListPanel({ date, appts, onClose, onApptClick }: {
+  date: Date
+  appts: Appointment[]
+  onClose: () => void
+  onApptClick: (a: Appointment) => void
+}) {
+  const sorted = [...appts].sort((a, b) =>
+    new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime()
+  )
+  const label = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.dayListPanel} onClick={e => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <span style={s.modalTitle}>{label}</span>
+          <button style={s.closeBtn} onClick={onClose}><X size={16}/></button>
+        </div>
+        {sorted.length === 0 ? (
+          <p style={{padding:'20px', color:'rgba(13,13,13,0.4)', fontSize:13}}>No appointments this day.</p>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', gap:2, padding:'8px 0'}}>
+            {sorted.map(a => (
+              <div key={a.id} style={s.dayListItem} onClick={() => onApptClick(a)}>
+                <div style={{...s.dayListDot, background: DEPT_COLOR[a.department]}} />
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:13, fontWeight:600, color:'#0d0d0d'}}>{formatTime(a.appointment_date)}</span>
+                    <span style={{fontSize:13, color:'#0d0d0d'}}>{a.customer_name}</span>
+                  </div>
+                  <div style={{display:'flex', gap:8, marginTop:2}}>
+                    {a.employee_name && <span style={{fontSize:11, color:'rgba(13,13,13,0.45)'}}>{a.employee_name}</span>}
+                    {a.services_requested && <span style={{fontSize:11, color:'rgba(13,13,13,0.45)'}}>{a.services_requested}</span>}
+                  </div>
+                </div>
+                <span style={{...s.badge2, background: DEPT_COLOR[a.department] + '22', color: DEPT_COLOR[a.department]}}>
+                  {DEPT_LABEL[a.department]}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Appointment Drawer ────────────────────────────────────────
 
 function AppointmentDrawer({ appt, onClose, onUpdated, onDeleted }: {
@@ -829,4 +926,10 @@ const s: Record<string, React.CSSProperties> = {
   statusGrid:     { display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 },
   statusBtn:      { padding:'6px 10px', borderRadius:7, border:BORDER, background:'#fff', fontSize:12, fontWeight:500, cursor:'pointer', color:'#0d0d0d', textAlign:'center' as const },
   deleteBtn:      { width:'100%', padding:'9px', borderRadius:8, border:'1px solid rgba(229,57,53,0.3)', background:'rgba(229,57,53,0.05)', color:'#e53935', fontSize:13, fontWeight:500, cursor:'pointer' },
+
+  // Day list panel
+  dayListPanel:   { background:'#fff', borderRadius:14, width:440, maxHeight:'80vh', overflow:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.18)', display:'flex', flexDirection:'column' as const },
+  dayListItem:    { display:'flex', alignItems:'center', gap:12, padding:'10px 20px', cursor:'pointer', borderBottom:'1px solid rgba(13,13,13,0.05)', transition:'background 0.1s' },
+  dayListDot:     { width:10, height:10, borderRadius:'50%', flexShrink:0 },
+  badge2:         { fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:5, flexShrink:0, letterSpacing:'0.03em' },
 }
