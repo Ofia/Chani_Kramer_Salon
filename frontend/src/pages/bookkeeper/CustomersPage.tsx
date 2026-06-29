@@ -361,7 +361,7 @@ function CustomerModal({
       return () => existing.removeEventListener('load', onLoad)
     }
     const s = document.createElement('script')
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&loading=async`
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`
     s.async = true
     s.onload = onLoad
     document.head.appendChild(s)
