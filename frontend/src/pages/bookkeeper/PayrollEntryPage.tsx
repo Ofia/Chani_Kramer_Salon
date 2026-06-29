@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { ChevronDown, ChevronUp, Check, Clock, Trash2, RotateCcw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Check, Clock, Trash2, RotateCcw, Upload, AlertTriangle, Pencil } from 'lucide-react'
 
 // ── Date helpers ─────────────────────────────────────────────
 
@@ -57,12 +57,47 @@ interface HoursSummary {
   hourly_rate: number | null
 }
 
+interface TimedocResult {
+  employee_id: string
+  total_hours: number
+  regular_hours: number
+  overtime_hours: number
+  suggested_pay: number | null
+  hourly_rate: number | null
+  weekly_rate: number | null
+  pay_type: string
+  missing_punch: boolean
+}
+
+interface CommissionLineItem {
+  label: string
+  item_type: string
+  per_item: number
+  count: number
+  total: number
+}
+
+interface CommissionSummaryItem {
+  employee_id: string
+  first_name: string
+  last_name: string
+  items: CommissionLineItem[]
+  calculated_amount: number
+  payout_id: string | null
+  adjustment_amount: number
+  final_amount: number
+  notes: string | null
+  status: string
+  paid_at: string | null
+}
+
 // ── Employee Row ─────────────────────────────────────────────
 
 function EmployeeRow({
   emp,
   entry,
   hours,
+  timedoc,
   weekStart,
   weekEnd,
   onSaved,
@@ -70,27 +105,37 @@ function EmployeeRow({
   emp: any
   entry: PayrollEntry | undefined
   hours: HoursSummary | undefined
+  timedoc: TimedocResult | undefined
   weekStart: string
   weekEnd: string
   onSaved: () => void
 }) {
-  const [open, setOpen]           = useState(false)
-  const [total, setTotal]         = useState('')
-  const [cash, setCash]           = useState('')
-  const [notes, setNotes]         = useState('')
-  const [error, setError]         = useState('')
+  const [open, setOpen]   = useState(false)
+  const [total, setTotal] = useState('')
+  const [cash, setCash]   = useState('')
+  const [notes, setNotes] = useState('')
+  const [error, setError] = useState('')
 
-  // Sync local state when entry loads or week changes
+  const clockData = timedoc ?? (hours ? {
+    total_hours: hours.total_hours,
+    regular_hours: hours.total_hours,
+    overtime_hours: 0,
+    suggested_pay: hours.suggested_pay,
+    hourly_rate: hours.hourly_rate,
+    weekly_rate: null,
+    pay_type: emp.pay_type,
+    missing_punch: false,
+  } : undefined)
+
   useEffect(() => {
     if (entry) {
       setTotal(entry.amount > 0 ? entry.amount.toFixed(2) : '')
       setCash(entry.cash_amount > 0 ? entry.cash_amount.toFixed(2) : '')
       setNotes(entry.notes ?? '')
     } else {
-      // Auto-fill from clock data or weekly rate — still editable
       const suggested =
-        hours?.suggested_pay != null ? hours.suggested_pay   // hourly: hours × rate
-        : emp.pay_type === 'weekly_flat' && emp.weekly_rate   // flat: fixed weekly rate
+        clockData?.suggested_pay != null ? clockData.suggested_pay
+        : emp.pay_type === 'weekly_flat' && emp.weekly_rate
           ? Number(emp.weekly_rate)
           : null
       setTotal(suggested != null ? suggested.toFixed(2) : '')
@@ -98,7 +143,7 @@ function EmployeeRow({
       setNotes('')
     }
     setError('')
-  }, [entry, weekStart, hours])
+  }, [entry, weekStart, timedoc])
 
   const totalNum = parseFloat(total) || 0
   const cashNum  = parseFloat(cash)  || 0
@@ -109,22 +154,9 @@ function EmployeeRow({
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      const body = {
-        amount: totalNum,
-        cash_amount: cashNum,
-        bank_amount: bankNum,
-        notes: notes || null,
-      }
-      if (entry) {
-        return api.patch(`/payroll/${entry.id}`, body)
-      }
-      return api.post('/payroll', {
-        ...body,
-        week_start: weekStart,
-        week_end: weekEnd,
-        employee_id: emp.id,
-        pay_type_snapshot: emp.pay_type,
-      })
+      const body = { amount: totalNum, cash_amount: cashNum, bank_amount: bankNum, notes: notes || null }
+      if (entry) return api.patch(`/payroll/${entry.id}`, body)
+      return api.post('/payroll', { ...body, week_start: weekStart, week_end: weekEnd, employee_id: emp.id, pay_type_snapshot: emp.pay_type })
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); qc.invalidateQueries({ queryKey: ['operation-overview'] }); setError(''); onSaved() },
     onError: (e: any) => setError(e?.response?.data?.detail ?? 'Save failed'),
@@ -132,7 +164,6 @@ function EmployeeRow({
 
   const markPaidMutation = useMutation({
     mutationFn: () => {
-      // If no entry yet, save first then mark paid in sequence
       if (!entry) {
         return api.post('/payroll', {
           amount: totalNum, cash_amount: cashNum, bank_amount: bankNum,
@@ -140,10 +171,8 @@ function EmployeeRow({
           employee_id: emp.id, pay_type_snapshot: emp.pay_type,
         }).then(r => api.post(`/payroll/${r.data.id}/mark-paid`, {}))
       }
-      // Save amounts first, then mark paid
-      return api.patch(`/payroll/${entry.id}`, {
-        amount: totalNum, cash_amount: cashNum, bank_amount: bankNum, notes: notes || null,
-      }).then(() => api.post(`/payroll/${entry.id}/mark-paid`, {}))
+      return api.patch(`/payroll/${entry.id}`, { amount: totalNum, cash_amount: cashNum, bank_amount: bankNum, notes: notes || null })
+        .then(() => api.post(`/payroll/${entry.id}/mark-paid`, {}))
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll-weekly', weekStart] }); qc.invalidateQueries({ queryKey: ['operation-overview'] }); setError(''); setOpen(false) },
     onError: (e: any) => setError(e?.response?.data?.detail ?? 'Failed to mark paid'),
@@ -162,175 +191,238 @@ function EmployeeRow({
 
   return (
     <div style={{ borderBottom: '1px solid rgba(13,13,13,0.06)' }}>
-
-      {/* ── Collapsed row ── */}
       <div
         onClick={() => !isPaid && setOpen(v => !v)}
-        style={{
-          ...s.row,
-          cursor: isPaid ? 'default' : 'pointer',
-          background: open ? 'rgba(13,13,13,0.02)' : 'transparent',
-        }}
+        style={{ ...s.row, cursor: isPaid ? 'default' : 'pointer', background: open ? 'rgba(13,13,13,0.02)' : 'transparent' }}
       >
         <div style={s.rowLeft}>
           <span style={s.empName}>{emp.first_name} {emp.last_name}</span>
           <span style={s.empRole}>{emp.job_title}</span>
         </div>
-
         <div style={s.rowRight}>
           {/* Hours badge */}
-          {hours && (
-            <span style={s.hoursBadge}>
-              <Clock size={10} color="#5581B1" />
-              {hours.total_hours}h
+          {clockData && (
+            <span style={{ ...s.hoursBadge, borderColor: clockData.missing_punch ? '#f59e0b' : 'transparent', background: clockData.missing_punch ? 'rgba(245,158,11,0.08)' : 'rgba(85,129,177,0.08)' }}>
+              {clockData.missing_punch && <AlertTriangle size={10} color="#f59e0b" />}
+              {!clockData.missing_punch && <Clock size={10} color="#5581B1" />}
+              <span style={{ color: clockData.missing_punch ? '#b45309' : '#5581B1' }}>
+                {clockData.total_hours}h
+                {clockData.overtime_hours > 0 && ` (${clockData.overtime_hours}h OT)`}
+              </span>
             </span>
           )}
-
-          {/* Amount summary */}
+          {/* Amount */}
           {entry && entry.amount > 0 ? (
             <span style={s.amountSummary}>
               {fmt(entry.amount)}
-              {entry.cash_amount > 0 && entry.bank_amount > 0 && (
-                <span style={s.splitHint}>
-                  {fmt(entry.cash_amount)} cash · {fmt(entry.bank_amount)} bank
-                </span>
-              )}
-              {entry.cash_amount > 0 && entry.bank_amount === 0 && (
-                <span style={s.splitHint}>cash</span>
-              )}
-              {entry.cash_amount === 0 && entry.bank_amount > 0 && (
-                <span style={s.splitHint}>bank</span>
-              )}
+              {entry.cash_amount > 0 && entry.bank_amount > 0 && <span style={s.splitHint}>{fmt(entry.cash_amount)} cash · {fmt(entry.bank_amount)} bank</span>}
+              {entry.cash_amount > 0 && entry.bank_amount === 0 && <span style={s.splitHint}>cash</span>}
+              {entry.cash_amount === 0 && entry.bank_amount > 0 && <span style={s.splitHint}>bank</span>}
             </span>
           ) : (
             <span style={s.amountEmpty}>—</span>
           )}
-
-          {/* Status badge */}
+          {/* Status */}
           {isPaid ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={s.paidBadge}><Check size={10} /> Paid</span>
-              <button
-                onClick={e => { e.stopPropagation(); markPendingMutation.mutate() }}
-                style={s.undoBtn}
-                title="Undo — mark as pending"
-              >
-                <RotateCcw size={11} />
-              </button>
+              <button onClick={e => { e.stopPropagation(); markPendingMutation.mutate() }} style={s.undoBtn} title="Undo"><RotateCcw size={11} /></button>
             </div>
           ) : (
             <span style={s.pendingBadge}>Pending</span>
           )}
-
-          {/* Chevron */}
-          {!isPaid && (
-            <span style={s.chevron}>
-              {open ? <ChevronUp size={14} color="rgba(13,13,13,0.35)" /> : <ChevronDown size={14} color="rgba(13,13,13,0.35)" />}
-            </span>
-          )}
+          {!isPaid && <span style={s.chevron}>{open ? <ChevronUp size={14} color="rgba(13,13,13,0.35)" /> : <ChevronDown size={14} color="rgba(13,13,13,0.35)" />}</span>}
         </div>
       </div>
 
-      {/* ── Expanded panel ── */}
       {open && !isPaid && (
         <div style={s.expandPanel}>
-
-          {/* Clock log info line */}
-          {hours && (
+          {clockData && (
             <div style={s.suggestRow}>
-              <Clock size={11} color="#5581B1" />
-              <span style={s.suggestLabel}>
-                {hours.total_hours}h logged this week
-                {hours.suggested_pay != null && ` · ${fmt(hours.suggested_pay)} at $${hours.hourly_rate}/h`}
-                {emp.pay_type === 'weekly_flat' && emp.weekly_rate && ` · flat rate ${fmt(emp.weekly_rate)}`}
+              {clockData.missing_punch
+                ? <AlertTriangle size={11} color="#f59e0b" />
+                : <Clock size={11} color="#5581B1" />}
+              <span style={{ ...s.suggestLabel, color: clockData.missing_punch ? '#b45309' : undefined }}>
+                {clockData.missing_punch
+                  ? `⚠ Missing punch detected — ${clockData.total_hours}h logged, verify manually`
+                  : clockData.overtime_hours > 0
+                    ? `${clockData.regular_hours}h regular + ${clockData.overtime_hours}h OT${clockData.hourly_rate ? ` · ${fmt(clockData.suggested_pay ?? 0)} at $${clockData.hourly_rate}/h (×1.5 OT)` : ''}`
+                    : `${clockData.total_hours}h logged${clockData.suggested_pay != null ? ` · ${fmt(clockData.suggested_pay)} at $${clockData.hourly_rate}/h` : ''}${emp.pay_type === 'weekly_flat' && emp.weekly_rate ? ` · flat rate ${fmt(emp.weekly_rate)}` : ''}`}
               </span>
             </div>
           )}
-
-          {/* Inputs */}
           <div style={s.inputGrid}>
             <div style={s.inputGroup}>
               <label style={s.label}>Total Pay</label>
               <div style={s.moneyCell}>
                 <span style={s.moneySym}>$</span>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={total}
-                  onChange={e => setTotal(e.target.value)}
-                  style={s.moneyInput}
-                  placeholder="0.00"
-                  autoFocus
-                />
+                <input type="number" min="0" step="0.01" value={total} onChange={e => setTotal(e.target.value)} style={s.moneyInput} placeholder="0.00" autoFocus />
               </div>
             </div>
-
             <div style={s.inputGroup}>
               <label style={s.label}>Cash portion</label>
               <div style={s.moneyCell}>
                 <span style={s.moneySym}>$</span>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={cash}
-                  onChange={e => setCash(e.target.value)}
-                  style={s.moneyInput}
-                  placeholder="0.00"
-                />
+                <input type="number" min="0" step="0.01" value={cash} onChange={e => setCash(e.target.value)} style={s.moneyInput} placeholder="0.00" />
               </div>
             </div>
-
             <div style={s.inputGroup}>
               <label style={s.label}>Bank transfer</label>
               <div style={{ ...s.moneyCell, background: '#f5f4f2', opacity: 0.8 }}>
                 <span style={s.moneySym}>$</span>
-                <span style={{ ...s.moneyInput, display: 'flex', alignItems: 'center', color: 'rgba(13,13,13,0.55)' }}>
-                  {bankNum > 0 ? bankNum.toFixed(2) : '—'}
-                </span>
+                <span style={{ ...s.moneyInput, display: 'flex', alignItems: 'center', color: 'rgba(13,13,13,0.55)' }}>{bankNum > 0 ? bankNum.toFixed(2) : '—'}</span>
               </div>
             </div>
           </div>
-
           <div style={s.inputGroup}>
             <label style={s.label}>Notes</label>
-            <input
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              style={s.notesInput}
-              placeholder="Optional notes…"
-            />
+            <input value={notes} onChange={e => setNotes(e.target.value)} style={s.notesInput} placeholder="Optional notes…" />
           </div>
-
           {error && <div style={s.errorText}>{error}</div>}
-
-          {/* Action buttons */}
           <div style={s.actions}>
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || totalNum <= 0}
-              style={{ ...s.saveBtn, opacity: totalNum <= 0 ? 0.4 : 1 }}
-            >
+            <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || totalNum <= 0} style={{ ...s.saveBtn, opacity: totalNum <= 0 ? 0.4 : 1 }}>
               {saveMutation.isPending ? 'Saving…' : 'Save'}
             </button>
-            <button
-              onClick={() => markPaidMutation.mutate()}
-              disabled={markPaidMutation.isPending || totalNum <= 0}
-              style={{ ...s.markPaidBtn, opacity: totalNum <= 0 ? 0.4 : 1 }}
-            >
+            <button onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending || totalNum <= 0} style={{ ...s.markPaidBtn, opacity: totalNum <= 0 ? 0.4 : 1 }}>
               <Check size={13} />
               {markPaidMutation.isPending ? 'Marking…' : 'Mark as Paid'}
             </button>
-            {entry && (
-              <button
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-                style={s.deleteBtn}
-                title="Delete entry"
-              >
-                <Trash2 size={13} />
-              </button>
-            )}
+            {entry && <button onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} style={s.deleteBtn}><Trash2 size={13} /></button>}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Commission Row ────────────────────────────────────────────
+
+function CommissionRow({ item, month }: { item: CommissionSummaryItem; month: string }) {
+  const [editing, setEditing]   = useState(false)
+  const [adjStr, setAdjStr]     = useState(item.adjustment_amount.toFixed(2))
+  const [finalStr, setFinalStr] = useState(item.final_amount.toFixed(2))
+  const [notes, setNotes]       = useState(item.notes ?? '')
+  const [error, setError]       = useState('')
+  const qc = useQueryClient()
+
+  // Sync when item changes (month change)
+  useEffect(() => {
+    setAdjStr(item.adjustment_amount.toFixed(2))
+    setFinalStr(item.final_amount.toFixed(2))
+    setNotes(item.notes ?? '')
+    setEditing(false)
+  }, [item.employee_id, month])
+
+  const adj      = parseFloat(adjStr) || 0
+  const finalNum = parseFloat(finalStr) || item.calculated_amount + adj
+  const isPaid   = item.status === 'paid'
+
+  const monthDate = month + '-01'
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.post('/payroll/commission-save', {
+      employee_id: item.employee_id,
+      month: monthDate,
+      calculated_amount: item.calculated_amount,
+      adjustment_amount: adj,
+      final_amount: finalNum,
+      notes: notes || null,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['commission-summary', month] }); setEditing(false); setError('') },
+    onError: () => setError('Save failed'),
+  })
+
+  const markPaidMutation = useMutation({
+    mutationFn: async () => {
+      let payoutId = item.payout_id
+      if (!payoutId) {
+        const r = await api.post('/payroll/commission-save', {
+          employee_id: item.employee_id, month: monthDate,
+          calculated_amount: item.calculated_amount, adjustment_amount: adj,
+          final_amount: finalNum, notes: notes || null,
+        })
+        payoutId = r.data.id
+      }
+      return api.post(`/payroll/commission-payout/${payoutId}/mark-paid`, {})
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['commission-summary', month] }); setEditing(false) },
+    onError: () => setError('Failed'),
+  })
+
+  const markPendingMutation = useMutation({
+    mutationFn: () => api.post(`/payroll/commission-payout/${item.payout_id}/mark-pending`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commission-summary', month] }),
+  })
+
+  return (
+    <div style={{ borderBottom: '1px solid rgba(13,13,13,0.06)', padding: '14px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={s.empName}>{item.first_name} {item.last_name}</span>
+            {isPaid
+              ? <span style={s.paidBadge}><Check size={10} /> Paid</span>
+              : <span style={s.pendingBadge}>Pending</span>}
+          </div>
+          {/* Breakdown */}
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
+            {item.items.map((li, i) => (
+              <span key={i} style={s.commChip}>
+                {li.label} × {li.count} = {fmt(li.total)}
+              </span>
+            ))}
+          </div>
+          {/* Edit panel */}
+          {editing && !isPaid && (
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={s.inputGroup}>
+                  <label style={s.label}>Adjustment ($)</label>
+                  <div style={s.moneyCell}>
+                    <span style={s.moneySym}>$</span>
+                    <input type="number" step="0.01" value={adjStr} onChange={e => { setAdjStr(e.target.value); setFinalStr((item.calculated_amount + (parseFloat(e.target.value) || 0)).toFixed(2)) }} style={s.moneyInput} placeholder="0.00" autoFocus />
+                  </div>
+                </div>
+                <div style={s.inputGroup}>
+                  <label style={s.label}>Final Amount ($)</label>
+                  <div style={s.moneyCell}>
+                    <span style={s.moneySym}>$</span>
+                    <input type="number" step="0.01" value={finalStr} onChange={e => setFinalStr(e.target.value)} style={s.moneyInput} placeholder="0.00" />
+                  </div>
+                </div>
+              </div>
+              <div style={s.inputGroup}>
+                <label style={s.label}>Notes</label>
+                <input value={notes} onChange={e => setNotes(e.target.value)} style={s.notesInput} placeholder="Optional" />
+              </div>
+              {error && <div style={s.errorText}>{error}</div>}
+              <div style={s.actions}>
+                <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} style={s.saveBtn}>{saveMutation.isPending ? 'Saving…' : 'Save'}</button>
+                <button onClick={() => setEditing(false)} style={s.ghostBtn}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 8 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#0d0d0d', letterSpacing: '-0.03em' }}>{fmt(item.final_amount)}</span>
+          {item.calculated_amount !== item.final_amount && (
+            <span style={{ fontSize: 10, color: 'rgba(13,13,13,0.4)' }}>calc {fmt(item.calculated_amount)}</span>
+          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            {!isPaid && (
+              <>
+                <button onClick={() => setEditing(v => !v)} style={s.undoBtn} title="Edit"><Pencil size={12} /></button>
+                <button onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending} style={s.markPaidBtn}>
+                  <Check size={12} />{markPaidMutation.isPending ? '…' : 'Mark Paid'}
+                </button>
+              </>
+            )}
+            {isPaid && (
+              <button onClick={() => markPendingMutation.mutate()} style={s.undoBtn} title="Undo"><RotateCcw size={11} /></button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -339,6 +431,7 @@ function EmployeeRow({
 
 export default function PayrollEntryPage() {
   const now = new Date()
+  const [pageTab, setPageTab]     = useState<'payroll' | 'commission'>('payroll')
   const [view, setView]           = useState<'weekly' | 'monthly' | 'range'>('weekly')
   const [weekStart, setWeekStart] = useState(getWednesday())
   const [selYear,  setSelYear]    = useState(now.getFullYear())
@@ -346,6 +439,15 @@ export default function PayrollEntryPage() {
   const [rangeStart, setRangeStart] = useState(firstOfMonth(now.getFullYear(), now.getMonth() + 1))
   const [rangeEnd,   setRangeEnd]   = useState(todayStr())
   const [savedFlash, setSavedFlash] = useState(false)
+  // TimeDocs state
+  const [timedocMap, setTimedocMap] = useState<Record<string, TimedocResult>>({})
+  const [timedocStatus, setTimedocStatus] = useState<'idle' | 'parsing' | 'done' | 'error'>('idle')
+  const [timedocSummary, setTimedocSummary] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Commission state
+  const [commYear, setCommYear]   = useState(now.getFullYear())
+  const [commMonth, setCommMonth] = useState(now.getMonth() + 1)
 
   const weekEnd = getTuesday(weekStart)
 
@@ -368,24 +470,26 @@ export default function PayrollEntryPage() {
 
   const { data: monthlyData = [], isLoading: monthlyLoading } = useQuery({
     queryKey: ['payroll-monthly', selYear, selMonth],
-    queryFn: () =>
-      api.get(`/payroll/?start_date=${firstOfMonth(selYear, selMonth)}&end_date=${lastOfMonth(selYear, selMonth)}`)
-        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+    queryFn: () => api.get(`/payroll/?start_date=${firstOfMonth(selYear, selMonth)}&end_date=${lastOfMonth(selYear, selMonth)}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'monthly',
   })
 
   const { data: rangeData = [], isLoading: rangeLoading } = useQuery({
     queryKey: ['payroll-range', rangeStart, rangeEnd],
-    queryFn: () =>
-      api.get(`/payroll/?start_date=${rangeStart}&end_date=${rangeEnd}`)
-        .then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+    queryFn: () => api.get(`/payroll/?start_date=${rangeStart}&end_date=${rangeEnd}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
     enabled: view === 'range' && !!rangeStart && !!rangeEnd,
   })
 
-  // Build quick-lookup maps
+  const commMonthStr = `${commYear}-${String(commMonth).padStart(2, '0')}`
+  const { data: commissionData = [], isLoading: commLoading, refetch: refetchComm } = useQuery<CommissionSummaryItem[]>({
+    queryKey: ['commission-summary', commMonthStr],
+    queryFn: () => api.get(`/payroll/commission-summary?month=${commMonthStr}`).then(r => Array.isArray(r.data) ? r.data : []).catch(() => []),
+    enabled: pageTab === 'commission',
+    staleTime: 0,
+  })
+
   const entryMap: Record<string, PayrollEntry> = {}
   ;(weekPayroll as PayrollEntry[]).forEach(e => { entryMap[e.employee_id] = e })
-
   const hoursMap: Record<string, HoursSummary> = {}
   ;(hoursSummary as HoursSummary[]).forEach(h => { hoursMap[h.employee_id] = h })
 
@@ -394,123 +498,236 @@ export default function PayrollEntryPage() {
     rows.forEach((r: any) => { agg[r.employee_id] = (agg[r.employee_id] || 0) + Number(r.amount) })
     return agg
   }
-
-  const monthlyAgg  = aggregateByEmployee(monthlyData as any[])
-  const rangeAgg    = aggregateByEmployee(rangeData as any[])
+  const monthlyAgg   = aggregateByEmployee(monthlyData as any[])
+  const rangeAgg     = aggregateByEmployee(rangeData as any[])
   const monthlyTotal = Object.values(monthlyAgg).reduce((s, v) => s + v, 0)
   const rangeTotal   = Object.values(rangeAgg).reduce((s, v) => s + v, 0)
+  const weeklyTotal  = (weekPayroll as PayrollEntry[]).reduce((s, e) => s + e.amount, 0)
+  const paidCount    = (weekPayroll as PayrollEntry[]).filter(e => e.status === 'paid').length
 
-  const weeklyTotal = (weekPayroll as PayrollEntry[]).reduce((s, e) => s + e.amount, 0)
-  const paidCount   = (weekPayroll as PayrollEntry[]).filter(e => e.status === 'paid').length
+  const weekLabel   = `${fmtDate(weekStart)} — ${fmtDate(weekEnd)}`
+  const monthLabel  = new Date(selYear, selMonth - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const rangeLabel  = rangeStart && rangeEnd ? `${fmtDate(rangeStart)} — ${fmtDate(rangeEnd)}` : ''
+  const subtitle    = view === 'weekly' ? weekLabel : view === 'monthly' ? monthLabel : rangeLabel
 
-  const weekLabel  = `${fmtDate(weekStart)} — ${fmtDate(weekEnd)}`
-  const monthLabel = new Date(selYear, selMonth - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  const rangeLabel = rangeStart && rangeEnd ? `${fmtDate(rangeStart)} — ${fmtDate(rangeEnd)}` : ''
-  const subtitle   = view === 'weekly' ? weekLabel : view === 'monthly' ? monthLabel : rangeLabel
+  function handleSaved() { setSavedFlash(true); setTimeout(() => setSavedFlash(false), 2000) }
 
-  function handleSaved() {
-    setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 2000)
+  // ── TimeDocs file handling ────────────────────────────────
+
+  async function processFile(file: File) {
+    setTimedocStatus('parsing')
+    const text = await file.text()
+    try {
+      const res = await api.post('/payroll/parse-timedoc', { content: text, week_start: weekStart, week_end: weekEnd })
+      const results: TimedocResult[] = res.data
+      const map: Record<string, TimedocResult> = {}
+      results.forEach(r => { map[r.employee_id] = r })
+      setTimedocMap(map)
+      const missing = results.filter(r => r.missing_punch).length
+      setTimedocSummary(`${results.length} employees found${missing > 0 ? ` · ${missing} missing punch` : ''}`)
+      setTimedocStatus('done')
+    } catch {
+      setTimedocStatus('error')
+      setTimedocSummary('Could not parse file')
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) processFile(file)
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) processFile(file)
   }
 
   return (
     <div style={s.page}>
-
       {/* ── Header ── */}
       <header style={s.header}>
         <div>
-          <h1 style={s.title}>Weekly Payroll</h1>
-          <p style={s.subtitle}>{subtitle}</p>
+          <h1 style={s.title}>Payroll</h1>
+          <p style={s.subtitle}>{pageTab === 'commission' ? 'Monthly Commission' : subtitle}</p>
         </div>
         <div style={s.headerRight}>
+          {/* Page tab */}
           <div style={s.segmented}>
-            <button onClick={() => setView('weekly')}  style={{ ...s.seg, ...(view === 'weekly'  ? s.segActive : {}) }}>Weekly</button>
-            <button onClick={() => setView('monthly')} style={{ ...s.seg, ...(view === 'monthly' ? s.segActive : {}) }}>Monthly</button>
-            <button onClick={() => setView('range')}   style={{ ...s.seg, ...(view === 'range'   ? s.segActive : {}) }}>Range</button>
+            <button onClick={() => setPageTab('payroll')}    style={{ ...s.seg, ...(pageTab === 'payroll'    ? s.segActive : {}) }}>Payroll</button>
+            <button onClick={() => setPageTab('commission')} style={{ ...s.seg, ...(pageTab === 'commission' ? s.segActive : {}) }}>Commission</button>
           </div>
           {savedFlash && <span style={s.savedBadge}>Saved</span>}
         </div>
       </header>
 
-      {/* ── Controls ── */}
-      {view === 'weekly' && (
-        <div style={s.controls}>
-          <input type="date" value={weekStart} onChange={e => setWeekStart(e.target.value)} style={s.dateInput} />
-          <span style={s.rangeSep}>→ {fmtDate(weekEnd)}</span>
-          <span style={s.weekNote}>Wed – Tue · paid Thursday</span>
-        </div>
-      )}
-      {view === 'monthly' && (
-        <div style={s.controls}>
-          <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} style={s.dateInput}>
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-          <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} style={s.dateInput}>
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-      )}
-      {view === 'range' && (
-        <div style={s.controls}>
-          <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} style={s.dateInput} />
-          <span style={s.rangeSep}>—</span>
-          <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} style={s.dateInput} />
-        </div>
-      )}
-
-      {/* ── Weekly view ── */}
-      {view === 'weekly' && (
+      {/* ══ PAYROLL TAB ══════════════════════════════════════ */}
+      {pageTab === 'payroll' && (
         <>
-          {/* Week summary bar */}
-          <div style={s.weekBar}>
-            <span style={s.weekBarStat}>
-              <span style={s.weekBarLabel}>Total</span>
-              <span style={s.weekBarValue}>{fmt(weeklyTotal)}</span>
-            </span>
-            <span style={s.weekBarDivider} />
-            <span style={s.weekBarStat}>
-              <span style={s.weekBarLabel}>Paid</span>
-              <span style={{ ...s.weekBarValue, color: paidCount > 0 ? '#16a34a' : 'rgba(13,13,13,0.35)' }}>
-                {paidCount} / {(employees as any[]).length}
-              </span>
-            </span>
+          {/* View segmented */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={s.segmented}>
+              <button onClick={() => setView('weekly')}  style={{ ...s.seg, ...(view === 'weekly'  ? s.segActive : {}) }}>Weekly</button>
+              <button onClick={() => setView('monthly')} style={{ ...s.seg, ...(view === 'monthly' ? s.segActive : {}) }}>Monthly</button>
+              <button onClick={() => setView('range')}   style={{ ...s.seg, ...(view === 'range'   ? s.segActive : {}) }}>Range</button>
+            </div>
           </div>
 
-          <p style={s.sectionLabel}>Click a row to enter or edit payroll</p>
-          <div style={s.card}>
-            {(employees as any[]).map((emp: any) => (
-              <EmployeeRow
-                key={emp.id}
-                emp={emp}
-                entry={entryMap[emp.id]}
-                hours={hoursMap[emp.id]}
-                weekStart={weekStart}
-                weekEnd={weekEnd}
-                onSaved={handleSaved}
-              />
-            ))}
-          </div>
+          {/* Controls */}
+          {view === 'weekly' && (
+            <div style={s.controls}>
+              <input type="date" value={weekStart} onChange={e => { setWeekStart(e.target.value); setTimedocMap({}); setTimedocStatus('idle') }} style={s.dateInput} />
+              <span style={s.rangeSep}>→ {fmtDate(weekEnd)}</span>
+              <span style={s.weekNote}>Wed – Tue · paid Thursday</span>
+            </div>
+          )}
+          {view === 'monthly' && (
+            <div style={s.controls}>
+              <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} style={s.dateInput}>
+                {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+              </select>
+              <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} style={s.dateInput}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          )}
+          {view === 'range' && (
+            <div style={s.controls}>
+              <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} style={s.dateInput} />
+              <span style={s.rangeSep}>—</span>
+              <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} style={s.dateInput} />
+            </div>
+          )}
+
+          {/* ── TimeDocs file drop (weekly only) ── */}
+          {view === 'weekly' && (
+            <div
+              onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                ...s.dropZone,
+                borderColor: isDragging ? '#5581B1' : timedocStatus === 'done' ? '#16a34a' : timedocStatus === 'error' ? '#DF5198' : 'rgba(13,13,13,0.15)',
+                background:  isDragging ? 'rgba(85,129,177,0.04)' : timedocStatus === 'done' ? 'rgba(22,163,74,0.03)' : '#fafaf9',
+              }}
+            >
+              <input ref={fileInputRef} type="file" accept=".dat,.txt" style={{ display: 'none' }} onChange={onFileChange} />
+              {timedocStatus === 'idle' && (
+                <>
+                  <Upload size={16} color="rgba(13,13,13,0.3)" />
+                  <span style={s.dropLabel}>Drop TimeDocs <code>.dat</code> file to auto-fill hours</span>
+                  <span style={s.dropHint}>or click to browse</span>
+                </>
+              )}
+              {timedocStatus === 'parsing' && <span style={s.dropLabel}>Parsing…</span>}
+              {timedocStatus === 'done' && (
+                <>
+                  <Check size={14} color="#16a34a" />
+                  <span style={{ ...s.dropLabel, color: '#16a34a' }}>{timedocSummary}</span>
+                  <span style={s.dropHint}>Drop a new file to replace</span>
+                </>
+              )}
+              {timedocStatus === 'error' && (
+                <>
+                  <AlertTriangle size={14} color="#DF5198" />
+                  <span style={{ ...s.dropLabel, color: '#DF5198' }}>{timedocSummary}</span>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Weekly view ── */}
+          {view === 'weekly' && (
+            <>
+              <div style={s.weekBar}>
+                <span style={s.weekBarStat}>
+                  <span style={s.weekBarLabel}>Total</span>
+                  <span style={s.weekBarValue}>{fmt(weeklyTotal)}</span>
+                </span>
+                <span style={s.weekBarDivider} />
+                <span style={s.weekBarStat}>
+                  <span style={s.weekBarLabel}>Paid</span>
+                  <span style={{ ...s.weekBarValue, color: paidCount > 0 ? '#16a34a' : 'rgba(13,13,13,0.35)' }}>
+                    {paidCount} / {(employees as any[]).length}
+                  </span>
+                </span>
+              </div>
+              <p style={s.sectionLabel}>Click a row to enter or edit payroll</p>
+              <div style={s.card}>
+                {(employees as any[]).map((emp: any) => (
+                  <EmployeeRow
+                    key={emp.id}
+                    emp={emp}
+                    entry={entryMap[emp.id]}
+                    hours={hoursMap[emp.id]}
+                    timedoc={timedocMap[emp.id]}
+                    weekStart={weekStart}
+                    weekEnd={weekEnd}
+                    onSaved={handleSaved}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── Monthly view ── */}
+          {view === 'monthly' && (
+            monthlyLoading ? <p style={s.muted}>Loading…</p> : (
+              <>
+                <p style={s.sectionLabel}>Payroll — {monthLabel}</p>
+                <AggregateCard employees={employees as any[]} agg={monthlyAgg} total={monthlyTotal} />
+              </>
+            )
+          )}
+
+          {/* ── Range view ── */}
+          {view === 'range' && (
+            rangeLoading ? <p style={s.muted}>Loading…</p> : (
+              <>
+                <p style={s.sectionLabel}>Payroll — {rangeLabel}</p>
+                <AggregateCard employees={employees as any[]} agg={rangeAgg} total={rangeTotal} />
+              </>
+            )
+          )}
         </>
       )}
 
-      {/* ── Monthly view ── */}
-      {view === 'monthly' && (
-        monthlyLoading ? <p style={s.muted}>Loading…</p> : (
-          <>
-            <p style={s.sectionLabel}>Payroll — {monthLabel}</p>
-            <AggregateCard employees={employees as any[]} agg={monthlyAgg} total={monthlyTotal} />
-          </>
-        )
-      )}
+      {/* ══ COMMISSION TAB ═══════════════════════════════════ */}
+      {pageTab === 'commission' && (
+        <>
+          <div style={s.controls}>
+            <select value={commMonth} onChange={e => setCommMonth(Number(e.target.value))} style={s.dateInput}>
+              {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+            </select>
+            <select value={commYear} onChange={e => setCommYear(Number(e.target.value))} style={s.dateInput}>
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={() => refetchComm()} style={s.saveBtn}>Refresh</button>
+          </div>
 
-      {/* ── Range view ── */}
-      {view === 'range' && (
-        rangeLoading ? <p style={s.muted}>Loading…</p> : (
-          <>
-            <p style={s.sectionLabel}>Payroll — {rangeLabel}</p>
-            <AggregateCard employees={employees as any[]} agg={rangeAgg} total={rangeTotal} />
-          </>
-        )
+          {commLoading ? (
+            <p style={s.muted}>Loading…</p>
+          ) : (commissionData as CommissionSummaryItem[]).length === 0 ? (
+            <div style={s.emptyCard}>
+              <p style={s.emptyTitle}>No commission employees found</p>
+              <p style={s.emptyHint}>Add commission rules to employee profiles to see them here.</p>
+            </div>
+          ) : (
+            <>
+              <p style={s.sectionLabel}>Commission — {MONTHS[commMonth - 1]} {commYear}</p>
+              <div style={s.card}>
+                {(commissionData as CommissionSummaryItem[]).map(item => (
+                  <CommissionRow key={item.employee_id} item={item} month={commMonthStr} />
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: 'rgba(13,13,13,0.35)', marginTop: 8 }}>
+                Counts are based on sales where the employee was assigned as sales rep. Adjust if needed.
+              </p>
+            </>
+          )}
+        </>
       )}
     </div>
   )
@@ -541,9 +758,7 @@ function AggregateCard({ employees, agg, total }: {
         <div key={emp.id} style={{ ...s.row, borderBottom: i < paid.length - 1 ? '1px solid rgba(13,13,13,0.05)' : 'none', cursor: 'default' }}>
           <span style={s.empName}>{emp.first_name} {emp.last_name}</span>
           <span style={s.empRole}>{emp.job_title}</span>
-          <span style={{ flex: 1, textAlign: 'right' as const, fontSize: 13, fontWeight: 600, color: '#0d0d0d' }}>
-            {fmt(agg[emp.id] || 0)}
-          </span>
+          <span style={{ flex: 1, textAlign: 'right' as const, fontSize: 13, fontWeight: 600, color: '#0d0d0d' }}>{fmt(agg[emp.id] || 0)}</span>
         </div>
       ))}
       <div style={s.totalRow}>
@@ -576,6 +791,11 @@ const s: Record<string, React.CSSProperties> = {
   rangeSep:  { fontSize: 12, color: 'rgba(13,13,13,0.35)' },
   weekNote:  { fontSize: 11, color: 'rgba(13,13,13,0.3)', fontStyle: 'italic' },
 
+  // File drop zone
+  dropZone: { display: 'flex', alignItems: 'center', gap: 8, border: '1.5px dashed', borderRadius: 10, padding: '12px 18px', marginBottom: 16, cursor: 'pointer', transition: 'all 0.15s' },
+  dropLabel: { fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.55)' },
+  dropHint:  { fontSize: 11, color: 'rgba(13,13,13,0.3)', marginLeft: 4 },
+
   weekBar:       { display: 'flex', alignItems: 'center', gap: 0, background: '#fff', border: BORDER, borderRadius: 12, padding: '12px 20px', marginBottom: 16, width: 'fit-content' },
   weekBarStat:   { display: 'flex', flexDirection: 'column' as const, gap: 2, padding: '0 16px' },
   weekBarLabel:  { fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.38)', letterSpacing: '0.06em', textTransform: 'uppercase' as const },
@@ -588,14 +808,13 @@ const s: Record<string, React.CSSProperties> = {
   card:        { background: '#fff', borderRadius: 14, border: BORDER, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginBottom: 12 },
   tableHeader: { display: 'flex', alignItems: 'center', padding: '10px 20px', background: '#f7f7f5', borderBottom: BORDER, fontSize: 10, fontWeight: 600, color: 'rgba(13,13,13,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase' as const },
 
-  // Row
   row:      { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', transition: 'background 0.1s' },
   rowLeft:  { display: 'flex', flexDirection: 'column' as const, gap: 2 },
   rowRight: { display: 'flex', alignItems: 'center', gap: 12 },
   empName:  { fontSize: 13, fontWeight: 500, color: '#0d0d0d', letterSpacing: '-0.01em' },
   empRole:  { fontSize: 11, color: 'rgba(13,13,13,0.4)' },
 
-  hoursBadge:    { display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 500, color: '#5581B1', background: 'rgba(85,129,177,0.08)', borderRadius: 5, padding: '2px 7px' },
+  hoursBadge:    { display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 500, borderRadius: 5, padding: '2px 7px', border: '1px solid transparent' },
   amountSummary: { fontSize: 13, fontWeight: 600, color: '#0d0d0d', display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 2 },
   splitHint:     { fontSize: 10, color: 'rgba(13,13,13,0.4)', fontWeight: 400 },
   amountEmpty:   { fontSize: 13, color: 'rgba(13,13,13,0.2)' },
@@ -605,11 +824,9 @@ const s: Record<string, React.CSSProperties> = {
   undoBtn:     { background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(13,13,13,0.3)', display: 'flex', alignItems: 'center', padding: 3, borderRadius: 5 },
   chevron:     { display: 'flex', alignItems: 'center' },
 
-  // Expand panel
   expandPanel: { padding: '14px 20px 18px', background: 'rgba(13,13,13,0.015)', borderTop: '1px solid rgba(13,13,13,0.05)', display: 'flex', flexDirection: 'column' as const, gap: 12 },
   suggestRow:  { display: 'flex', alignItems: 'center', gap: 8 },
   suggestLabel:{ fontSize: 11, color: 'rgba(13,13,13,0.45)' },
-  suggestPill: { fontSize: 11, fontWeight: 500, color: '#5581B1', background: 'rgba(85,129,177,0.09)', border: '1px solid rgba(85,129,177,0.25)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
 
   inputGrid:  { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 },
   inputGroup: { display: 'flex', flexDirection: 'column' as const, gap: 5 },
@@ -622,6 +839,7 @@ const s: Record<string, React.CSSProperties> = {
   errorText: { fontSize: 11, color: '#DF5198' },
   actions:   { display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 },
   saveBtn:   { padding: '6px 16px', border: BORDER, borderRadius: 8, fontSize: 13, fontWeight: 500, color: '#0d0d0d', background: '#fff', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
+  ghostBtn:  { padding: '6px 16px', border: BORDER, borderRadius: 8, fontSize: 13, fontWeight: 500, color: 'rgba(13,13,13,0.5)', background: 'transparent', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
   markPaidBtn: { display: 'flex', alignItems: 'center', gap: 5, padding: '6px 16px', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', background: '#212121', cursor: 'pointer', fontFamily: "'Inter', sans-serif" },
   deleteBtn:   { background: 'none', border: 'none', color: 'rgba(13,13,13,0.25)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 6, marginLeft: 'auto' },
 
@@ -631,4 +849,6 @@ const s: Record<string, React.CSSProperties> = {
   emptyCard:  { background: '#fff', border: BORDER, borderRadius: 14, padding: '48px 40px', textAlign: 'center' as const, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' },
   emptyTitle: { color: '#0d0d0d', fontSize: 14, fontWeight: 600, margin: '0 0 6px', letterSpacing: '-0.02em' },
   emptyHint:  { color: 'rgba(13,13,13,0.42)', fontSize: 12, margin: 0 },
+
+  commChip:   { fontSize: 11, fontWeight: 500, color: '#5581B1', background: 'rgba(85,129,177,0.08)', borderRadius: 5, padding: '2px 8px' },
 }

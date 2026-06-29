@@ -61,6 +61,7 @@ class EmployeeCreate(BaseModel):
     email: Optional[str] = None
     timedoc_number: Optional[int] = None
     commission_rules: Optional[List[CommissionRule]] = None
+    overtime_after_hours: Optional[int] = None
     notes: Optional[str] = None
     hired_at: Optional[date] = None
 
@@ -78,6 +79,7 @@ class EmployeeUpdate(BaseModel):
     email: Optional[str] = None
     timedoc_number: Optional[int] = None
     commission_rules: Optional[List[CommissionRule]] = None
+    overtime_after_hours: Optional[int] = None
     notes: Optional[str] = None
 
 
@@ -95,12 +97,69 @@ class EmployeeResponse(BaseModel):
     email: Optional[str]
     timedoc_number: Optional[int]
     commission_rules: Optional[List[CommissionRule]]
+    overtime_after_hours: Optional[int]
     notes: Optional[str]
     hired_at: Optional[date]
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# ── TimeDocs / Payroll ────────────────────────────────────────
+
+class TimedocParseRequest(BaseModel):
+    content: str
+    week_start: date
+    week_end: date
+
+
+class TimedocEmployeeResult(BaseModel):
+    employee_id: str
+    first_name: str
+    last_name: str
+    timedoc_number: int
+    total_hours: float
+    regular_hours: float
+    overtime_hours: float
+    suggested_pay: Optional[float]
+    hourly_rate: Optional[float]
+    weekly_rate: Optional[float]
+    pay_type: str
+    missing_punch: bool
+
+
+# ── Commission ────────────────────────────────────────────────
+
+class CommissionLineItem(BaseModel):
+    label: str
+    item_type: str
+    per_item: float
+    count: int
+    total: float
+
+
+class CommissionSummaryItem(BaseModel):
+    employee_id: str
+    first_name: str
+    last_name: str
+    items: List[CommissionLineItem]
+    calculated_amount: float
+    payout_id: Optional[str]
+    adjustment_amount: float
+    final_amount: float
+    notes: Optional[str]
+    status: str
+    paid_at: Optional[datetime]
+
+
+class CommissionSaveRequest(BaseModel):
+    employee_id: UUID
+    month: date
+    calculated_amount: float
+    adjustment_amount: float
+    final_amount: float
+    notes: Optional[str] = None
 
 
 # ── Customers ────────────────────────────────────────────────

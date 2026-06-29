@@ -21,6 +21,7 @@ type Employee = {
   email?: string
   timedoc_number?: number
   commission_rules?: CommissionRule[]
+  overtime_after_hours?: number
   notes?: string
   is_active: boolean
 }
@@ -57,7 +58,7 @@ function rateDisplay(emp: Employee): string {
 const EMPTY_FORM = {
   first_name: '', last_name: '', job_title: '', pay_type: 'weekly_flat',
   weekly_rate: '', commission_rate: '', hourly_rate: '', hired_at: '',
-  department: '', email: '', timedoc_number: '', notes: '',
+  department: '', email: '', timedoc_number: '', overtime_after_hours: '', notes: '',
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -235,8 +236,9 @@ function EmployeeModal({
           hired_at:        employee.hired_at        ?? '',
           department:      employee.department      ?? '',
           email:           employee.email           ?? '',
-          timedoc_number:  employee.timedoc_number  != null ? String(employee.timedoc_number)   : '',
-          notes:           employee.notes           ?? '',
+          timedoc_number:       employee.timedoc_number       != null ? String(employee.timedoc_number)       : '',
+          overtime_after_hours: employee.overtime_after_hours != null ? String(employee.overtime_after_hours) : '',
+          notes:                employee.notes                ?? '',
         }
       : EMPTY_FORM
   )
@@ -275,9 +277,10 @@ function EmployeeModal({
       hired_at:         form.hired_at        || null,
       department:       form.department      || null,
       email:            form.email           || null,
-      timedoc_number:   form.timedoc_number  ? parseInt(form.timedoc_number) : null,
-      commission_rules: commissionRules.filter(r => r.label.trim()),
-      notes:            form.notes           || null,
+      timedoc_number:       form.timedoc_number       ? parseInt(form.timedoc_number)       : null,
+      overtime_after_hours: form.overtime_after_hours  ? parseInt(form.overtime_after_hours) : null,
+      commission_rules:     commissionRules.filter(r => r.label.trim()),
+      notes:                form.notes                 || null,
     })
   }
 
@@ -338,6 +341,10 @@ function EmployeeModal({
               <input type="number" min="1" value={form.timedoc_number} onChange={e => set('timedoc_number', e.target.value)} style={s.input} placeholder="e.g. 5" />
             </Field>
           </div>
+          <Field label="Overtime after (hours/week)" hint="Leave blank for no overtime tracking">
+            <input type="number" min="1" step="1" value={form.overtime_after_hours}
+              onChange={e => set('overtime_after_hours', e.target.value)} style={s.input} placeholder="e.g. 40" />
+          </Field>
           <Field label="Hire Date">
             <input type="date" value={form.hired_at} onChange={e => set('hired_at', e.target.value)} style={s.input} />
           </Field>

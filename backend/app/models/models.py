@@ -195,11 +195,12 @@ class Employee(Base):
     is_active        = Column(Boolean, nullable=False, default=True)
     department       = Column(String, nullable=True)
     email            = Column(String, nullable=True)
-    timedoc_number   = Column(Integer, nullable=True, unique=True)
-    commission_rules = Column(JSONB, nullable=True)
-    notes            = Column(Text)
-    hired_at         = Column(Date)
-    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+    timedoc_number       = Column(Integer, nullable=True, unique=True)
+    commission_rules     = Column(JSONB, nullable=True)
+    overtime_after_hours = Column(Integer, nullable=True)
+    notes                = Column(Text)
+    hired_at             = Column(Date)
+    created_at           = Column(DateTime(timezone=True), server_default=func.now())
 
     payroll_entries = relationship("WeeklyPayroll", back_populates="employee")
 
@@ -347,6 +348,27 @@ class WeeklyPayroll(Base):
 
     __table_args__ = (
         UniqueConstraint("week_start", "employee_id", name="uq_payroll_week_employee"),
+    )
+
+
+class CommissionPayout(Base):
+    __tablename__ = "commission_payouts"
+
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_id       = Column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    month             = Column(Date, nullable=False)
+    calculated_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    adjustment_amount = Column(Numeric(10, 2), nullable=False, default=0)
+    final_amount      = Column(Numeric(10, 2), nullable=False, default=0)
+    notes             = Column(Text)
+    status            = Column(String(20), nullable=False, default="pending")
+    paid_at           = Column(DateTime(timezone=True), nullable=True)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("Employee")
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "month", name="uq_commission_employee_month"),
     )
 
 
