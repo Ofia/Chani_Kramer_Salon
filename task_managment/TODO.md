@@ -1,5 +1,5 @@
 # The Salon — Task Tracker
-**Last updated:** Session 27 — 2026-06-24
+**Last updated:** Session 31 — 2026-06-29
 
 Single source of truth for open/closed status. Raw meeting notes and rationale
 stay in `june_1_meeting_Avi.md`, `june_8.md`, `june_17_meeting_Avi.md`,
@@ -13,8 +13,13 @@ not duplicated here.
 
 | Migration | File | Status |
 |-----------|------|--------|
-| 011–026 | (consolidate wig orders → role expansion → repair tasks) | ✅ All confirmed run |
-| 027 | `027_wash_set.sql` — `wash_set_services` table + `pos_sale_items.sales_rep_id` | ✅ Run 2026-06-24 |
+| 011–027 | (consolidate wig orders → wash_set + sales_rep_id) | ✅ All confirmed run |
+| 028 | `appointments.employee_id` FK + `employees.department` column | ✅ Run 2026-06-29 |
+| 029 | `customers.email/address2/city/state/zip_code` | ✅ Run 2026-06-29 |
+| 030 | `employees.email/timedoc_number/commission_rules` | ✅ Run 2026-06-29 |
+| 031 | Seed 12 real employees with timedoc# + commission_rules | ✅ Run 2026-06-29 |
+| 032 | `employees.overtime_after_hours INTEGER nullable` | ✅ Run 2026-06-29 |
+| 033 | `commission_payouts` table | ✅ Run 2026-06-29 |
 
 ---
 
@@ -23,8 +28,6 @@ not duplicated here.
 | Task | Notes |
 |------|-------|
 | Bank statement reconciliation / auto-import | Tzipora gets a bank statement showing only merchant names (Amazon, AliExpress), no line-item detail. Talk to her about the actual workflow and bank statement format before building anything. (This was tracked as two separate numbers in two old meeting docs — same feature.) |
-| Clock-in / payroll integration | Salon has a fingerprint clock-in system. Two options: direct integration with the device, or upload a weekly Excel export. Ask Tzipora which is feasible and what the Excel format looks like. |
-| Commission calculation engine | Need the real commission table from Tzipora (rate per employee, what it applies to). **Data-capture groundwork is done** (Session 27): `sales_rep_id` now persists on every `pos_sale_item`, not just on the pending cart. The actual $ → payroll calculation is not built. |
 | DaySmart integration approach | Direct API integration, or manually mirror data? Still unanswered. |
 
 ---
@@ -33,7 +36,13 @@ not duplicated here.
 
 | Task | Notes |
 |------|-------|
-| Persist unsaved form data on navigation | If a user starts filling a form and navigates away, restore the fields on return. |
+| Persist unsaved form data on navigation | If a user starts filling a form and navigates away, restore the fields on return. Use `sessionStorage` — survives tab navigation, cleared on close. |
+| Session storage for TimeDocs parse results | After dropping a `.dat` file on Payroll page, results live in React state only — page refresh loses them. Store in `sessionStorage` keyed by week_start so re-opening the same tab restores the parsed hours. Auto-clear on new file drop or week change. |
+| Pending Orders flow (CoGS expense → inventory) | CoGS expense saves to expenses AND creates a Pending Orders tab entry in Product Management. On arrival, check against pending order, then add to inventory. Need to confirm QuickBooks best practice with Avi first. |
+| Mobile calendar + Google Drive upload | Separate mobile-first calendar page; image/video upload to Google Drive via OAuth. Complex — phase 2. |
+| CC bank statement reconciliation | Upload monthly CC statement (PDF/CSV) → match against expenses for that month → flag unmatched items. Need Tzipora's actual bank statement format first. |
+| SMS/WhatsApp appointment notifications | Notify clients on booking. Twilio or WhatsApp Business API. Needs DaySmart sync discussion first. |
+| Clean test data + import real Access data | 6,914 customers from Sheitel.mdb. Access migration strategy already designed (upsert via `access_id`). Waiting for clean environment. |
 
 ---
 
@@ -112,11 +121,11 @@ None of these have been touched since the audit. The critical ones are the highe
 
 **Expenses** — 13 industry-standard categories, bank/cash payment-source tag per entry (already built — toggle + badge in `ExpensesPage.tsx`, just never marked off in any doc until now).
 
-**Payroll** — weekly accordion, clock-in/out driven hours, mark paid/undo.
+**Payroll** — weekly accordion, clock-in/out driven hours, mark paid/undo. **Session 31:** Full TimeDocs integration — drop `.dat` file (full history dump) + select week → backend filters to Wed–Tue range, alternating-pair-per-day algorithm calculates hours + OT, missing punch flagged with orange ⚠️. Commission tab auto-calculates from `pos_sale_items.sales_rep_id`, monthly payout with adjustment + mark-paid. Migrations 032 (`overtime_after_hours`) + 033 (`commission_payouts`) run.
 
-**Customers CRM** — purchase history (POS sales + wig sales, deduped), edit/delete wig from history.
+**Customers CRM** — purchase history (POS sales + wig sales, deduped), edit/delete wig from history. Email, split address fields (address/address2/city/state/zip), Google Places autocomplete (migration 029).
 
-**Employees** — time log modal per employee.
+**Employees** — time log modal per employee. Department field, email, `timedoc_number`, `commission_rules JSONB`, `overtime_after_hours` on profile (migrations 028, 030, 031, 032).
 
 **Ella (AI chatbot)** — 9 tools, `/remember` command.
 
