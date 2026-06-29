@@ -53,9 +53,6 @@ function rateDisplay(emp: Employee): string {
   return '—'
 }
 
-function fmtDate(str: string) {
-  return new Date(str + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 const EMPTY_FORM = {
   first_name: '', last_name: '', job_title: '', pay_type: 'weekly_flat',
