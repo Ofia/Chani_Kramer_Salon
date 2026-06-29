@@ -479,9 +479,18 @@ function NewAppointmentModal({ date, hour, onClose, onSaved }: {
     queryFn: () => api.get('/wash-set-services/').then(r => r.data),
   })
 
+  const FRONT_DESK_SERVICES: ServiceOption[] = [
+    { id: 'fd1', name: '2 Wash and sets' },
+    { id: 'fd2', name: '3 Wash and sets' },
+    { id: 'fd3', name: 'Buy Fall Consultation' },
+    { id: 'fd4', name: 'Buy Wig Consultation' },
+    { id: 'fd5', name: 'Closed (30 min)' },
+  ]
+
   const allServices = useMemo(() => {
-    if (form.department === 'repairs') return repairServices
-    if (form.department === 'wash_set') return washSetServices
+    if (form.department === 'repairs')    return repairServices
+    if (form.department === 'wash_set')   return washSetServices
+    if (form.department === 'front_desk') return FRONT_DESK_SERVICES
     return [...washSetServices, ...repairServices]
   }, [form.department, repairServices, washSetServices])
   const [search, setSearch] = useState('')
