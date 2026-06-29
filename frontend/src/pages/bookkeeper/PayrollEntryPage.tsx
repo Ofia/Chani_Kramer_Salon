@@ -519,12 +519,19 @@ export default function PayrollEntryPage() {
     const text = await file.text()
     try {
       const res = await api.post('/payroll/parse-timedoc', { content: text })
-      const results: TimedocResult[] = res.data
+      const { employees, date_from, date_to } = res.data as {
+        employees: TimedocResult[]
+        date_from: string | null
+        date_to: string | null
+      }
       const map: Record<string, TimedocResult> = {}
-      results.forEach(r => { map[r.employee_id] = r })
+      employees.forEach(r => { map[r.employee_id] = r })
       setTimedocMap(map)
-      const missing = results.filter(r => r.missing_punch).length
-      setTimedocSummary(`${results.length} employees found${missing > 0 ? ` · ${missing} missing punch` : ''}`)
+      const missing = employees.filter(r => r.missing_punch).length
+      const range = date_from && date_to
+        ? ` · ${new Date(date_from + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(date_to + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : ''
+      setTimedocSummary(`${employees.length} employees${range}${missing > 0 ? ` · ${missing} missing punch` : ''}`)
       setTimedocStatus('done')
     } catch {
       setTimedocStatus('error')

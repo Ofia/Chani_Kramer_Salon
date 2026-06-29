@@ -127,6 +127,12 @@ class TimedocEmployeeResult(BaseModel):
     missing_punch: bool
 
 
+class TimedocParseResponse(BaseModel):
+    date_from: Optional[str]
+    date_to: Optional[str]
+    employees: List[TimedocEmployeeResult]
+
+
 # ── Commission ────────────────────────────────────────────────
 
 class CommissionLineItem(BaseModel):

@@ -15,7 +15,7 @@ from app.models.models import (
 from app.schemas.schemas import (
     CommissionLineItem, CommissionSaveRequest, CommissionSummaryItem,
     PayrollCreate, PayrollUpdate, PayrollResponse,
-    TimedocEmployeeResult, TimedocParseRequest,
+    TimedocEmployeeResult, TimedocParseRequest, TimedocParseResponse,
 )
 from app.core.security import get_current_user
 
@@ -34,28 +34,53 @@ _LABEL_MAP = {
 
 # ── TimeDocs import ───────────────────────────────────────────
 
-@router.post("/parse-timedoc", response_model=List[TimedocEmployeeResult])
+@router.post("/parse-timedoc", response_model=TimedocParseResponse)
 def parse_timedoc(
     data: TimedocParseRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    events: list[tuple[int, datetime, int]] = []
+    # This clock runs in "auto" mode — status column is always 0.
+    # Every punch is just a timestamp. Pair them alternately within each day:
+    # 1st punch = in, 2nd = out, 3rd = in, 4th = out, odd count = missing punch.
+    from datetime import date as date_type
+
+    raw: list[tuple[int, datetime]] = []
     for line in data.content.split("\n"):
         parts = line.strip().split("\t")
-        if len(parts) < 4:
+        if len(parts) < 2:
             continue
         try:
-            user_id   = int(parts[0].strip())
-            event_dt  = datetime.strptime(parts[1].strip(), "%Y-%m-%d %H:%M:%S")
-            status    = int(parts[3].strip())
+            uid = int(parts[0].strip())
+            dt  = datetime.strptime(parts[1].strip(), "%Y-%m-%d %H:%M:%S")
         except (ValueError, IndexError):
             continue
-        events.append((user_id, event_dt, status))
+        raw.append((uid, dt))
 
-    by_user: dict[int, list[tuple[datetime, int]]] = defaultdict(list)
-    for uid, dt, st in sorted(events, key=lambda x: (x[0], x[1])):
-        by_user[uid].append((dt, st))
+    if not raw:
+        return TimedocParseResponse(date_from=None, date_to=None, employees=[])
+
+    all_dates = [dt for _, dt in raw]
+    date_from = min(all_dates).date().isoformat()
+    date_to   = max(all_dates).date().isoformat()
+
+    # Group punches by (uid, day)
+    by_user_day: dict[tuple[int, date_type], list[datetime]] = defaultdict(list)
+    for uid, dt in sorted(raw, key=lambda x: (x[0], x[1])):
+        by_user_day[(uid, dt.date())].append(dt)
+
+    # Aggregate per user
+    user_minutes: dict[int, float] = defaultdict(float)
+    user_missing: dict[int, bool]  = defaultdict(bool)
+
+    for (uid, _day), punches in by_user_day.items():
+        punches.sort()
+        for i in range(0, len(punches) - 1, 2):
+            mins = (punches[i + 1] - punches[i]).total_seconds() / 60
+            if mins > 0:
+                user_minutes[uid] += mins
+        if len(punches) % 2 == 1:
+            user_missing[uid] = True
 
     employees = (
         db.query(Employee)
@@ -65,28 +90,13 @@ def parse_timedoc(
     emp_by_timedoc = {emp.timedoc_number: emp for emp in employees}
 
     results = []
-    for uid, user_events in by_user.items():
+    for uid, total_minutes in user_minutes.items():
         emp = emp_by_timedoc.get(uid)
         if not emp:
             continue
 
-        total_minutes = 0.0
-        missing_punch = False
-        pending_in: datetime | None = None
-
-        for dt, st in user_events:
-            if st in (0, 4):            # check-in / overtime-in
-                if pending_in is not None:
-                    missing_punch = True
-                pending_in = dt
-            elif st == 1 and pending_in: # check-out
-                total_minutes += (dt - pending_in).total_seconds() / 60
-                pending_in = None
-
-        if pending_in is not None:
-            missing_punch = True
-
         total_hours = round(total_minutes / 60, 2)
+        missing_punch = user_missing.get(uid, False)
 
         ot = emp.overtime_after_hours
         if ot and total_hours > ot:
@@ -118,7 +128,11 @@ def parse_timedoc(
             missing_punch=missing_punch,
         ))
 
-    return results
+    return TimedocParseResponse(
+        date_from=date_from,
+        date_to=date_to,
+        employees=results,
+    )
 
 
 # ── Commission ────────────────────────────────────────────────
