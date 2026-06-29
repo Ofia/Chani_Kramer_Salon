@@ -51,8 +51,6 @@ def parse_timedoc(
             status    = int(parts[3].strip())
         except (ValueError, IndexError):
             continue
-        if not (data.week_start <= event_dt.date() <= data.week_end):
-            continue
         events.append((user_id, event_dt, status))
 
     by_user: dict[int, list[tuple[datetime, int]]] = defaultdict(list)

@@ -110,8 +110,6 @@ class EmployeeResponse(BaseModel):
 
 class TimedocParseRequest(BaseModel):
     content: str
-    week_start: date
-    week_end: date
 
 
 class TimedocEmployeeResult(BaseModel):
