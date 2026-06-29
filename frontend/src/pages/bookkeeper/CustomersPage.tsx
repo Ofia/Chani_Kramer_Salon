@@ -375,19 +375,31 @@ function CustomerModal({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g = (window as any).google
+    // Inject global style so CSS custom properties reach the shadow DOM
+    if (!document.getElementById('gmp-ac-style')) {
+      const st = document.createElement('style')
+      st.id = 'gmp-ac-style'
+      st.textContent = `
+        gmp-placeautocomplete {
+          --gmp-input-border: 1px solid rgba(0,0,0,0.12);
+          --gmp-input-border-radius: 10px;
+          --gmp-input-padding: 10px 12px;
+          --gmp-input-background-color: #f9f9f9;
+          --gmp-input-font-size: 14px;
+          --gmp-input-color: #18181b;
+          --gmp-input-placeholder-color: rgba(0,0,0,0.35);
+          width: 100%;
+        }
+      `
+      document.head.appendChild(st)
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const el: any = new g.maps.places.PlaceAutocompleteElement({
       types: ['address'],
       componentRestrictions: { country: 'us' },
     })
     el.placeholder = 'Start typing to search address…'
-    el.style.width = '100%'
-    el.style.setProperty('--gmp-input-border', '1px solid rgba(0,0,0,0.12)')
-    el.style.setProperty('--gmp-input-border-radius', '10px')
-    el.style.setProperty('--gmp-input-padding', '10px 12px')
-    el.style.setProperty('--gmp-input-background-color', '#f9f9f9')
-    el.style.setProperty('--gmp-input-font-size', '14px')
-    el.style.setProperty('--gmp-input-color', '#18181b')
     container.appendChild(el)
 
     // Pre-fill (edit mode or typed value before Google loaded)
