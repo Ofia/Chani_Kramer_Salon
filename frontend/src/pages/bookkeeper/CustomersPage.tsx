@@ -380,7 +380,7 @@ function CustomerModal({
       const st = document.createElement('style')
       st.id = 'gmp-ac-style'
       st.textContent = `
-        gmp-placeautocomplete {
+        gmp-place-autocomplete {
           --gmp-input-border: 1px solid rgba(0,0,0,0.12);
           --gmp-input-border-radius: 10px;
           --gmp-input-padding: 10px 12px;
@@ -388,6 +388,7 @@ function CustomerModal({
           --gmp-input-font-size: 14px;
           --gmp-input-color: #18181b;
           --gmp-input-placeholder-color: rgba(0,0,0,0.35);
+          --gmp-input-font-family: inherit;
           width: 100%;
         }
       `
