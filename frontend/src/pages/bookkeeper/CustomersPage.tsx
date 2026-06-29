@@ -336,28 +336,50 @@ function CustomerModal({
       : EMPTY_FORM
   )
   const [error, setError] = useState('')
-  const addressRef = useRef<HTMLInputElement>(null)
+  const addressContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    function initAC() {
+    function init() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const g = (window as any).google
-      if (!addressRef.current || !g) return
-      const ac = new g.maps.places.Autocomplete(addressRef.current, {
+      const container = addressContainerRef.current
+      if (!container || !g?.maps?.places?.PlaceAutocompleteElement) return
+      if (container.childElementCount > 0) return // already mounted
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const el: any = new g.maps.places.PlaceAutocompleteElement({
         types: ['address'],
         componentRestrictions: { country: 'us' },
-        fields: ['address_components'],
       })
-      ac.addListener('place_changed', () => {
-        const place = ac.getPlace()
-        if (!place.address_components) return
+      el.placeholder = 'Start typing to search address…'
+      el.style.width = '100%'
+      el.style.setProperty('--gmp-input-border', '1px solid rgba(0,0,0,0.12)')
+      el.style.setProperty('--gmp-input-border-radius', '10px')
+      el.style.setProperty('--gmp-input-padding', '10px 12px')
+      el.style.setProperty('--gmp-input-background-color', '#f9f9f9')
+      el.style.setProperty('--gmp-input-font-size', '14px')
+      el.style.setProperty('--gmp-input-color', '#18181b')
+      container.appendChild(el)
+
+      // Pre-fill for edit mode + sync typed text back to form state
+      const inner = el.querySelector('input') as HTMLInputElement | null
+      if (inner) {
+        if (form.address) inner.value = form.address
+        inner.addEventListener('input', (e: Event) => {
+          setForm(f => ({ ...f, address: (e.target as HTMLInputElement).value }))
+        })
+      }
+
+      el.addEventListener('gmp-select', async (e: any) => {
+        const place = e.placePrediction.toPlace()
+        await place.fetchFields({ fields: ['addressComponents'] })
         let num = '', route = '', city = '', state = '', zip = ''
-        for (const c of place.address_components) {
-          if (c.types.includes('street_number')) num = c.long_name
-          if (c.types.includes('route')) route = c.short_name
-          if (c.types.includes('locality')) city = c.long_name
-          if (c.types.includes('administrative_area_level_1')) state = c.short_name
-          if (c.types.includes('postal_code')) zip = c.long_name
+        for (const c of place.addressComponents ?? []) {
+          if (c.types.includes('street_number')) num = c.longText
+          if (c.types.includes('route')) route = c.shortText
+          if (c.types.includes('locality')) city = c.longText
+          if (c.types.includes('administrative_area_level_1')) state = c.shortText
+          if (c.types.includes('postal_code')) zip = c.longText
         }
         setForm(f => ({ ...f, address: `${num} ${route}`.trim(), city, state, zip_code: zip }))
       })
@@ -367,19 +389,19 @@ function CustomerModal({
     if (!key) return
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).google) { initAC(); return }
+    if ((window as any).google) { init(); return }
 
     const existing = document.querySelector('script[src*="maps.googleapis"]') as HTMLScriptElement | null
     if (existing) {
-      existing.addEventListener('load', initAC)
-      return () => existing.removeEventListener('load', initAC)
+      existing.addEventListener('load', init)
+      return () => existing.removeEventListener('load', init)
     }
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`
-    script.async = true
-    script.onload = initAC
-    document.head.appendChild(script)
-  }, [])
+    const s = document.createElement('script')
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&loading=async`
+    s.async = true
+    s.onload = init
+    document.head.appendChild(s)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function set(field: string, value: string) {
     setForm(p => ({ ...p, [field]: value }))
@@ -444,14 +466,7 @@ function CustomerModal({
             <input type="email" value={form.email} onChange={e => set('email', e.target.value)} style={s.input} placeholder="name@email.com" />
           </Field>
           <Field label="Address">
-            <input
-              ref={addressRef}
-              value={form.address}
-              onChange={e => set('address', e.target.value)}
-              style={s.input}
-              placeholder="Start typing to search address…"
-              autoComplete="off"
-            />
+            <div ref={addressContainerRef} style={{ width: '100%', minHeight: 41 }} />
           </Field>
           <Field label="Address 2">
             <input value={form.address2} onChange={e => set('address2', e.target.value)} style={s.input} placeholder="Apt, Suite, Floor (optional)" />
