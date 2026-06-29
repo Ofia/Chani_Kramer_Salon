@@ -375,26 +375,6 @@ function CustomerModal({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g = (window as any).google
-    // Inject global style so CSS custom properties reach the shadow DOM
-    if (!document.getElementById('gmp-ac-style')) {
-      const st = document.createElement('style')
-      st.id = 'gmp-ac-style'
-      st.textContent = `
-        gmp-place-autocomplete {
-          --gmp-input-border: 1px solid rgba(0,0,0,0.12);
-          --gmp-input-border-radius: 10px;
-          --gmp-input-padding: 10px 12px;
-          --gmp-input-background-color: #f9f9f9;
-          --gmp-input-font-size: 14px;
-          --gmp-input-color: #18181b;
-          --gmp-input-placeholder-color: rgba(0,0,0,0.35);
-          --gmp-input-font-family: inherit;
-          width: 100%;
-        }
-      `
-      document.head.appendChild(st)
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const el: any = new g.maps.places.PlaceAutocompleteElement({
       types: ['address'],
@@ -402,6 +382,30 @@ function CustomerModal({
     })
     el.placeholder = 'Start typing to search address…'
     container.appendChild(el)
+
+    // Inject style into shadow DOM (the element uses shadow DOM; external CSS can't reach it)
+    requestAnimationFrame(() => {
+      const shadow = el.shadowRoot as ShadowRoot | null
+      if (shadow) {
+        const st = document.createElement('style')
+        st.textContent = `
+          :host { display: block; width: 100%; }
+          input, [type="text"] {
+            background: #f9f9f9 !important;
+            border: 1px solid rgba(0,0,0,0.12) !important;
+            border-radius: 10px !important;
+            padding: 10px 12px !important;
+            font-size: 14px !important;
+            color: #18181b !important;
+            font-family: inherit !important;
+            outline: none !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+        `
+        shadow.appendChild(st)
+      }
+    })
 
     // Pre-fill (edit mode or typed value before Google loaded)
     const inner = el.querySelector('input') as HTMLInputElement | null
